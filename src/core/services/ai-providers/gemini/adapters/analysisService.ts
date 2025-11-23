@@ -1,6 +1,7 @@
 import { GoogleGenAI, Part, Type, Modality } from "@google/genai";
 import { ImageAsset, AnalysisResult } from '../../../../../types';
 import { VIBE_STYLES } from '../../../../../constants';
+import { getModelWithFallback, callWithFallback } from '../config';
 
 export const extractFacesFromImage = async (
     ai: GoogleGenAI, 
@@ -8,16 +9,31 @@ export const extractFacesFromImage = async (
 ): Promise<ImageAsset[]> => {
     const prompt = "Detect all human faces in the provided image. For each face found, create a new image that is a clean cutout of just the head and shoulders, with the background completely removed and transparent. Output each cutout as a separate PNG image.";
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: { parts: [
-            { inlineData: { data: sourceImage.base64, mimeType: sourceImage.mimeType } },
-            { text: prompt }
-        ]},
-        config: {
-            responseModalities: [Modality.IMAGE],
-        },
-    });
+    const response = await callWithFallback(
+        // Primary: Try Gemini 3 Pro first
+        () => ai.models.generateContent({
+            model: getModelWithFallback('IMAGE', false),
+            contents: { parts: [
+                { inlineData: { data: sourceImage.base64, mimeType: sourceImage.mimeType } },
+                { text: prompt }
+            ]},
+            config: {
+                responseModalities: [Modality.IMAGE],
+            },
+        }),
+        // Fallback: Use Gemini 2.5 Flash if primary fails
+        () => ai.models.generateContent({
+            model: getModelWithFallback('IMAGE', true),
+            contents: { parts: [
+                { inlineData: { data: sourceImage.base64, mimeType: sourceImage.mimeType } },
+                { text: prompt }
+            ]},
+            config: {
+                responseModalities: [Modality.IMAGE],
+            },
+        }),
+        'Failed to extract faces'
+    );
 
     const results: ImageAsset[] = [];
     if (response.candidates?.[0]?.content?.parts) {
@@ -66,30 +82,59 @@ export const analyzeVideoAndSuggestStyles = async (
         }
     `;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: { parts: [{ text: prompt }, ...imageParts] },
-        config: {
-            responseMimeType: 'application/json',
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    suggestedStyle: { type: Type.STRING },
-                    suggestedColors: {
-                        type: Type.OBJECT,
-                        properties: {
-                            primary: { type: Type.STRING },
-                            secondary: { type: Type.STRING },
-                            accent: { type: Type.STRING },
-                            background: { type: Type.STRING },
-                        },
-                        required: ["primary", "secondary", "accent", "background"]
-                    }
-                },
-                required: ["suggestedStyle", "suggestedColors"]
+    const response = await callWithFallback(
+        // Primary: Try Gemini 3 Pro first
+        () => ai.models.generateContent({
+            model: getModelWithFallback('TEXT', false),
+            contents: { parts: [{ text: prompt }, ...imageParts] },
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        suggestedStyle: { type: Type.STRING },
+                        suggestedColors: {
+                            type: Type.OBJECT,
+                            properties: {
+                                primary: { type: Type.STRING },
+                                secondary: { type: Type.STRING },
+                                accent: { type: Type.STRING },
+                                background: { type: Type.STRING },
+                            },
+                            required: ["primary", "secondary", "accent", "background"]
+                        }
+                    },
+                    required: ["suggestedStyle", "suggestedColors"]
+                }
             }
-        }
-    });
+        }),
+        // Fallback: Use Gemini 2.5 Flash if primary fails
+        () => ai.models.generateContent({
+            model: getModelWithFallback('TEXT', true),
+            contents: { parts: [{ text: prompt }, ...imageParts] },
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        suggestedStyle: { type: Type.STRING },
+                        suggestedColors: {
+                            type: Type.OBJECT,
+                            properties: {
+                                primary: { type: Type.STRING },
+                                secondary: { type: Type.STRING },
+                                accent: { type: Type.STRING },
+                                background: { type: Type.STRING },
+                            },
+                            required: ["primary", "secondary", "accent", "background"]
+                        }
+                    },
+                    required: ["suggestedStyle", "suggestedColors"]
+                }
+            }
+        }),
+        'Failed to analyze video and suggest styles'
+    );
     
     try {
         const jsonString = response.text.trim();

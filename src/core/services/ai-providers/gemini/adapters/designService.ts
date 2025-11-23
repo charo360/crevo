@@ -9,6 +9,7 @@ import { retryWithBackoff } from '../../../../infrastructure/retry-handlers';
 import { optimizeImageForAI } from '../../../../processors/image';
 import { errorTracker } from '../../../../infrastructure/error-tracking';
 import { performanceMonitor } from '../../../../infrastructure/performance-monitoring';
+import { getModelWithFallback, callWithFallback } from '../config';
 
 export const generateDesign = async (
     ai: GoogleGenAI, 
@@ -232,8 +233,7 @@ export const generateDesign = async (
         `;
             }
             
-            // The 'gemini-2.5-flash-image' model does not support multiple candidates.
-            // To generate multiple variations, we must call the API multiple times.
+            // Generate multiple variations with fallback support
             // Use rate limiting and retry logic for each request
             const generationPromises: Promise<GenerateContentResponse>[] = [];
 
@@ -241,22 +241,42 @@ export const generateDesign = async (
                 // Acquire rate limit permission for each variation
                 await imageGenRateLimiter.acquire(`generate-${platform}-variation-${i}`);
                 
-                const promise = retryWithBackoff(
-                    () => ai.models.generateContent({
-                        model: 'gemini-2.5-flash-image',
-                        contents: { parts: [{ text: finalPrompt }, ...allImageParts] },
-                        config: {
-                            responseModalities: [Modality.IMAGE],
-                        },
-                    }),
-                    {
-                        maxRetries: 2,
-                        initialDelayMs: 2000,
-                        retryableErrors: (error: any) => {
-                            // Retry on rate limit errors (429) and server errors (5xx)
-                            return error.status === 429 || (error.status >= 500 && error.status < 600);
-                        },
-                    }
+                const promise = callWithFallback(
+                    // Primary: Try Gemini 3 Pro first
+                    () => retryWithBackoff(
+                        () => ai.models.generateContent({
+                            model: getModelWithFallback('IMAGE', false),
+                            contents: { parts: [{ text: finalPrompt }, ...allImageParts] },
+                            config: {
+                                responseModalities: [Modality.IMAGE],
+                            },
+                        }),
+                        {
+                            maxRetries: 2,
+                            initialDelayMs: 2000,
+                            retryableErrors: (error: any) => {
+                                return error.status === 429 || (error.status >= 500 && error.status < 600);
+                            },
+                        }
+                    ),
+                    // Fallback: Use Gemini 2.5 Flash if primary fails
+                    () => retryWithBackoff(
+                        () => ai.models.generateContent({
+                            model: getModelWithFallback('IMAGE', true),
+                            contents: { parts: [{ text: finalPrompt }, ...allImageParts] },
+                            config: {
+                                responseModalities: [Modality.IMAGE],
+                            },
+                        }),
+                        {
+                            maxRetries: 2,
+                            initialDelayMs: 2000,
+                            retryableErrors: (error: any) => {
+                                return error.status === 429 || (error.status >= 500 && error.status < 600);
+                            },
+                        }
+                    ),
+                    'Failed to generate design variation'
                 );
                 generationPromises.push(promise);
             }
@@ -346,24 +366,48 @@ export const adaptImageForPlatform = async (
             **Final Check:** Before outputting, verify again that the aspect ratio is exactly ${targetConfig.aspectRatio}.
         `;
 
-            const response = await retryWithBackoff(
-                () => ai.models.generateContent({
-                    model: 'gemini-2.5-flash-image',
-                    contents: { parts: [
-                        { inlineData: { data: optimizedImage.base64, mimeType: optimizedImage.mimeType } },
-                        { text: prompt }
-                    ]},
-                    config: {
-                        responseModalities: [Modality.IMAGE],
-                    },
-                }),
-                {
-                    maxRetries: 2,
-                    initialDelayMs: 2000,
-                    retryableErrors: (error: any) => {
-                        return error.status === 429 || (error.status >= 500 && error.status < 600);
-                    },
-                }
+            const response = await callWithFallback(
+                // Primary: Try Gemini 3 Pro first
+                () => retryWithBackoff(
+                    () => ai.models.generateContent({
+                        model: getModelWithFallback('IMAGE', false),
+                        contents: { parts: [
+                            { inlineData: { data: optimizedImage.base64, mimeType: optimizedImage.mimeType } },
+                            { text: prompt }
+                        ]},
+                        config: {
+                            responseModalities: [Modality.IMAGE],
+                        },
+                    }),
+                    {
+                        maxRetries: 2,
+                        initialDelayMs: 2000,
+                        retryableErrors: (error: any) => {
+                            return error.status === 429 || (error.status >= 500 && error.status < 600);
+                        },
+                    }
+                ),
+                // Fallback: Use Gemini 2.5 Flash if primary fails
+                () => retryWithBackoff(
+                    () => ai.models.generateContent({
+                        model: getModelWithFallback('IMAGE', true),
+                        contents: { parts: [
+                            { inlineData: { data: optimizedImage.base64, mimeType: optimizedImage.mimeType } },
+                            { text: prompt }
+                        ]},
+                        config: {
+                            responseModalities: [Modality.IMAGE],
+                        },
+                    }),
+                    {
+                        maxRetries: 2,
+                        initialDelayMs: 2000,
+                        retryableErrors: (error: any) => {
+                            return error.status === 429 || (error.status >= 500 && error.status < 600);
+                        },
+                    }
+                ),
+                'Failed to adapt design'
             );
 
             const results: DesignResult[] = [];

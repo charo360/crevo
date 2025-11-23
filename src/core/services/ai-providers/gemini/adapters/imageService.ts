@@ -5,6 +5,7 @@ import { retryWithBackoff } from '../../../../infrastructure/retry-handlers';
 import { optimizeImageForAI } from '../../../../processors/image';
 import { errorTracker } from '../../../../infrastructure/error-tracking';
 import { performanceMonitor } from '../../../../infrastructure/performance-monitoring';
+import { getModelWithFallback, callWithFallback } from '../config';
 
 export const generateImage = async (
     ai: GoogleGenAI, 
@@ -94,21 +95,42 @@ export const editImage = async (
             
             parts.push({ text: finalPrompt });
 
-            const response = await retryWithBackoff(
-                () => ai.models.generateContent({
-                    model: 'gemini-2.5-flash-image',
-                    contents: { parts },
-                    config: {
-                        responseModalities: [Modality.IMAGE],
-                    },
-                }),
-                {
-                    maxRetries: 2,
-                    initialDelayMs: 2000,
-                    retryableErrors: (error: any) => {
-                        return error.status === 429 || (error.status >= 500 && error.status < 600);
-                    },
-                }
+            const response = await callWithFallback(
+                // Primary: Try Gemini 3 Pro first
+                () => retryWithBackoff(
+                    () => ai.models.generateContent({
+                        model: getModelWithFallback('IMAGE', false),
+                        contents: { parts },
+                        config: {
+                            responseModalities: [Modality.IMAGE],
+                        },
+                    }),
+                    {
+                        maxRetries: 2,
+                        initialDelayMs: 2000,
+                        retryableErrors: (error: any) => {
+                            return error.status === 429 || (error.status >= 500 && error.status < 600);
+                        },
+                    }
+                ),
+                // Fallback: Use Gemini 2.5 Flash if primary fails
+                () => retryWithBackoff(
+                    () => ai.models.generateContent({
+                        model: getModelWithFallback('IMAGE', true),
+                        contents: { parts },
+                        config: {
+                            responseModalities: [Modality.IMAGE],
+                        },
+                    }),
+                    {
+                        maxRetries: 2,
+                        initialDelayMs: 2000,
+                        retryableErrors: (error: any) => {
+                            return error.status === 429 || (error.status >= 500 && error.status < 600);
+                        },
+                    }
+                ),
+                'Failed to edit image'
             );
             if (response.candidates?.[0]?.content?.parts) {
                 for (const part of response.candidates[0].content.parts) {

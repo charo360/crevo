@@ -51,32 +51,56 @@ export const AuthProvider: FC<{ children: React.ReactNode }> = ({ children }) =>
     }, [user?.id]);
 
     useEffect(() => {
-        // Get initial session
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setSession(session);
-            setUser(session?.user ?? null);
-            setLoading(false);
-        });
-
-        // Listen for auth changes
-        const {
-            data: { subscription },
-        } = supabase.auth.onAuthStateChange(async (_event, session) => {
-            setSession(session);
-            setUser(session?.user ?? null);
-            setLoading(false);
-            
-            // Refresh credits when user changes
-            if (session?.user?.id) {
-                await refreshCredits();
-            } else {
-                setCredits(null);
-                // Clear credits from localStorage on sign out
-                localStorage.removeItem(`credits_${session?.user?.id}`);
+        // Get initial session with error handling
+        const initializeAuth = async () => {
+            try {
+                const { data: { session }, error } = await supabase.auth.getSession();
+                if (error) {
+                    console.warn('Auth session error:', error);
+                }
+                setSession(session);
+                setUser(session?.user ?? null);
+            } catch (err) {
+                console.warn('Failed to get auth session:', err);
+                // Set to null state if auth fails
+                setSession(null);
+                setUser(null);
+            } finally {
+                setLoading(false);
             }
-        });
+        };
 
-        return () => subscription.unsubscribe();
+        initializeAuth();
+
+        // Listen for auth changes with error handling
+        let subscription: any;
+        try {
+            const {
+                data: { subscription: authSubscription },
+            } = supabase.auth.onAuthStateChange(async (_event, session) => {
+                setSession(session);
+                setUser(session?.user ?? null);
+                setLoading(false);
+                
+                // Refresh credits when user changes
+                if (session?.user?.id) {
+                    await refreshCredits();
+                } else {
+                    setCredits(null);
+                    // Clear credits from localStorage on sign out
+                    localStorage.removeItem(`credits_${session?.user?.id}`);
+                }
+            });
+            subscription = authSubscription;
+        } catch (err) {
+            console.warn('Failed to set up auth state listener:', err);
+        }
+
+        return () => {
+            if (subscription) {
+                subscription.unsubscribe();
+            }
+        };
     }, [refreshCredits]);
 
     // Load credits when user is available

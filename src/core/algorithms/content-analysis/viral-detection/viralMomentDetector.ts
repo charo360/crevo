@@ -27,6 +27,7 @@ import { fetchTranscript } from '../../../../shared/utils/youtube-utils';
 import { imageGenRateLimiter } from '../../../infrastructure/rate-limiting';
 import { retryWithBackoff } from '../../../infrastructure/retry-handlers';
 import { optimizeImageForAI } from '../../../processors/image';
+import { getModelWithFallback, callWithFallback } from '../../../services/ai-providers/gemini/config';
 
 /**
  * Main function to analyze video and detect viral moments
@@ -211,76 +212,152 @@ Calculate time for each frame based on: time = (frame_index / total_frames) * vi
 
     console.log('[Visual Analysis] Calling Gemini API for visual feature analysis...');
     try {
-        const response = await retryWithBackoff(
-            () => ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: { parts: [{ text: prompt }, ...imageParts] },
-                config: {
-                    responseMimeType: 'application/json',
-                    responseSchema: {
-                        type: Type.OBJECT,
-                        properties: {
-                            dominant_colors: {
-                                type: Type.ARRAY,
-                                items: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        color: { type: Type.STRING },
-                                        percentage: { type: Type.NUMBER }
+        const response = await callWithFallback(
+            // Primary: Try Gemini 3 Pro first
+            () => retryWithBackoff(
+                () => ai.models.generateContent({
+                    model: getModelWithFallback('TEXT', false),
+                    contents: { parts: [{ text: prompt }, ...imageParts] },
+                    config: {
+                        responseMimeType: 'application/json',
+                        responseSchema: {
+                            type: Type.OBJECT,
+                            properties: {
+                                dominant_colors: {
+                                    type: Type.ARRAY,
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            color: { type: Type.STRING },
+                                            percentage: { type: Type.NUMBER }
+                                        }
                                     }
-                                }
-                            },
-                            brightness_levels: {
-                                type: Type.ARRAY,
-                                items: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        time: { type: Type.NUMBER },
-                                        brightness: { type: Type.NUMBER }
+                                },
+                                brightness_levels: {
+                                    type: Type.ARRAY,
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            time: { type: Type.NUMBER },
+                                            brightness: { type: Type.NUMBER }
+                                        }
                                     }
-                                }
-                            },
-                            contrast_levels: {
-                                type: Type.ARRAY,
-                                items: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        time: { type: Type.NUMBER },
-                                        contrast: { type: Type.NUMBER }
+                                },
+                                contrast_levels: {
+                                    type: Type.ARRAY,
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            time: { type: Type.NUMBER },
+                                            contrast: { type: Type.NUMBER }
+                                        }
                                     }
-                                }
-                            },
-                            face_detections: {
-                                type: Type.ARRAY,
-                                items: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        time: { type: Type.NUMBER },
-                                        count: { type: Type.NUMBER },
-                                        confidence: { type: Type.NUMBER }
+                                },
+                                face_detections: {
+                                    type: Type.ARRAY,
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            time: { type: Type.NUMBER },
+                                            count: { type: Type.NUMBER },
+                                            confidence: { type: Type.NUMBER }
+                                        }
                                     }
-                                }
-                            },
-                            text_overlays: {
-                                type: Type.ARRAY,
-                                items: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        time: { type: Type.NUMBER },
-                                        text: { type: Type.STRING },
-                                        confidence: { type: Type.NUMBER }
+                                },
+                                text_overlays: {
+                                    type: Type.ARRAY,
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            time: { type: Type.NUMBER },
+                                            text: { type: Type.STRING },
+                                            confidence: { type: Type.NUMBER }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                }),
+                {
+                    maxRetries: 2,
+                    initialDelayMs: 2000,
+                    retryableErrors: (error: any) => error.status === 429 || (error.status >= 500 && error.status < 600)
                 }
-            }),
-            {
-                maxRetries: 2,
-                initialDelayMs: 2000,
-                retryableErrors: (error: any) => error.status === 429 || (error.status >= 500 && error.status < 600)
-            }
+            ),
+            // Fallback: Use Gemini 2.5 Flash if primary fails
+            () => retryWithBackoff(
+                () => ai.models.generateContent({
+                    model: getModelWithFallback('TEXT', true),
+                    contents: { parts: [{ text: prompt }, ...imageParts] },
+                    config: {
+                        responseMimeType: 'application/json',
+                        responseSchema: {
+                            type: Type.OBJECT,
+                            properties: {
+                                dominant_colors: {
+                                    type: Type.ARRAY,
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            color: { type: Type.STRING },
+                                            percentage: { type: Type.NUMBER }
+                                        }
+                                    }
+                                },
+                                brightness_levels: {
+                                    type: Type.ARRAY,
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            time: { type: Type.NUMBER },
+                                            brightness: { type: Type.NUMBER }
+                                        }
+                                    }
+                                },
+                                contrast_levels: {
+                                    type: Type.ARRAY,
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            time: { type: Type.NUMBER },
+                                            contrast: { type: Type.NUMBER }
+                                        }
+                                    }
+                                },
+                                face_detections: {
+                                    type: Type.ARRAY,
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            time: { type: Type.NUMBER },
+                                            count: { type: Type.NUMBER },
+                                            confidence: { type: Type.NUMBER }
+                                        }
+                                    }
+                                },
+                                text_overlays: {
+                                    type: Type.ARRAY,
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            time: { type: Type.NUMBER },
+                                            text: { type: Type.STRING },
+                                            confidence: { type: Type.NUMBER }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }),
+                {
+                    maxRetries: 2,
+                    initialDelayMs: 2000,
+                    retryableErrors: (error: any) => error.status === 429 || (error.status >= 500 && error.status < 600)
+                }
+            ),
+            'Failed to analyze visual features'
         );
 
         console.log('[Visual Analysis] Gemini API call completed successfully');
@@ -369,35 +446,68 @@ Return JSON array of scene segments:
 `;
 
     try {
-        const response = await retryWithBackoff(
-            () => ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: { parts: [{ text: prompt }, ...imageParts] },
-                config: {
-                    responseMimeType: 'application/json',
-                    responseSchema: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                id: { type: Type.STRING },
-                                start_time: { type: Type.NUMBER },
-                                end_time: { type: Type.NUMBER },
-                                duration: { type: Type.NUMBER },
-                                scene_type: { type: Type.STRING },
-                                importance_score: { type: Type.NUMBER },
-                                visual_complexity: { type: Type.NUMBER },
-                                motion_level: { type: Type.NUMBER }
+        const response = await callWithFallback(
+            () => retryWithBackoff(
+                () => ai.models.generateContent({
+                    model: getModelWithFallback('TEXT', false),
+                    contents: { parts: [{ text: prompt }, ...imageParts] },
+                    config: {
+                        responseMimeType: 'application/json',
+                        responseSchema: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    id: { type: Type.STRING },
+                                    start_time: { type: Type.NUMBER },
+                                    end_time: { type: Type.NUMBER },
+                                    duration: { type: Type.NUMBER },
+                                    scene_type: { type: Type.STRING },
+                                    importance_score: { type: Type.NUMBER },
+                                    visual_complexity: { type: Type.NUMBER },
+                                    motion_level: { type: Type.NUMBER }
+                                }
                             }
                         }
                     }
+                }),
+                {
+                    maxRetries: 2,
+                    initialDelayMs: 2000,
+                    retryableErrors: (error: any) => error.status === 429 || (error.status >= 500 && error.status < 600)
                 }
-            }),
-            {
-                maxRetries: 2,
-                initialDelayMs: 2000,
-                retryableErrors: (error: any) => error.status === 429 || (error.status >= 500 && error.status < 600)
-            }
+            ),
+            () => retryWithBackoff(
+                () => ai.models.generateContent({
+                    model: getModelWithFallback('TEXT', true),
+                    contents: { parts: [{ text: prompt }, ...imageParts] },
+                    config: {
+                        responseMimeType: 'application/json',
+                        responseSchema: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    id: { type: Type.STRING },
+                                    start_time: { type: Type.NUMBER },
+                                    end_time: { type: Type.NUMBER },
+                                    duration: { type: Type.NUMBER },
+                                    scene_type: { type: Type.STRING },
+                                    importance_score: { type: Type.NUMBER },
+                                    visual_complexity: { type: Type.NUMBER },
+                                    motion_level: { type: Type.NUMBER }
+                                }
+                            }
+                        }
+                    }
+                }),
+                {
+                    maxRetries: 2,
+                    initialDelayMs: 2000,
+                    retryableErrors: (error: any) => error.status === 429 || (error.status >= 500 && error.status < 600)
+                }
+            ),
+            'Failed to detect scenes'
         );
 
         // Handle response - check if response.text exists
@@ -503,80 +613,158 @@ Return JSON:
 `;
 
     try {
-        const response = await retryWithBackoff(
-            () => ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: { parts: [{ text: prompt }] },
-                config: {
-                    responseMimeType: 'application/json',
-                    responseSchema: {
-                        type: Type.OBJECT,
-                        properties: {
-                            sentences: {
-                                type: Type.ARRAY,
-                                items: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        text: { type: Type.STRING },
-                                        start_time: { type: Type.NUMBER },
-                                        end_time: { type: Type.NUMBER },
-                                        confidence: { type: Type.NUMBER }
+        const response = await callWithFallback(
+            () => retryWithBackoff(
+                () => ai.models.generateContent({
+                    model: getModelWithFallback('TEXT', false),
+                    contents: { parts: [{ text: prompt }] },
+                    config: {
+                        responseMimeType: 'application/json',
+                        responseSchema: {
+                            type: Type.OBJECT,
+                            properties: {
+                                sentences: {
+                                    type: Type.ARRAY,
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            text: { type: Type.STRING },
+                                            start_time: { type: Type.NUMBER },
+                                            end_time: { type: Type.NUMBER },
+                                            confidence: { type: Type.NUMBER }
+                                        }
                                     }
-                                }
-                            },
-                            key_phrases: {
-                                type: Type.ARRAY,
-                                items: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        phrase: { type: Type.STRING },
-                                        importance: { type: Type.NUMBER },
-                                        timestamps: { type: Type.ARRAY, items: { type: Type.NUMBER } }
+                                },
+                                key_phrases: {
+                                    type: Type.ARRAY,
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            phrase: { type: Type.STRING },
+                                            importance: { type: Type.NUMBER },
+                                            timestamps: { type: Type.ARRAY, items: { type: Type.NUMBER } }
+                                        }
                                     }
-                                }
-                            },
-                            topics: {
-                                type: Type.ARRAY,
-                                items: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        topic: { type: Type.STRING },
-                                        confidence: { type: Type.NUMBER },
-                                        timestamps: { type: Type.ARRAY, items: { type: Type.NUMBER } }
+                                },
+                                topics: {
+                                    type: Type.ARRAY,
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            topic: { type: Type.STRING },
+                                            confidence: { type: Type.NUMBER },
+                                            timestamps: { type: Type.ARRAY, items: { type: Type.NUMBER } }
+                                        }
                                     }
-                                }
-                            },
-                            sentiment_scores: {
-                                type: Type.ARRAY,
-                                items: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        time: { type: Type.NUMBER },
-                                        sentiment: { type: Type.NUMBER }
+                                },
+                                sentiment_scores: {
+                                    type: Type.ARRAY,
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            time: { type: Type.NUMBER },
+                                            sentiment: { type: Type.NUMBER }
+                                        }
                                     }
-                                }
-                            },
-                            hooks: {
-                                type: Type.ARRAY,
-                                items: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        text: { type: Type.STRING },
-                                        start_time: { type: Type.NUMBER },
-                                        end_time: { type: Type.NUMBER },
-                                        hook_score: { type: Type.NUMBER }
+                                },
+                                hooks: {
+                                    type: Type.ARRAY,
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            text: { type: Type.STRING },
+                                            start_time: { type: Type.NUMBER },
+                                            end_time: { type: Type.NUMBER },
+                                            hook_score: { type: Type.NUMBER }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                }),
+                {
+                    maxRetries: 2,
+                    initialDelayMs: 2000,
+                    retryableErrors: (error: any) => error.status === 429 || (error.status >= 500 && error.status < 600)
                 }
-            }),
-            {
-                maxRetries: 2,
-                initialDelayMs: 2000,
-                retryableErrors: (error: any) => error.status === 429 || (error.status >= 500 && error.status < 600)
-            }
+            ),
+            () => retryWithBackoff(
+                () => ai.models.generateContent({
+                    model: getModelWithFallback('TEXT', true),
+                    contents: { parts: [{ text: prompt }] },
+                    config: {
+                        responseMimeType: 'application/json',
+                        responseSchema: {
+                            type: Type.OBJECT,
+                            properties: {
+                                sentences: {
+                                    type: Type.ARRAY,
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            text: { type: Type.STRING },
+                                            start_time: { type: Type.NUMBER },
+                                            end_time: { type: Type.NUMBER },
+                                            confidence: { type: Type.NUMBER }
+                                        }
+                                    }
+                                },
+                                key_phrases: {
+                                    type: Type.ARRAY,
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            phrase: { type: Type.STRING },
+                                            importance: { type: Type.NUMBER },
+                                            timestamps: { type: Type.ARRAY, items: { type: Type.NUMBER } }
+                                        }
+                                    }
+                                },
+                                topics: {
+                                    type: Type.ARRAY,
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            topic: { type: Type.STRING },
+                                            confidence: { type: Type.NUMBER },
+                                            timestamps: { type: Type.ARRAY, items: { type: Type.NUMBER } }
+                                        }
+                                    }
+                                },
+                                sentiment_scores: {
+                                    type: Type.ARRAY,
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            time: { type: Type.NUMBER },
+                                            sentiment: { type: Type.NUMBER }
+                                        }
+                                    }
+                                },
+                                hooks: {
+                                    type: Type.ARRAY,
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            text: { type: Type.STRING },
+                                            start_time: { type: Type.NUMBER },
+                                            end_time: { type: Type.NUMBER },
+                                            hook_score: { type: Type.NUMBER }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }),
+                {
+                    maxRetries: 2,
+                    initialDelayMs: 2000,
+                    retryableErrors: (error: any) => error.status === 429 || (error.status >= 500 && error.status < 600)
+                }
+            ),
+            'Failed to analyze transcript'
         );
 
         // Handle response - check if response.text exists

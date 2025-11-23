@@ -1,6 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { TextState, ColorsState, PreferencesState } from '../../../../../types';
 import { VIBE_STYLES } from '../../../../../constants';
+import { getModelWithFallback, callWithFallback } from '../config';
 
 export const getAssistantResponse = async (
     ai: GoogleGenAI, 
@@ -47,22 +48,43 @@ Based on the user's request and the current state, respond with a single JSON ob
 Now, generate the JSON response for the user's request.
 `;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-        config: {
-            responseMimeType: 'application/json',
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    action: { type: Type.STRING },
-                    payload: { type: Type.OBJECT },
-                    responseMessage: { type: Type.STRING },
-                },
-                required: ["action", "payload", "responseMessage"]
+    const response = await callWithFallback(
+        // Primary: Try Gemini 3 Pro first
+        () => ai.models.generateContent({
+            model: getModelWithFallback('TEXT', false),
+            contents: prompt,
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        action: { type: Type.STRING },
+                        payload: { type: Type.OBJECT },
+                        responseMessage: { type: Type.STRING },
+                    },
+                    required: ["action", "payload", "responseMessage"]
+                }
             }
-        }
-    });
+        }),
+        // Fallback: Use Gemini 2.5 Flash if primary fails
+        () => ai.models.generateContent({
+            model: getModelWithFallback('TEXT', true),
+            contents: prompt,
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        action: { type: Type.STRING },
+                        payload: { type: Type.OBJECT },
+                        responseMessage: { type: Type.STRING },
+                    },
+                    required: ["action", "payload", "responseMessage"]
+                }
+            }
+        }),
+        'Failed to get assistant response'
+    );
 
     try {
         const jsonString = response.text.trim();
