@@ -47,6 +47,12 @@ const TwitterPage = lazy(() =>
 const RepurposePage = lazy(() => 
   import('../pages/platforms/RepurposePage').then(m => ({ default: m.RepurposePage }))
 );
+const YouTubeTranscriptToolPage = lazy(() =>
+  import('../pages/tools/YouTubeTranscriptToolPage').then(m => ({ default: m.YouTubeTranscriptToolPage }))
+);
+const ImageResizerToolPage = lazy(() =>
+  import('../pages/tools/ImageResizerToolPage').then(m => ({ default: m.ImageResizerToolPage }))
+);
 
 // Protected Pages
 const StudioPage = lazy(() => 
@@ -90,6 +96,8 @@ export const AppRoutes: FC = () => {
         <Routes>
           {/* Public Routes */}
           <Route path={AppRoutePaths.home} element={<LandingPage />} />
+          <Route path="/tools/youtube-transcript" element={<YouTubeTranscriptToolPage />} />
+          <Route path="/tools/image-resizer" element={<ImageResizerToolPage />} />
           <Route path={AppRoutePaths.login} element={<LoginPage />} />
           <Route path={AppRoutePaths.signup} element={<SignupPage />} />
           <Route path={AppRoutePaths.features} element={<FeaturesPage />} />

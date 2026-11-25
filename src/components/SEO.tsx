@@ -65,6 +65,18 @@ const ROUTE_SEO: Record<string, SEOConfig> = {
             'Design eye-catching 1.91:1 X/Twitter social cards and widescreen 16:9 viral video clips that stop the scroll.',
         path: '/platforms/twitter',
     },
+    '/tools/youtube-transcript': {
+        title: 'Free YouTube Transcript & HD Thumbnail Downloader | Crevo AI',
+        description:
+            'Extract timestamped YouTube video transcripts and download full HD 1280x720 YouTube thumbnails free online — no login required to try.',
+        path: '/tools/youtube-transcript',
+    },
+    '/tools/image-resizer': {
+        title: 'Free Image Resizer for YouTube, TikTok & Instagram | Crevo AI',
+        description:
+            'Resize images online free for YouTube thumbnails (1280x720), Shorts & TikTok (1080x1920), Instagram 1:1 & 4:5, X/Twitter, and Podcast covers.',
+        path: '/tools/image-resizer',
+    },
     '/login': {
         title: 'Sign In — Crevo Studio',
         description: 'Sign in to your Crevo Studio account to create AI thumbnails and viral short clips.',

@@ -92,6 +92,12 @@ export const Navbar: FC = () => {
                             <Link to="/platforms/repurpose" className="dropdown-item" onClick={handlePlatformClick}>
                                 <span>Content Repurpose</span>
                             </Link>
+                            <Link to="/tools/youtube-transcript" className="dropdown-item" onClick={handlePlatformClick}>
+                                <span>Free Transcript &amp; Thumb Tool</span>
+                            </Link>
+                            <Link to="/tools/image-resizer" className="dropdown-item" onClick={handlePlatformClick}>
+                                <span>Free Image Resizer</span>
+                            </Link>
                         </div>
                     </div>
                     <Link to="/features" className="navbar-link" onClick={() => setMobileMenuOpen(false)}>Features</Link>
