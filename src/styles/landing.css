@@ -165,6 +165,78 @@
     background-clip: text;
 }
 
+.hero-feature-marquee {
+    width: 100%;
+    max-width: 980px;
+    margin: 1.5rem auto 1.65rem;
+    overflow: hidden;
+    position: relative;
+    mask-image: linear-gradient(to right, transparent 0%, #000 8%, #000 92%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 8%, #000 92%, transparent 100%);
+}
+
+.hero-feature-track {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: max-content;
+    animation: crevoHeroMarquee 32s linear infinite;
+    padding: 4px 0;
+}
+
+.hero-feature-marquee:hover .hero-feature-track {
+    animation-play-state: paused;
+}
+
+.hero-feature-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 15px;
+    border-radius: 999px;
+    background: #ffffff;
+    border: 1px solid #e4dcf2;
+    color: #1f1633;
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 600;
+    white-space: nowrap;
+    box-shadow: 0 3px 12px rgba(87, 28, 134, 0.08);
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    flex-shrink: 0;
+}
+
+.hero-feature-pill:hover {
+    transform: translateY(-2px);
+    border-color: #7e22ce;
+    box-shadow: 0 8px 20px rgba(87, 28, 134, 0.16);
+    color: #571c86;
+}
+
+.hero-feature-pill-icon {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.hero-feature-pill-badge {
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #f3e8ff;
+    color: #571c86;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+@keyframes crevoHeroMarquee {
+    0% {
+        transform: translateX(0);
+    }
+    100% {
+        transform: translateX(-50%);
+    }
+}
+
 .hero-description {
     font-size: 1.25rem;
     color: var(--text-secondary);
