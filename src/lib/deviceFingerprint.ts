@@ -1,49 +1,46 @@
 /**
- * Hardware + Browser Device Fingerprint Utility
- * Distinguishes different physical devices on the same office/home Wi-Fi IP
- * while remaining stable on the same device (including across different emails & incognito).
+ * Cross-Browser Hardware Device Fingerprint Utility
+ * Uses ONLY pure hardware & OS properties that stay IDENTICAL across
+ * Chrome, Edge, Firefox, Safari, and Incognito on the SAME physical device,
+ * while remaining distinct across different phones/laptops on the same office Wi-Fi.
  */
 
 let cachedFingerprint: string | null = null;
 
-function getWebGLSignature(): string {
+function getOsFamily(): string {
+    const ua = (navigator.userAgent || '').toLowerCase();
+    if (ua.includes('iphone') || ua.includes('ipad') || ua.includes('ipod')) return 'ios';
+    if (ua.includes('android')) return 'android';
+    if (ua.includes('mac os') || ua.includes('macintosh')) return 'macos';
+    if (ua.includes('windows')) return 'windows';
+    if (ua.includes('linux')) return 'linux';
+    return 'other';
+}
+
+function getNormalizedGpu(): string {
     try {
         const canvas = document.createElement('canvas');
         const gl = (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')) as WebGLRenderingContext | null;
-        if (!gl) return 'no-webgl';
+        if (!gl) return '';
         const dbg = gl.getExtension('WEBGL_debug_renderer_info');
-        if (dbg) {
-            const vendor = gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) || '';
-            const renderer = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '';
-            return `${vendor}|${renderer}`;
-        }
-        return String(gl.getParameter(gl.RENDERER) || 'webgl');
+        const raw = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '') : '';
+        // Extract core GPU model token (e.g. "RTX 3060", "Intel Iris", "Apple M2", "Adreno 740")
+        // so Chrome ANGLE / Firefox / Safari wrappers normalize to the same hardware string
+        const cleaned = raw
+            .replace(/^ANGLE\s*\([^,]+,\s*/i, '')
+            .replace(/\s*\(0x[0-9a-f]+\).*$/i, '')
+            .replace(/Direct3D\d+.*$/i, '')
+            .replace(/vs_\d+_\d+.*$/i, '')
+            .replace(/[^a-z0-9]+/gi, ' ')
+            .trim()
+            .toLowerCase();
+        return cleaned.slice(0, 40);
     } catch {
-        return 'webgl-err';
-    }
-}
-
-function getCanvasSignature(): string {
-    try {
-        const canvas = document.createElement('canvas');
-        canvas.width = 200;
-        canvas.height = 40;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return 'no-canvas';
-        ctx.textBaseline = 'top';
-        ctx.font = '14px Arial, sans-serif';
-        ctx.fillStyle = '#571c86';
-        ctx.fillRect(2, 2, 60, 20);
-        ctx.fillStyle = '#111827';
-        ctx.fillText('Crevo-Device-FP-v2', 6, 8);
-        return canvas.toDataURL().slice(-64);
-    } catch {
-        return 'canvas-err';
+        return '';
     }
 }
 
 function hashString(str: string): string {
-    // Dual FNV-1a 32-bit hash -> compact 16-char hex device signature (synchronous, works in all browsers)
     let h1 = 0x811c9dc5;
     let h2 = 0x01000193;
     for (let i = 0; i < str.length; i++) {
@@ -63,19 +60,18 @@ export function getDeviceFingerprint(): string {
     try {
         const nav = navigator as any;
         const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+        const lang = (nav.language || '').split('-')[0].toLowerCase();
         const raw = [
-            screen.width,
-            screen.height,
-            screen.colorDepth,
-            window.devicePixelRatio || 1,
+            getOsFamily(),
+            Math.max(screen.width, screen.height),
+            Math.min(screen.width, screen.height),
+            screen.colorDepth || 24,
+            Math.round((window.devicePixelRatio || 1) * 100),
             nav.hardwareConcurrency || '',
-            nav.deviceMemory || '',
-            nav.maxTouchPoints || 0,
-            nav.platform || '',
-            nav.language || '',
+            nav.maxTouchPoints > 0 ? 1 : 0,
             tz,
-            getWebGLSignature(),
-            getCanvasSignature(),
+            lang,
+            getNormalizedGpu(),
         ].join('||');
 
         cachedFingerprint = hashString(raw);
