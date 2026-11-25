@@ -1,5 +1,5 @@
 import React, { FC, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -10,7 +10,7 @@ export const SignupPage: FC = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [loading, setLoading] = useState(false);
-    const { signUp, signIn } = useAuth();
+    const { user, loading: authLoading, signUp, signIn } = useAuth();
     const navigate = useNavigate();
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -56,6 +56,10 @@ export const SignupPage: FC = () => {
             setLoading(false);
         }
     };
+
+    if (!authLoading && user) {
+        return <Navigate to="/dashboard" replace />;
+    }
 
     return (
         <div className="auth-page">

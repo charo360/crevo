@@ -1,5 +1,5 @@
 import React, { FC, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -8,7 +8,7 @@ export const LoginPage: FC = () => {
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
-    const { signIn } = useAuth();
+    const { user, loading: authLoading, signIn } = useAuth();
     const navigate = useNavigate();
     
     // Show info about email confirmation if present in URL
@@ -44,6 +44,10 @@ export const LoginPage: FC = () => {
             setLoading(false);
         }
     };
+
+        if (!authLoading && user) {
+        return <Navigate to="/dashboard" replace />;
+    }
 
     return (
         <div className="auth-page">

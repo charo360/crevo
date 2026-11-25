@@ -121,7 +121,7 @@ export const Header: FC<HeaderProps> = ({ platform, onPlatformChange, onSidebarT
                 <div className="header-left">
                     {/* Home Link */}
                     <Link 
-                        to="/" 
+                        to="/?home=1" 
                         className="header-home-link"
                         title="Go to Home"
                         aria-label="Go to Home"

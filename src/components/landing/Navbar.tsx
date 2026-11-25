@@ -45,12 +45,12 @@ export const Navbar: FC = () => {
     return (
         <nav className="landing-navbar">
             <div className="navbar-container">
-                <Link to="/" className="navbar-logo" onClick={() => setMobileMenuOpen(false)}>
-                    <span className="logo-text">Revo3.ai</span>
+                <Link to={user ? '/?home=1' : '/'} className="navbar-logo" onClick={() => setMobileMenuOpen(false)}>
+                    <span className="logo-text">Crevo</span>
                 </Link>
                 
                 <div className={`navbar-menu ${mobileMenuOpen ? 'active' : ''}`}>
-                    <Link to="/" className="navbar-link" onClick={() => setMobileMenuOpen(false)}>Home</Link>
+                    <Link to={user ? '/?home=1' : '/'} className="navbar-link" onClick={() => setMobileMenuOpen(false)}>Home</Link>
                     <div 
                         ref={dropdownRef}
                         className={`navbar-dropdown ${platformsDropdownOpen ? 'active' : ''}`}
@@ -100,7 +100,9 @@ export const Navbar: FC = () => {
                     
                     {user ? (
                         <>
-                            <Link to="/dashboard" className="navbar-link" onClick={() => setMobileMenuOpen(false)}>Studio</Link>
+                            <Link to="/dashboard" className="navbar-button primary" onClick={() => setMobileMenuOpen(false)}>
+                                Open Studio →
+                            </Link>
                             <button onClick={() => {
                                 signOut();
                                 setMobileMenuOpen(false);

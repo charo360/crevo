@@ -1,4 +1,6 @@
 import React, { FC } from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { Navbar } from '../components/landing/Navbar';
 import { Hero } from '../components/landing/Hero';
 import { ProductShowcase } from '../components/landing/ProductShowcase';
@@ -20,6 +22,14 @@ import { FinalCTA } from '../components/landing/FinalCTA';
 import { Footer } from '../components/landing/Footer';
 
 export const LandingPage: FC = () => {
+    const { user, loading } = useAuth();
+    const location = useLocation();
+    const stayOnHome = new URLSearchParams(location.search).get('home') === '1';
+
+    if (!loading && user && !stayOnHome) {
+        return <Navigate to="/dashboard" replace />;
+    }
+
     return (
         <div className="landing-page">
             <Navbar />
