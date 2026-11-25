@@ -30,6 +30,18 @@ import {
 import { signToken, requireAuth } from './authMiddleware.js';
 import jwt from 'jsonwebtoken';
 import { generateWithOpenRouter } from './openrouter.js';
+import {
+    sendWelcomeEmail,
+    sendAdminNewSignupAlert,
+    sendPasswordResetEmail,
+    sendPasswordChangedEmail,
+    sendPaymentReceiptEmail,
+    sendAdminNewSaleAlert,
+    sendSubscriptionCancelledEmail,
+    sendAdminSubscriptionCancelledAlert,
+    sendBonusCreditsEmail,
+    sendNewsletterWelcomeEmail,
+} from './emailService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -81,6 +93,8 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
         const session = event.data.object;
         const userId = session.metadata?.user_id || session.client_reference_id;
         const credits = Number(session.metadata?.credits || 0);
+        const packName = session.metadata?.pack_name || `${credits} Credits`;
+        const isSubscription = session.mode === 'subscription' || session.metadata?.billing_mode === 'subscription';
 
         if (userId && credits > 0) {
             try {
@@ -94,7 +108,9 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
                     user_id: userId,
                     amount: credits,
                     transaction_type: 'purchase',
-                    description: `Purchased ${credits} credits`,
+                    description: isSubscription
+                        ? `Subscribed to ${packName} (+${credits} credits)`
+                        : `Purchased ${credits} credits (${packName})`,
                     reference_id: session.id,
                     metadata: session.metadata || {},
                 });
@@ -104,16 +120,118 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
                     stripe_session_id: session.id,
                     amount_cents: session.amount_total || 0,
                     credits,
+                    credits_purchased: credits,
                     status: 'completed',
+                    metadata: { pack_name: packName, mode: isSubscription ? 'subscription' : 'payment' },
                     credit_packs: {
-                        name: session.metadata?.pack_name || `${credits} Credits`,
+                        name: packName,
                         credits,
                         price_cents: session.amount_total || 0,
                     },
                 });
+
+                const customerEmail = session.customer_details?.email || session.customer_email;
+                if (customerEmail) {
+                    sendPaymentReceiptEmail({
+                        toEmail: customerEmail,
+                        packName,
+                        amountCents: session.amount_total || 0,
+                        credits,
+                        isSubscription,
+                        isRenewal: false,
+                    }).catch(() => {});
+                    sendAdminNewSaleAlert({
+                        customerEmail,
+                        packName,
+                        amountCents: session.amount_total || 0,
+                        credits,
+                        isSubscription,
+                        isRenewal: false,
+                    }).catch(() => {});
+                }
             } catch (err) {
                 console.error('Failed to process completed checkout session:', err);
             }
+        }
+    } else if (event.type === 'invoice.paid') {
+        const invoice = event.data.object;
+        // Only credit monthly renewals (initial checkout is already credited in checkout.session.completed)
+        if (invoice.billing_reason === 'subscription_cycle') {
+            try {
+                const customerEmail = String(invoice.customer_email || '').trim().toLowerCase();
+                const priceId = invoice.lines?.data?.[0]?.price?.id || '';
+                const user = customerEmail ? await User.findOne({ email: customerEmail }) : null;
+                const pack = priceId ? await CreditPack.findOne({ stripe_price_id: priceId }).lean() : null;
+                const amountCents = Number(invoice.amount_paid || 0);
+                const credits = pack?.credits || (amountCents >= 9000 ? 1000 : amountCents >= 2500 ? 200 : 50);
+                const packName = pack?.name || (amountCents >= 9000 ? 'Enterprise Plan' : 'Pro Plan');
+
+                if (user && credits > 0) {
+                    const userId = user._id.toString();
+                    await UserCredits.findOneAndUpdate(
+                        { user_id: userId },
+                        { $inc: { balance: credits, total_earned: credits } },
+                        { upsert: true, new: true }
+                    );
+                    await CreditTransaction.create({
+                        user_id: userId,
+                        amount: credits,
+                        transaction_type: 'purchase',
+                        description: `Monthly subscription renewal — ${packName} (+${credits} credits)`,
+                        reference_id: invoice.id,
+                    });
+                    await Payment.create({
+                        user_id: userId,
+                        stripe_session_id: invoice.id,
+                        amount_cents: amountCents,
+                        credits,
+                        credits_purchased: credits,
+                        status: 'completed',
+                        metadata: { pack_name: packName, mode: 'subscription_renewal' },
+                    });
+
+                    sendPaymentReceiptEmail({
+                        toEmail: user.email,
+                        packName,
+                        amountCents,
+                        credits,
+                        isSubscription: true,
+                        isRenewal: true,
+                    }).catch(() => {});
+                    sendAdminNewSaleAlert({
+                        customerEmail: user.email,
+                        packName,
+                        amountCents,
+                        credits,
+                        isSubscription: true,
+                        isRenewal: true,
+                    }).catch(() => {});
+                }
+            } catch (err) {
+                console.error('Failed to process subscription renewal invoice:', err);
+            }
+        }
+    } else if (event.type === 'customer.subscription.deleted') {
+        try {
+            const sub = event.data.object;
+            const customerId = sub.customer;
+            let customerEmail = '';
+            if (customerId && stripe) {
+                const customer = await stripe.customers.retrieve(String(customerId));
+                if (customer && !customer.deleted && customer.email) {
+                    customerEmail = customer.email;
+                }
+            }
+            const priceId = sub.items?.data?.[0]?.price?.id || '';
+            const pack = priceId ? await CreditPack.findOne({ stripe_price_id: priceId }).lean() : null;
+            const packName = pack?.name || 'Crevo AI Subscription';
+
+            if (customerEmail) {
+                sendSubscriptionCancelledEmail(customerEmail, packName).catch(() => {});
+                sendAdminSubscriptionCancelledAlert(customerEmail, packName).catch(() => {});
+            }
+        } catch (err) {
+            console.error('Failed to process subscription cancellation webhook:', err);
         }
     }
 
@@ -242,6 +360,11 @@ app.post('/api/auth/signup', async (req, res) => {
         });
 
         const token = signToken(user);
+
+        // Fire-and-forget Welcome Email to user + New Signup Alert to Admin
+        sendWelcomeEmail(normalizedEmail).catch(() => {});
+        sendAdminNewSignupAlert(normalizedEmail, signupIp).catch(() => {});
+
         return res.status(201).json({
             user: formatUser(user),
             token,
@@ -283,53 +406,6 @@ app.post('/api/auth/login', async (req, res) => {
         return res.status(500).json({ error: 'Failed to sign in. Please try again.' });
     }
 });
-
-async function sendPasswordResetEmail(toEmail, resetUrl) {
-    const resendKey = process.env.RESEND_API_KEY;
-    const fromEmail = process.env.EMAIL_FROM || 'Crevo AI <noreply@crevo.app>';
-
-    if (!resendKey) {
-        console.warn(`[Auth] RESEND_API_KEY not set — password reset link for ${toEmail}: ${resetUrl}`);
-        return { sent: false, reason: 'no_provider' };
-    }
-
-    const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${resendKey}`,
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            from: fromEmail,
-            to: [toEmail],
-            subject: 'Reset your Crevo AI password',
-            html: `
-                <div style="font-family: Inter, Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; color: #111827;">
-                    <h2 style="color: #571c86; margin: 0 0 12px;">Reset your Crevo AI password</h2>
-                    <p style="font-size: 15px; line-height: 1.6; color: #374151;">
-                        We received a request to reset your password for <strong>${toEmail}</strong>. Click the button below to choose a new password. This link expires in 1 hour.
-                    </p>
-                    <p style="margin: 24px 0;">
-                        <a href="${resetUrl}" style="display: inline-block; padding: 12px 24px; background: #571c86; color: #ffffff; text-decoration: none; border-radius: 10px; font-weight: 700;">
-                            Reset Password
-                        </a>
-                    </p>
-                    <p style="font-size: 13px; color: #6b7280;">
-                        If you didn't request this, you can safely ignore this email.
-                    </p>
-                </div>
-            `,
-        }),
-    });
-
-    if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        console.error('Resend email error:', res.status, text);
-        return { sent: false, reason: 'provider_error' };
-    }
-
-    return { sent: true };
-}
 
 app.post('/api/auth/forgot-password', async (req, res) => {
     try {
@@ -389,6 +465,8 @@ app.post('/api/auth/reset-password', async (req, res) => {
         user.resetPasswordTokenHash = null;
         user.resetPasswordExpiresAt = null;
         await user.save();
+
+        sendPasswordChangedEmail(user.email).catch(() => {});
 
         return res.json({
             ok: true,
@@ -1070,6 +1148,7 @@ app.post('/api/newsletter/subscribe', async (req, res) => {
             { email: normalized },
             { upsert: true, new: true }
         );
+        sendNewsletterWelcomeEmail(normalized).catch(() => {});
         return res.json({ ok: true });
     } catch (err) {
         console.error('Newsletter subscribe error:', err);
@@ -1745,6 +1824,13 @@ app.post('/api/admin/users/:userId/credits', requireAdmin, async (req, res) => {
             transaction_type: amount > 0 ? 'bonus' : 'adjustment',
             description: note,
         });
+
+        if (amount > 0) {
+            const targetUser = await User.findById(userId, { email: 1 }).lean();
+            if (targetUser?.email) {
+                sendBonusCreditsEmail(targetUser.email, amount, note, updated.balance).catch(() => {});
+            }
+        }
 
         return res.json({
             ok: true,
