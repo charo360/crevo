@@ -67,23 +67,38 @@ export const GoogleSignInButton: FC<GoogleSignInButtonProps> = ({ mode = 'signin
     const { signInWithGoogle } = useAuth();
     const navigate = useNavigate();
     const buttonContainerRef = useRef<HTMLDivElement>(null);
-    const [enabled, setEnabled] = useState(false);
+    const [clientId, setClientId] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
 
+    // Step 1: Fetch Google Client ID so the container div mounts first
     useEffect(() => {
         let cancelled = false;
+        apiRequest<{ enabled: boolean; clientId: string | null }>('/api/auth/google/config')
+            .then((cfg) => {
+                if (!cancelled && cfg?.enabled && cfg.clientId) {
+                    setClientId(cfg.clientId);
+                }
+            })
+            .catch((err) => {
+                console.warn('Google Sign-In config unavailable:', err);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
-        async function initGoogleButton() {
+    // Step 2: Once clientId is ready and buttonContainerRef is mounted, render the Google button
+    useEffect(() => {
+        if (!clientId) return;
+        let cancelled = false;
+
+        async function renderGoogleButton() {
             try {
-                const cfg = await apiRequest<{ enabled: boolean; clientId: string | null }>('/api/auth/google/config');
-                if (cancelled || !cfg?.enabled || !cfg.clientId) return;
-
-                setEnabled(true);
                 await loadGoogleIdentityScript();
                 if (cancelled || !window.google?.accounts?.id || !buttonContainerRef.current) return;
 
                 window.google.accounts.id.initialize({
-                    client_id: cfg.clientId,
+                    client_id: clientId,
                     callback: async (response) => {
                         if (!response?.credential) {
                             toast.error('Google sign-in did not return a credential.');
@@ -120,13 +135,13 @@ export const GoogleSignInButton: FC<GoogleSignInButtonProps> = ({ mode = 'signin
             }
         }
 
-        initGoogleButton();
+        renderGoogleButton();
         return () => {
             cancelled = true;
         };
-    }, [mode, navigate, signInWithGoogle]);
+    }, [clientId, mode, navigate, signInWithGoogle]);
 
-    if (!enabled) return null;
+    if (!clientId) return null;
 
     return (
         <div style={{ marginBottom: '18px' }}>
