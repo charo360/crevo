@@ -500,8 +500,18 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
                                 </div>
                                 <div className="clip-info">
                                     <h4>{clip.title}</h4>
-                                    <p className="clip-duration">{clip.duration.toFixed(1)}s</p>
-                                    <p className="clip-platform">{clip.platform_format.replace('_', ' ').toUpperCase()}</p>
+                                    <p className="clip-duration">
+                                        {clip.duration.toFixed(1)}s
+                                        {clip.metadata?.resolution ? ` • ${clip.metadata.resolution}` : ''}
+                                        {clip.aspect_ratio ? ` (${clip.aspect_ratio})` : ''}
+                                    </p>
+                                    <p className="clip-platform">
+                                        {Array.isArray((clip.metadata as any)?.target_platforms) && (clip.metadata as any).target_platforms.length > 0
+                                            ? (clip.metadata as any).target_platforms
+                                                  .map((p: string) => p.replace('_', ' ').toUpperCase())
+                                                  .join(' • ')
+                                            : clip.platform_format.replace('_', ' ').toUpperCase()}
+                                    </p>
                                     <div className="clip-actions">
                                         <a 
                                             href={clip.clip_url} 

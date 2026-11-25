@@ -130,19 +130,23 @@ export async function repurposeVideo(
             filteredMoments.push(...topMoments);
         }
         
-        // Step 7: Generate clips — deduplicate by aspect ratio so identical 9:16 platforms only encode ONCE!
+        // Step 7: Generate clips — group platforms by aspect ratio so identical 9:16 platforms only encode ONCE!
         const clips: ViralClip[] = [];
         const selectedRanges: Array<{ start: number; end: number }> = [];
-        const uniqueAspectPlatforms: string[] = [];
-        const seenAspects = new Set<string>();
+        const aspectGroups = new Map<string, string[]>();
         for (const p of finalOptions.platforms) {
             const aspect = getPlatformSettings(p).aspectRatio;
-            if (!seenAspects.has(aspect)) {
-                seenAspects.add(aspect);
-                uniqueAspectPlatforms.push(p);
+            if (!aspectGroups.has(aspect)) {
+                aspectGroups.set(aspect, []);
             }
+            aspectGroups.get(aspect)!.push(p);
         }
-        const totalClips = filteredMoments.length * uniqueAspectPlatforms.length;
+        const uniqueAspectGroups = Array.from(aspectGroups.entries()).map(([aspect, platforms]) => ({
+            aspect,
+            primaryPlatform: platforms[0],
+            platforms,
+        }));
+        const totalClips = filteredMoments.length * uniqueAspectGroups.length;
         let processedClips = 0;
 
         const clipVerb = finalOptions.include_captions ? 'Cutting & captioning' : 'Cutting';
@@ -159,7 +163,8 @@ export async function repurposeVideo(
                 selectedRanges.push({ start, end });
             }
 
-            for (const platform of uniqueAspectPlatforms) {
+            for (const group of uniqueAspectGroups) {
+                const platform = group.primaryPlatform;
                 clipIndex++;
                 const currentClipNum = clipIndex;
                 const clipStartPct = 62 + Math.round(((currentClipNum - 1) / Math.max(1, totalClips)) * 32);
@@ -185,6 +190,7 @@ export async function repurposeVideo(
                             }
                         }
                     );
+                    (clip.metadata as any).target_platforms = group.platforms;
                     clips.push(clip);
                     processedClips++;
                     onProgress?.(clipEndPct, 100, `Finished clip ${processedClips} of ${totalClips}`);
