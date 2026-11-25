@@ -12,6 +12,9 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
 import { ClipMetadata } from '../../../types/repurpose';
+import { getAuthToken } from '../../../lib/api';
+
+const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 
 // FFmpeg instance (singleton) + cached input file to avoid rewriting 100MB+ per clip
 let ffmpegInstance: FFmpeg | null = null;
@@ -19,7 +22,24 @@ let isFFmpegLoaded = false;
 let cachedInputFile: File | Blob | null = null;
 const CACHED_INPUT_NAME = 'input.mp4';
 
+// Server-side native FFmpeg upload cache (uploads once per video, cuts clips in ~1-2s each)
+let serverFFmpegAvailable = true;
+let serverUploadedFile: File | Blob | null = null;
+let serverUploadId: string | null = null;
+
 export async function clearCachedVideoInput(): Promise<void> {
+    if (serverUploadId) {
+        const idToDelete = serverUploadId;
+        serverUploadId = null;
+        serverUploadedFile = null;
+        const token = getAuthToken();
+        if (token) {
+            fetch(`${API_BASE}/api/video/upload/${encodeURIComponent(idToDelete)}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${token}` },
+            }).catch(() => {});
+        }
+    }
     if (ffmpegInstance && isFFmpegLoaded && cachedInputFile) {
         try {
             await ffmpegInstance.deleteFile(CACHED_INPUT_NAME);
@@ -28,6 +48,82 @@ export async function clearCachedVideoInput(): Promise<void> {
         }
     }
     cachedInputFile = null;
+}
+
+async function processVideoClipOnServer(
+    videoFile: File | Blob,
+    startTime: number,
+    endTime: number,
+    options: {
+        aspectRatio?: '9:16' | '16:9' | '1:1' | '4:5';
+        fps?: number;
+        includeAudio?: boolean;
+    }
+): Promise<{ blob: Blob; metadata: ClipMetadata } | null> {
+    if (!serverFFmpegAvailable) return null;
+    const token = getAuthToken();
+    if (!token) return null;
+
+    if (serverUploadedFile !== videoFile || !serverUploadId) {
+        const uploadRes = await fetch(`${API_BASE}/api/video/upload`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/octet-stream',
+            },
+            body: videoFile,
+        });
+        if (!uploadRes.ok) {
+            const errData = await uploadRes.json().catch(() => ({}));
+            throw new Error(errData?.error || `Video upload failed (${uploadRes.status})`);
+        }
+        const uploaded = await uploadRes.json();
+        serverUploadId = uploaded.uploadId;
+        serverUploadedFile = videoFile;
+    }
+
+    const duration = Math.max(1, endTime - startTime);
+    const fps = options.fps || 30;
+    const clipRes = await fetch(`${API_BASE}/api/video/clip`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            uploadId: serverUploadId,
+            startTime,
+            endTime,
+            aspectRatio: options.aspectRatio || '9:16',
+            fps,
+            includeAudio: options.includeAudio !== false,
+        }),
+    });
+
+    if (clipRes.status === 501) {
+        serverFFmpegAvailable = false;
+        return null;
+    }
+
+    if (!clipRes.ok) {
+        const errData = await clipRes.json().catch(() => ({}));
+        throw new Error(errData?.error || `Server clip failed (${clipRes.status})`);
+    }
+
+    const blob = await clipRes.blob();
+    const width = clipRes.headers.get('X-Clip-Width') || '720';
+    const height = clipRes.headers.get('X-Clip-Height') || '1280';
+
+    const metadata: ClipMetadata = {
+        frame_count: Math.ceil(duration * fps),
+        fps,
+        resolution: `${width}x${height}`,
+        file_size: blob.size,
+        audio_enabled: options.includeAudio !== false,
+        captions_enabled: false,
+    };
+
+    return { blob, metadata };
 }
 
 /**
@@ -81,6 +177,17 @@ export async function processVideoClip(
         includeAudio?: boolean;
     } = {}
 ): Promise<{ blob: Blob; metadata: ClipMetadata }> {
+    // 1. Prefer fast native server-side FFmpeg (works on HTTP & HTTPS, handles large videos cleanly)
+    try {
+        const serverResult = await processVideoClipOnServer(videoFile, startTime, endTime, options);
+        if (serverResult) {
+            return serverResult;
+        }
+    } catch (serverErr: any) {
+        console.warn('Server-side FFmpeg failed, attempting browser FFmpeg fallback:', serverErr?.message || serverErr);
+    }
+
+    // 2. Fallback to browser FFmpeg.wasm (e.g., local dev without native ffmpeg installed)
     const ffmpeg = await getFFmpeg();
     const inputFileName = CACHED_INPUT_NAME;
     const outputFileName = `output_${Date.now()}.${options.outputFormat || 'mp4'}`;

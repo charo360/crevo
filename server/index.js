@@ -1,5 +1,9 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
+import crypto from 'crypto';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import express from 'express';
@@ -867,6 +871,219 @@ app.post('/api/newsletter/subscribe', async (req, res) => {
         console.error('Newsletter subscribe error:', err);
         return res.status(500).json({ error: 'Failed to subscribe' });
     }
+});
+
+// ==================== NATIVE FFMPEG VIDEO CLIPPING ====================
+
+const execFileAsync = promisify(execFile);
+const VIDEO_TMP_DIR = path.join(os.tmpdir(), 'revo3-videos');
+const MAX_VIDEO_UPLOAD_BYTES = 600 * 1024 * 1024; // 600 MB
+const VIDEO_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+function ensureVideoTmpDir() {
+    if (!fs.existsSync(VIDEO_TMP_DIR)) {
+        fs.mkdirSync(VIDEO_TMP_DIR, { recursive: true });
+    }
+}
+
+function cleanupOldTempVideos() {
+    try {
+        ensureVideoTmpDir();
+        const now = Date.now();
+        for (const entry of fs.readdirSync(VIDEO_TMP_DIR)) {
+            const fullPath = path.join(VIDEO_TMP_DIR, entry);
+            try {
+                const stat = fs.statSync(fullPath);
+                if (now - stat.mtimeMs > VIDEO_TTL_MS) {
+                    fs.unlinkSync(fullPath);
+                }
+            } catch {
+                // ignore individual file errors
+            }
+        }
+    } catch {
+        // ignore cleanup errors
+    }
+}
+
+function isValidUploadId(id) {
+    return typeof id === 'string' && /^[a-f0-9-]{16,64}$/i.test(id);
+}
+
+app.post('/api/video/upload', requireAuth, (req, res) => {
+    cleanupOldTempVideos();
+    ensureVideoTmpDir();
+
+    const uploadId = crypto.randomUUID();
+    const filePath = path.join(VIDEO_TMP_DIR, `${uploadId}.mp4`);
+    const writeStream = fs.createWriteStream(filePath);
+    let totalBytes = 0;
+    let aborted = false;
+
+    const cleanup = () => {
+        try {
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        } catch {
+            // ignore
+        }
+    };
+
+    req.on('data', (chunk) => {
+        if (aborted) return;
+        totalBytes += chunk.length;
+        if (totalBytes > MAX_VIDEO_UPLOAD_BYTES) {
+            aborted = true;
+            writeStream.destroy();
+            cleanup();
+            if (!res.headersSent) {
+                res.status(413).json({ error: 'Video file exceeds 600 MB limit' });
+            }
+            req.destroy();
+        }
+    });
+
+    req.on('error', (err) => {
+        aborted = true;
+        writeStream.destroy();
+        cleanup();
+        if (!res.headersSent) {
+            res.status(500).json({ error: `Upload stream error: ${err.message}` });
+        }
+    });
+
+    writeStream.on('error', (err) => {
+        aborted = true;
+        cleanup();
+        if (!res.headersSent) {
+            res.status(500).json({ error: `Disk write error: ${err.message}` });
+        }
+    });
+
+    writeStream.on('finish', () => {
+        if (aborted || res.headersSent) return;
+        if (totalBytes === 0) {
+            cleanup();
+            return res.status(400).json({ error: 'Empty video upload' });
+        }
+        return res.json({ uploadId, size: totalBytes });
+    });
+
+    req.pipe(writeStream);
+});
+
+app.post('/api/video/clip', requireAuth, async (req, res) => {
+    const {
+        uploadId,
+        startTime = 0,
+        endTime = 15,
+        aspectRatio = '9:16',
+        fps = 30,
+        includeAudio = true,
+    } = req.body || {};
+
+    if (!isValidUploadId(uploadId)) {
+        return res.status(400).json({ error: 'Invalid uploadId' });
+    }
+
+    const inputPath = path.join(VIDEO_TMP_DIR, `${uploadId}.mp4`);
+    if (!fs.existsSync(inputPath)) {
+        return res.status(404).json({ error: 'Uploaded video expired or not found. Please try again.' });
+    }
+
+    const start = Math.max(0, Number(startTime) || 0);
+    const end = Math.max(start + 1, Number(endTime) || start + 15);
+    const duration = Math.max(1, end - start);
+
+    let outputWidth = 720;
+    let outputHeight = 1280;
+    if (aspectRatio === '16:9') {
+        outputWidth = 1280;
+        outputHeight = 720;
+    } else if (aspectRatio === '1:1') {
+        outputWidth = 720;
+        outputHeight = 720;
+    } else if (aspectRatio === '4:5') {
+        outputWidth = 720;
+        outputHeight = 900;
+    }
+
+    const targetFps = Math.min(60, Math.max(15, Number(fps) || 30));
+    const outputPath = path.join(VIDEO_TMP_DIR, `clip_${crypto.randomUUID()}.mp4`);
+    const filterComplex = `[0:v]scale=${outputWidth}:${outputHeight}:force_original_aspect_ratio=increase,crop=${outputWidth}:${outputHeight}[v]`;
+
+    const args = [
+        '-y',
+        '-ss', start.toFixed(3),
+        '-i', inputPath,
+        '-t', duration.toFixed(3),
+        '-filter_complex', filterComplex,
+        '-map', '[v]',
+        '-c:v', 'libx264',
+        '-preset', 'ultrafast',
+        '-crf', '23',
+        '-pix_fmt', 'yuv420p',
+        '-r', String(targetFps),
+        '-movflags', '+faststart',
+    ];
+
+    if (includeAudio !== false) {
+        args.push('-map', '0:a?', '-c:a', 'aac', '-b:a', '128k');
+    } else {
+        args.push('-an');
+    }
+
+    args.push(outputPath);
+
+    const removeOutput = () => {
+        try {
+            if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+        } catch {
+            // ignore
+        }
+    };
+
+    try {
+        await execFileAsync('ffmpeg', args, { maxBuffer: 10 * 1024 * 1024 });
+        const stat = fs.statSync(outputPath);
+        res.setHeader('Content-Type', 'video/mp4');
+        res.setHeader('Content-Length', String(stat.size));
+        res.setHeader('X-Clip-Width', String(outputWidth));
+        res.setHeader('X-Clip-Height', String(outputHeight));
+        const readStream = fs.createReadStream(outputPath);
+        readStream.on('close', removeOutput);
+        readStream.on('error', (err) => {
+            removeOutput();
+            if (!res.headersSent) {
+                res.status(500).json({ error: `Failed to stream clip: ${err.message}` });
+            }
+        });
+        return readStream.pipe(res);
+    } catch (err) {
+        removeOutput();
+        if (err && err.code === 'ENOENT') {
+            return res.status(501).json({
+                error: 'Native FFmpeg is not installed on this server',
+                code: 'FFMPEG_UNAVAILABLE',
+            });
+        }
+        console.error('Native FFmpeg clip error:', err?.stderr || err?.message || err);
+        return res.status(500).json({
+            error: `FFmpeg failed to cut clip: ${err?.message || 'unknown error'}`,
+        });
+    }
+});
+
+app.delete('/api/video/upload/:uploadId', requireAuth, (req, res) => {
+    const { uploadId } = req.params;
+    if (isValidUploadId(uploadId)) {
+        const filePath = path.join(VIDEO_TMP_DIR, `${uploadId}.mp4`);
+        try {
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        } catch {
+            // ignore
+        }
+    }
+    return res.json({ ok: true });
 });
 
 // ==================== PRODUCTION STATIC FRONTEND ====================
