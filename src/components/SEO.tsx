@@ -12,7 +12,7 @@ const SITE_URL = 'https://crevo.app';
 
 const ROUTE_SEO: Record<string, SEOConfig> = {
     '/': {
-        title: 'Crevo — AI YouTube Thumbnail Generator & Viral Short Clip Studio',
+        title: 'Crevo AI — YouTube Thumbnail Generator & Viral Short Clip Studio',
         description:
             'Create high-CTR YouTube thumbnails, improve existing thumbnails with AI, repurpose long videos into viral Shorts, TikToks & Reels with auto-captions, and download transcripts in seconds.',
         path: '/',
