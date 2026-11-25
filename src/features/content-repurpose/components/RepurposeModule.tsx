@@ -7,6 +7,7 @@
 import React, { FC, useState, useRef } from 'react';
 import { toast } from 'react-toastify';
 import { GoogleGenAI } from "@google/genai";
+import { createAiClient } from '../../../core/services/ai-providers/openrouterClient';
 import { repurposeVideo } from '../services/repurposeService';
 import { RepurposeResult, ClipGenerationOptions } from '../../../types/repurpose';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -29,16 +30,16 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
     
     const [options, setOptions] = useState<ClipGenerationOptions>({
         min_duration: 15,
-        max_duration: 60,
-        target_clip_count: 10,
+        max_duration: 45,
+        target_clip_count: 3,
         platforms: ['youtube_shorts', 'tiktok', 'instagram_reels'],
         include_captions: true,
         include_transitions: true,
-        virality_threshold: 70,
+        virality_threshold: 65,
         overlap_prevention: true,
     });
 
-    const ai = useRef<GoogleGenAI>(new GoogleGenAI({ apiKey: process.env.API_KEY }));
+    const ai = useRef<GoogleGenAI>(createAiClient());
 
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -183,15 +184,30 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
             {/* Video Upload/URL Section */}
             <div className="repurpose-upload-section">
                 <div className="upload-content">
-                    {/* File Upload */}
-                    <div className="upload-area" onClick={() => fileInputRef.current?.click()}>
+                    {/* File Upload with real drag-and-drop */}
+                    <div
+                        className="upload-area"
+                        onClick={() => fileInputRef.current?.click()}
+                        onDragOver={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                        }}
+                        onDrop={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const file = e.dataTransfer.files?.[0];
+                            if (file) {
+                                handleFileChange({ target: { files: [file] } } as any);
+                            }
+                        }}
+                    >
                         {videoPreviewUrl ? (
                             <div style={{ width: '100%' }}>
                                 <video 
                                     src={videoPreviewUrl} 
                                     controls 
                                     className="video-preview"
-                                    style={{ maxWidth: '100%', maxHeight: '400px', margin: '0 auto', display: 'block' }}
+                                    style={{ maxWidth: '100%', maxHeight: '360px', margin: '0 auto', display: 'block', borderRadius: '10px' }}
                                 />
                                 <button 
                                     onClick={(e) => {
@@ -201,20 +217,20 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
                                         setVideoPreviewUrl('');
                                     }}
                                     className="remove-video-btn"
-                                    style={{ marginTop: '1rem', padding: '0.5rem 1rem', background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                    style={{ marginTop: '1rem', padding: '0.5rem 1rem', background: '#ef4444', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}
                                 >
                                     Remove Video
                                 </button>
                             </div>
                         ) : (
                             <>
-                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--primary, #571c86)" strokeWidth="2">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                                     <polyline points="17 8 12 3 7 8"></polyline>
                                     <line x1="12" y1="3" x2="12" y2="15"></line>
                                 </svg>
-                                <p>Click to upload or drag and drop</p>
-                                <p className="upload-hint">MP4, MOV, AVI up to 500MB</p>
+                                <p>Click to upload or drag &amp; drop a video</p>
+                                <p className="upload-hint">MP4, MOV, WebM up to 200MB — AI finds top viral moments &amp; clips them in seconds</p>
                             </>
                         )}
                     </div>
@@ -225,24 +241,6 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
                         accept="video/*" 
                         style={{ display: 'none' }} 
                     />
-
-                    {/* URL Input */}
-                    <div className="url-input-section" style={{ marginTop: '1rem' }}>
-                        <input 
-                            type="text" 
-                            ref={urlInputRef}
-                            placeholder="Or paste YouTube, Vimeo, or video URL..."
-                            className="url-input"
-                            onKeyPress={(e) => {
-                                if (e.key === 'Enter') {
-                                    handleUrlSubmit();
-                                }
-                            }}
-                        />
-                        <button onClick={handleUrlSubmit} className="url-submit-btn">
-                            Load Video
-                        </button>
-                    </div>
                 </div>
             </div>
 

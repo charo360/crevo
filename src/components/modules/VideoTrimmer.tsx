@@ -104,8 +104,10 @@ export const VideoTrimmer: FC<VideoTrimmerProps> = ({ videoUrl, onVideoLoad, tri
         };
     }, [handleMouseMove, handleMouseUp]);
 
-    const startPercent = (trimTimes.start / videoDuration) * 100;
-    const endPercent = ((videoDuration - trimTimes.end) / videoDuration) * 100;
+    const safeDuration = videoDuration > 0 ? videoDuration : 1;
+    const startPercent = videoDuration > 0 ? Math.max(0, Math.min(100, (trimTimes.start / safeDuration) * 100)) : 0;
+    const endPercent = videoDuration > 0 ? Math.max(0, Math.min(100, ((safeDuration - trimTimes.end) / safeDuration) * 100)) : 0;
+    const progressPercent = videoDuration > 0 ? Math.max(0, Math.min(100, (currentTime / safeDuration) * 100)) : 0;
 
     return (
         <div className="trimmer-container">
@@ -120,7 +122,7 @@ export const VideoTrimmer: FC<VideoTrimmerProps> = ({ videoUrl, onVideoLoad, tri
                 />
             </div>
             <div className="trimmer-controls">
-                <button className="trimmer-play-btn" onClick={togglePlay}>
+                <button type="button" className="trimmer-play-btn" onClick={togglePlay}>
                     {isPlaying ? <svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"></path></svg> : <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg>}
                 </button>
                 <div className="trimmer-time-display">
@@ -129,7 +131,7 @@ export const VideoTrimmer: FC<VideoTrimmerProps> = ({ videoUrl, onVideoLoad, tri
             </div>
              <div className="trimmer-timeline-container" ref={timelineRef}>
                 <div className="trimmer-timeline">
-                    <div className="trimmer-timeline-progress" style={{ width: `${(currentTime / videoDuration) * 100}%` }}></div>
+                    <div className="trimmer-timeline-progress" style={{ width: `${progressPercent}%` }}></div>
                     <div className="trimmer-timeline-range" style={{ left: `${startPercent}%`, right: `${endPercent}%` }}>
                          <div className="trimmer-timeline-handle" style={{ left: '0%' }} onMouseDown={() => handleMouseDown('start')}></div>
                          <div className="trimmer-timeline-handle" style={{ left: '100%' }} onMouseDown={() => handleMouseDown('end')}></div>

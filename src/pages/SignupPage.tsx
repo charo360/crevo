@@ -32,30 +32,19 @@ export const SignupPage: FC = () => {
             const { error: signUpError, session } = await signUp(email, password) as any;
             
             if (signUpError) {
-                if (signUpError.name === 'EmailConfirmationRequired') {
-                    toast.error('Email confirmation is enabled in Supabase. Please go to your Supabase dashboard → Authentication → Providers → Email → Toggle OFF "Confirm email" to allow direct signup.');
-                } else if (signUpError.name === 'ConfigurationError') {
-                    toast.error(signUpError.message || 'Supabase is not configured. Please set up your environment variables.');
-                } else if (signUpError.name === 'NetworkError' || signUpError.message?.includes('Failed to fetch') || signUpError.message?.includes('ERR_NAME_NOT_RESOLVED')) {
-                    toast.error('Unable to connect to Supabase. Please verify your Supabase project URL is correct. Check your .env.local file and ensure VITE_SUPABASE_URL points to a valid Supabase project.');
+                if (signUpError.name === 'NetworkError' || signUpError.message?.includes('Failed to fetch')) {
+                    toast.error('Unable to connect to the backend server. Please make sure the API server is running.');
                 } else {
                     toast.error(signUpError.message || 'Failed to sign up');
                 }
             } else if (session) {
-                // User is already signed in (email confirmation disabled)
                 toast.success('Account created successfully!');
-                navigate('/app');
+                navigate('/dashboard');
             } else {
-                // Try to sign in (fallback)
                 const { error: signInError } = await signIn(email, password);
-                
                 if (signInError) {
-                    if (signInError.message?.includes('Email not confirmed')) {
-                        toast.error('Email confirmation is required. Please disable it in Supabase dashboard: https://supabase.com/dashboard/project/yxsscklulcedocisdrje/auth/providers');
-                    } else {
-                        toast.warning('Account created but sign-in failed. Please try signing in manually.');
-                        setTimeout(() => navigate('/login'), 2000);
-                    }
+                    toast.warning('Account created but sign-in failed. Please try signing in manually.');
+                    setTimeout(() => navigate('/login'), 2000);
                 } else {
                     toast.success('Account created and signed in successfully!');
                     navigate('/dashboard');

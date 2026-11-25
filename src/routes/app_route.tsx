@@ -182,6 +182,26 @@ export const AppRoutes: FC = () => {
               </ProtectedRoute>
             }
           />
+          <Route
+            path={AppRoutePaths.dashboard.resizeImage}
+            element={
+              <ProtectedRoute>
+                <ErrorBoundary>
+                  <StudioPage view="resize" />
+                </ErrorBoundary>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path={AppRoutePaths.dashboard.youtubeTools}
+            element={
+              <ProtectedRoute>
+                <ErrorBoundary>
+                  <StudioPage view="youtube-tools" />
+                </ErrorBoundary>
+              </ProtectedRoute>
+            }
+          />
 
           {/* Profile Route */}
           <Route

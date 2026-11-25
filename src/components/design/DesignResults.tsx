@@ -1,5 +1,5 @@
 import React, { FC } from 'react';
-import { DesignResult, Platform, ImageAsset } from '../../types';
+import { DesignResult, Platform, ImageAsset, ResizeOption } from '../../types';
 import { DesignCard } from './DesignCard';
 
 interface DesignResultsProps {
@@ -10,7 +10,7 @@ interface DesignResultsProps {
     onUpscale: (image: ImageAsset) => void;
     onDownload: (image: ImageAsset) => void;
     onPreview: (image: ImageAsset) => void;
-    onAdapt: (image: ImageAsset, platform: Platform) => void;
+    onAdapt: (image: ImageAsset, option: ResizeOption) => void;
 }
 
 export const DesignResults: FC<DesignResultsProps> = ({ 
@@ -23,7 +23,10 @@ export const DesignResults: FC<DesignResultsProps> = ({
     onPreview, 
     onAdapt 
 }) => (
-    <div className="design-results-grid">
+    <div
+        className="design-results-grid"
+        style={results.length === 1 ? { maxWidth: '720px', margin: '0 auto' } : undefined}
+    >
         {results.map((design, index) => (
             <DesignCard 
                 key={design.image?.id || index} 

@@ -1,48 +1,34 @@
-# Multi-stage build for Vite + React application (Revo3.ai)
-# Using Node 20 to match package requirements (@google/genai, react-router-dom, etc.)
+# Stage 1: Build Vite + React frontend
 FROM node:20-alpine AS builder
 
-# Set working directory
 WORKDIR /usr/src/app
 
-# Copy package files
 COPY package.json package-lock.json ./
-
-# Install all dependencies (including devDependencies for build)
 RUN npm ci
 
-# Copy source files and configuration
 COPY . .
-
-# Build the application (creates dist/ folder with static assets)
-# Vite will output to dist/ directory
 RUN npm run build
 
-# Production stage - serve static files
+# Stage 2: Production Node.js + Express API + Native FFmpeg + Built Frontend
 FROM node:20-alpine
 
-# Set working directory
 WORKDIR /usr/src/app
 
-# Install serve globally to serve static files
-RUN npm install -g serve
+# Install native FFmpeg (handles multi-GB video clipping cleanly on ARM64 & AMD64)
+RUN apk add --no-cache ffmpeg
 
-# Copy built static files from builder stage
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+COPY server ./server
 COPY --from=builder /usr/src/app/dist ./dist
 
-# Expose port 3000 (matches vite.config.ts server port)
-EXPOSE 3000
-
-# Set environment to production
 ENV NODE_ENV=production
+ENV API_PORT=4000
 
-# Health check to verify the server is running
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000 || exit 1
+EXPOSE 4000
 
-# Start the server to serve static files
-# -s: single-page application mode (serve index.html for all routes)
-# -l: listen on all network interfaces
-# -p: port number
-CMD ["serve", "-s", "dist", "-l", "3000"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:4000/api/health || exit 1
 
+CMD ["node", "server/index.js"]

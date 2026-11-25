@@ -1,24 +1,38 @@
 import { ImageAsset } from '../../types';
 
-export const extractFramesFromVideo = (videoUrl: string, startTime: number, endTime: number, frameCount: number): Promise<ImageAsset[]> => {
+const MAX_FRAME_WIDTH = 1024;
+
+export const extractFramesFromVideo = (
+    videoUrl: string,
+    startTime: number,
+    endTime: number,
+    frameCount: number
+): Promise<ImageAsset[]> => {
     return new Promise((resolve, reject) => {
-        const video = document.createElement('video');
-        video.preload = 'metadata';
-        video.muted = true;
-        
-        // Only set crossOrigin for external URLs, not for blob URLs
-        if (!videoUrl.startsWith('blob:')) {
-            video.crossOrigin = "anonymous";
+        if (!videoUrl || videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be')) {
+            reject(new Error('Please upload a local video file (.mp4, .mov, .webm) to extract frames.'));
+            return;
         }
-        
+
+        const video = document.createElement('video');
+        video.preload = 'auto';
+        video.muted = true;
+        video.playsInline = true;
+
+        if (!videoUrl.startsWith('blob:') && !videoUrl.startsWith('data:')) {
+            video.crossOrigin = 'anonymous';
+        }
+
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         const frames: ImageAsset[] = [];
-        const interval = frameCount > 1 ? (endTime - startTime) / (frameCount - 1) : 0;
 
         let loaded = false;
         let framesExtracted = 0;
         let errorOccurred = false;
+        let effectiveStart = Math.max(0, startTime || 0);
+        let effectiveEnd = endTime || 0;
+        let interval = 0;
 
         const cleanup = () => {
             video.onloadedmetadata = null;
@@ -28,94 +42,83 @@ export const extractFramesFromVideo = (videoUrl: string, startTime: number, endT
             video.src = '';
         };
 
-        video.onloadedmetadata = () => {
-            if (loaded || errorOccurred) return;
-            console.log('[Frame Extraction] Video metadata loaded', {
-                duration: video.duration,
-                width: video.videoWidth,
-                height: video.videoHeight
-            });
+        const captureCurrentFrame = () => {
+            if (frames.length >= frameCount || errorOccurred) return;
+            try {
+                context?.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+                frames.push({
+                    id: `frame_${Date.now()}_${framesExtracted}`,
+                    url: dataUrl,
+                    base64: dataUrl.split(',')[1],
+                    mimeType: 'image/jpeg',
+                });
+                framesExtracted++;
+                seekNext(framesExtracted);
+            } catch (err) {
+                console.error('[Frame Extraction] Error drawing frame:', err);
+                errorOccurred = true;
+                cleanup();
+                reject(new Error(`Error extracting frame: ${err}`));
+            }
+        };
+
+        const seekNext = (index: number) => {
+            if (index >= frameCount || errorOccurred) {
+                cleanup();
+                resolve(frames);
+                return;
+            }
+            const rawTime = effectiveStart + index * interval;
+            const maxSeek = Math.max(0, (video.duration || effectiveEnd) - 0.05);
+            const seekTime = Math.min(Math.max(0, rawTime), maxSeek);
+
+            // If video is already at seekTime (e.g. 0.00s), Chromium may not fire onseeked — capture immediately
+            if (Math.abs(video.currentTime - seekTime) < 0.02) {
+                captureCurrentFrame();
+            } else {
+                video.currentTime = seekTime;
+            }
         };
 
         video.onloadeddata = () => {
             if (loaded || errorOccurred) return;
             loaded = true;
-            
-            console.log('[Frame Extraction] Video data loaded, starting frame extraction');
-            
-            canvas.width = video.videoWidth || 1920;
-            canvas.height = video.videoHeight || 1080;
-            
-            const seekNext = (index: number) => {
-                if (index >= frameCount || errorOccurred) {
-                    cleanup();
-                    resolve(frames);
-                    return;
-                }
-                const time = startTime + (index * interval);
-                const seekTime = Math.min(time, video.duration || endTime);
-                console.log(`[Frame Extraction] Seeking to ${seekTime.toFixed(2)}s (frame ${index + 1}/${frameCount})`);
-                video.currentTime = seekTime;
-            };
-            
-            video.onseeked = () => {
-                if (frames.length >= frameCount || errorOccurred) return;
-                
-                try {
-                    context?.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-                    frames.push({
-                        id: `frame_${Date.now()}_${framesExtracted}`,
-                        url: dataUrl,
-                        base64: dataUrl.split(',')[1],
-                        mimeType: 'image/jpeg'
-                    });
-                    framesExtracted++;
-                    console.log(`[Frame Extraction] Extracted frame ${framesExtracted}/${frameCount}`);
-                    seekNext(framesExtracted);
-                } catch (err) {
-                    console.error('[Frame Extraction] Error drawing frame:', err);
-                    errorOccurred = true;
-                    cleanup();
-                    reject(`Error extracting frame: ${err}`);
-                }
-            };
 
+            const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 1;
+            effectiveStart = Math.max(0, Math.min(startTime || 0, duration));
+            effectiveEnd = endTime && endTime > effectiveStart ? Math.min(endTime, duration) : duration;
+            interval = frameCount > 1 ? (effectiveEnd - effectiveStart) / (frameCount - 1) : 0;
+
+            const naturalWidth = video.videoWidth || 1280;
+            const naturalHeight = video.videoHeight || 720;
+            const scale = naturalWidth > MAX_FRAME_WIDTH ? MAX_FRAME_WIDTH / naturalWidth : 1;
+            canvas.width = Math.round(naturalWidth * scale);
+            canvas.height = Math.round(naturalHeight * scale);
+
+            video.onseeked = captureCurrentFrame;
             seekNext(0);
         };
-        
-        video.onerror = (e) => {
+
+        video.onerror = () => {
             if (errorOccurred) return;
             errorOccurred = true;
             cleanup();
-            console.error('[Frame Extraction] Video error:', {
-                error: e,
-                videoSrc: videoUrl.substring(0, 100),
-                readyState: video.readyState,
-                networkState: video.networkState,
-                framesExtracted: framesExtracted,
-                totalFrames: frameCount
-            });
-            
-            // If we got at least some frames, return what we have instead of failing
             if (frames.length > 0) {
-                console.warn(`[Frame Extraction] Partial success: extracted ${frames.length}/${frameCount} frames`);
                 resolve(frames);
             } else {
-                reject(new Error("Error loading video for frame extraction. Please ensure the video file is valid and accessible."));
+                reject(new Error('Could not read video file for frame extraction. Please try an MP4 or WebM video.'));
             }
         };
-        
-        // Set source and start loading
+
         video.src = videoUrl;
         video.load();
-        
-        // Timeout after 30 seconds
+
         setTimeout(() => {
             if (!loaded && !errorOccurred) {
                 errorOccurred = true;
                 cleanup();
-                reject(new Error("Video loading timeout. Please try a smaller video or check your connection."));
+                reject(new Error('Video loading timed out. Please try a smaller video file.'));
             }
         }, 30000);
     });

@@ -1,15 +1,16 @@
 import React, { useState, FC, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { GoogleGenAI } from "@google/genai";
+import { createAiClient } from './core/services/ai-providers/openrouterClient';
 import { toast } from 'react-toastify';
 import {
     Platform, ImageAsset, VideoAsset, LogoState, TextState, ColorsState, 
     PreferencesState, DesignResult, AnalysisResult, AssistantMessage, 
-    EditorState, EditableElement, ImagenAspectRatio, VeoAspectRatio
+    EditorState, EditableElement, ImagenAspectRatio, VeoAspectRatio, ResizeOption
 } from './types';
 import { VIBE_STYLES, PLATFORM_CONFIGS } from './constants';
 import { 
-    generateDesign, adaptImageForPlatform, generateImage, editImage, 
+    generateDesign, resizeThumbnailForSize, generateImage, editImage, 
     upscaleImage, analyzeVideoAndSuggestStyles, extractFacesFromImage, 
     getAssistantResponse 
 } from './core/services/ai-providers/gemini';
@@ -24,6 +25,7 @@ import { PreviewModal } from './components/modals/PreviewModal';
 import { AssistantPanel } from './components/modals/AssistantPanel';
 import { Editor } from './components/modals/Editor';
 import { RepurposeModule } from './features/content-repurpose/components/RepurposeModule';
+import { YouTubeToolsView } from './components/modules/YouTubeToolsView';
 import { CreditManagement } from './components/dashboard/CreditManagement';
 import { useAuth } from './contexts/AuthContext';
 import { hasEnoughCredits, deductCredits, CREDITS_PER_GENERATION } from './services/payments/creditService';
@@ -44,7 +46,7 @@ interface AppProps {
 }
 
 export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatformChange }) => {
-    const { user } = useAuth();
+    const { user, refreshCredits } = useAuth();
     // Input state
     const [platform, setPlatform] = useState<Platform>(initialPlatform);
     
@@ -66,11 +68,22 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
     const [trimTimes, setTrimTimes] = useState({ start: 0, end: 1 });
     const [cutoutAssets, setCutoutAssets] = useState<ImageAsset[]>([]);
     const [isExtractingFaces, setIsExtractingFaces] = useState(false);
-    const [text, setText] = useState<TextState>({
+
+    const createDefaultText = (): TextState => ({
         headline: '', headlineFont: 'Inter', headlineSize: 48, headlineWeight: 'bold', headlineItalic: false, headlineColor: '#FFFFFF',
         subheadline: '', subheadlineFont: 'Inter', subheadlineSize: 24, subheadlineWeight: 'normal', subheadlineItalic: false, subheadlineColor: '#FFFFFF',
         author: ''
     });
+
+    const [textByPlatform, setTextByPlatform] = useState<Partial<Record<Platform, TextState>>>({});
+    const text: TextState = textByPlatform[platform] ?? createDefaultText();
+    const setText: React.Dispatch<React.SetStateAction<TextState>> = (updater) => {
+        setTextByPlatform(prev => {
+            const current = prev[platform] ?? createDefaultText();
+            const next = typeof updater === 'function' ? updater(current) : updater;
+            return { ...prev, [platform]: next };
+        });
+    };
     const [logo, setLogo] = useState<LogoState>({
         url: null, base64: null, mimeType: null,
         size: 10, position: 'bottom-right', opacity: 1,
@@ -83,9 +96,41 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
     const [colors, setColors] = useState<ColorsState>(prefs.colors);
     const [preferences, setPreferences] = useState<PreferencesState>(prefs.preferences);
     
-    // App status state
-    const [results, setResults] = useState<DesignResult[]>([]);
+    // App status state (persist finished results in sessionStorage; never persist in-progress loading overlays)
+    const [results, setResults] = useState<DesignResult[]>(() => {
+        try {
+            const saved = sessionStorage.getItem('revo3.latestResults');
+            if (!saved) return [];
+            const parsed: DesignResult[] = JSON.parse(saved);
+            return parsed
+                .filter((r) => !r.isResizing && !r.image?.id?.startsWith('batch_resize_') && !r.image?.id?.startsWith('resizing_'))
+                .map((r) => ({ ...r, isEditing: false, isUpscaling: false, isResizing: false }));
+        } catch {
+            return [];
+        }
+    });
+
+    useEffect(() => {
+        try {
+            const finishedResults = results.filter(
+                (r) => !r.isResizing && !r.isEditing && !r.isUpscaling
+            );
+            if (finishedResults.length > 0) {
+                sessionStorage.setItem('revo3.latestResults', JSON.stringify(finishedResults));
+            } else {
+                sessionStorage.removeItem('revo3.latestResults');
+            }
+        } catch {
+            // If finished images exceed sessionStorage quota, remove stale entry so old loading states never reappear
+            try {
+                sessionStorage.removeItem('revo3.latestResults');
+            } catch {
+                // Ignore
+            }
+        }
+    }, [results]);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [isBatchResizing, setIsBatchResizing] = useState(false);
     const [isGeneratingImage, setIsGeneratingImage] = useState(false);
     const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -104,7 +149,7 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
     // Mobile Sidebar State
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-    const ai = useRef<GoogleGenAI>(new GoogleGenAI({ apiKey: process.env.API_KEY }));
+    const ai = useRef<GoogleGenAI>(createAiClient());
     
     // Save preferences to localStorage on change
     useEffect(() => {
@@ -123,7 +168,7 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
         }
     }, []);
 
-    const handleGenerate = async () => {
+    const handleGenerate = async (improveMode: 'improve' | 'reimagine' = 'improve') => {
         if (isGenerating) return;
 
         // Check credits before generating
@@ -146,12 +191,24 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                 videoFrames = await extractFramesFromVideo(videoAsset.url, trimTimes.start, trimTimes.end, 3);
             }
             const allImages = [...images, ...videoFrames];
-            const results = await generateDesign(ai.current, allImages, logo, colors, preferences, platform, youtubeTranscript, originalYoutubeTitle, text);
+            const results = await generateDesign(
+                ai.current,
+                allImages,
+                logo,
+                colors,
+                preferences,
+                platform,
+                youtubeTranscript,
+                originalYoutubeTitle,
+                text,
+                improveMode
+            );
             
-            // Deduct credits after successful generation
+            // Deduct credits after successful generation and refresh navbar balance immediately
             if (user) {
                 const platformName = PLATFORM_CONFIGS[platform].title;
                 await deductCredits(user.id, `Generate ${platformName}`, CREDITS_PER_GENERATION, { platform });
+                await refreshCredits();
             }
             
             setResults(results);
@@ -162,6 +219,16 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
         } finally {
             setIsGenerating(false);
         }
+    };
+
+    const handleVideoAssetChange = (nextVideo: VideoAsset | null) => {
+        setVideoAsset(nextVideo);
+        setAnalysisResult(null);
+        setTrimTimes({ start: 0, end: 1 });
+        setCutoutAssets([]);
+        setImages(prev => prev.filter(img => !img.id.startsWith('face_')));
+        setText(createDefaultText());
+        setResults([]);
     };
 
     const handleAnalyzeVideo = async () => {
@@ -175,7 +242,14 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
             setAnalysisResult(result);
             setColors(result.suggestedColors);
             setPreferences(prev => ({ ...prev, style: result.suggestedStyle }));
-            toast.success('Video analyzed successfully!');
+            if (result.suggestedHeadline || result.suggestedSubheadline) {
+                setText(prev => ({
+                    ...prev,
+                    headline: result.suggestedHeadline || prev.headline,
+                    subheadline: result.suggestedSubheadline ?? prev.subheadline,
+                }));
+            }
+            toast.success('Video analyzed — style, colors & headline hooks suggested!');
         } catch (e: any) {
             console.error(e);
             toast.error(`Failed to analyze video: ${e.message || 'Unknown error'}`);
@@ -194,7 +268,8 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
             }
             const faces = await extractFacesFromImage(ai.current, frame);
             setCutoutAssets(prev => [...prev, ...faces]);
-            toast.success(`Extracted ${faces.length} face(s) successfully!`);
+            setImages(prev => [...prev, ...faces]);
+            toast.success(`Extracted ${faces.length} face(s) and added to your Images!`);
         } catch (e: any) {
             console.error(e);
             toast.error(`Failed to extract faces: ${e.message || 'Unknown error'}`);
@@ -243,23 +318,85 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
         clearEditorState();
     };
 
-    const handleAdaptDesign = async (sourceImage: ImageAsset, targetPlatform: Platform) => {
-        if (isGenerating) return;
+    const handleAdaptDesign = async (sourceImage: ImageAsset, option: ResizeOption) => {
+        const tempId = `resizing_${option.id}_${Date.now()}`;
+        const placeholderCard: DesignResult = {
+            image: { ...sourceImage, id: tempId },
+            isResizing: true,
+            resizingLabel: option.label,
+            description: `Resizing · ${option.label}`,
+        };
 
-        setIsGenerating(true);
-        setResults([]);
-        setPlatform(targetPlatform);
+        // Drop a loading card right onto the current canvas without wiping existing thumbnails or switching tabs
+        setResults(prev => [...prev, placeholderCard]);
 
         try {
-            const adaptedResults = await adaptImageForPlatform(ai.current, sourceImage, targetPlatform, text, logo, colors, preferences);
-            setResults(adaptedResults);
-            toast.success('Design adapted successfully!');
+            const resizedResult = await resizeThumbnailForSize(ai.current, sourceImage, option);
+            setResults(prev => prev.map(item => (item.image?.id === tempId ? resizedResult : item)));
+            toast.success(`Resized to ${option.label} and added to canvas!`);
         } catch (e: any) {
             console.error(e);
-            toast.error(`An error occurred during adaptation: ${e.message || 'Unknown error'}`);
-        } finally {
-            setIsGenerating(false);
+            setResults(prev => prev.filter(item => item.image?.id !== tempId));
+            toast.error(`Resize failed: ${e.message || 'Unknown error'}`);
         }
+    };
+
+    const handleBatchResize = async (sourceImage: ImageAsset, options: ResizeOption[]) => {
+        if (isBatchResizing || options.length === 0) return;
+
+        if (user) {
+            const hasCredits = await hasEnoughCredits(user.id, CREDITS_PER_GENERATION);
+            if (!hasCredits) {
+                toast.error(`Insufficient credits. You need ${CREDITS_PER_GENERATION} credits to resize images.`);
+                return;
+            }
+        }
+
+        setIsBatchResizing(true);
+        setIsSidebarOpen(false);
+
+        const now = Date.now();
+        const placeholders = options.map((opt, idx) => {
+            const tempId = `batch_resize_${opt.id}_${now}_${idx}`;
+            return {
+                tempId,
+                option: opt,
+                card: {
+                    image: { ...sourceImage, id: tempId },
+                    isResizing: true,
+                    resizingLabel: opt.label,
+                    description: `Resizing · ${opt.label}`,
+                } as DesignResult,
+            };
+        });
+
+        // Drop loading cards for all selected sizes onto the canvas
+        setResults(prev => [...prev, ...placeholders.map(p => p.card)]);
+
+        let successCount = 0;
+        await Promise.allSettled(
+            placeholders.map(async ({ tempId, option }) => {
+                try {
+                    const resized = await resizeThumbnailForSize(ai.current, sourceImage, option);
+                    successCount++;
+                    setResults(prev => prev.map(item => (item.image?.id === tempId ? resized : item)));
+                } catch (err: any) {
+                    console.error(`Resize failed for ${option.label}:`, err);
+                    setResults(prev => prev.filter(item => item.image?.id !== tempId));
+                    toast.error(`Failed to resize to ${option.label}`);
+                }
+            })
+        );
+
+        if (successCount > 0) {
+            if (user) {
+                await deductCredits(user.id, 'Smart Resize', CREDITS_PER_GENERATION, { platform: 'resize', count: successCount });
+                await refreshCredits();
+            }
+            toast.success(`Resized into ${successCount} size${successCount > 1 ? 's' : ''}!`);
+        }
+
+        setIsBatchResizing(false);
     };
 
     const handleGenerateImage = async (prompt: string, negativePrompt: string, aspectRatio: ImagenAspectRatio): Promise<ImageAsset | null> => {
@@ -521,6 +658,11 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                 <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
                     <RepurposeModule />
                 </div>
+            ) : platform === 'youtube_tools' ? (
+                /* YouTube Thumbnail Downloader & Transcript Extractor */
+                <div style={{ flex: 1, overflow: 'auto' }}>
+                    <YouTubeToolsView onSwitchPlatform={handlePlatformChange} />
+                </div>
             ) : (
                 /* Design Studio - generates thumbnails and images */
                 <main className="main-content">
@@ -541,7 +683,7 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                         platform={platform}
                         text={text} onTextChange={setText}
                         images={images} onImagesChange={setImages}
-                        videoAsset={videoAsset} onVideoAssetChange={setVideoAsset}
+                        videoAsset={videoAsset} onVideoAssetChange={handleVideoAssetChange}
                         trimTimes={trimTimes} onTrimTimesChange={setTrimTimes}
                         isAnalyzing={isAnalyzing} onAnalyzeVideo={handleAnalyzeVideo}
                         analysisResult={analysisResult} onAnalysisResultChange={setAnalysisResult}
@@ -557,6 +699,8 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                         isGeneratingVideo={isGeneratingVideo}
                         onTranscriptChange={setYoutubeTranscript}
                         onOriginalTitleChange={setOriginalYoutubeTitle}
+                        onBatchResize={handleBatchResize}
+                        isBatchResizing={isBatchResizing}
                         isOpen={isSidebarOpen}
                         onClose={() => setIsSidebarOpen(false)}
                     />
@@ -570,6 +714,7 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                         onDownload={handleDownloadImage}
                         onPreview={(image) => setPreviewingImage(image)}
                         onAdapt={handleAdaptDesign}
+                        onClearCanvas={() => setResults([])}
                         onAssistantToggle={() => setIsAssistantOpen(prev => !prev)}
                     />
                 </main>

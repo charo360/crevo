@@ -1,68 +1,77 @@
 import React, { createContext, useContext, useEffect, useState, FC, useCallback } from 'react';
-import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { apiRequest, getAuthToken, setAuthToken } from '../lib/api';
 import { getUserCredits, CreditBalance } from '../services/payments/creditService';
 
+export interface AuthUser {
+    id: string;
+    email: string;
+    created_at?: string;
+}
+
+export interface AuthSession {
+    access_token: string;
+    user: AuthUser;
+}
+
 interface AuthContextType {
-    user: User | null;
-    session: Session | null;
+    user: AuthUser | null;
+    session: AuthSession | null;
     loading: boolean;
     credits: CreditBalance | null;
     refreshCredits: () => Promise<void>;
     signIn: (email: string, password: string) => Promise<{ error: any }>;
-    signUp: (email: string, password: string) => Promise<{ error: any; session?: Session | null }>;
+    signUp: (email: string, password: string) => Promise<{ error: any; session?: AuthSession | null }>;
+    updateProfile: (updates: { email?: string; password?: string }) => Promise<{ error: any }>;
     signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [user, setUser] = useState<User | null>(null);
-    const [session, setSession] = useState<Session | null>(null);
+    const [user, setUser] = useState<AuthUser | null>(null);
+    const [session, setSession] = useState<AuthSession | null>(null);
     const [loading, setLoading] = useState(true);
     const [credits, setCredits] = useState<CreditBalance | null>(null);
-    const [creditsLoading, setCreditsLoading] = useState(false);
 
-    // Refresh credits function - invalidates cache and fetches fresh data
     const refreshCredits = useCallback(async () => {
         if (!user?.id) {
             setCredits(null);
             return;
         }
 
-        setCreditsLoading(true);
         try {
-            // Force fresh fetch by bypassing any cache
-            const freshCredits = await getUserCredits(user.id);
+            const freshCredits = await getUserCredits(user.id, true);
             setCredits(freshCredits);
-            
-            // Update localStorage with fresh data
+
             if (freshCredits) {
-                localStorage.setItem(`credits_${user.id}`, JSON.stringify({
-                    ...freshCredits,
-                    lastUpdated: Date.now()
-                }));
+                localStorage.setItem(
+                    `credits_${user.id}`,
+                    JSON.stringify({
+                        ...freshCredits,
+                        lastUpdated: Date.now(),
+                    })
+                );
             }
         } catch (error) {
             console.error('Error refreshing credits:', error);
-        } finally {
-            setCreditsLoading(false);
         }
     }, [user?.id]);
 
     useEffect(() => {
-        // Get initial session with error handling
         const initializeAuth = async () => {
+            const token = getAuthToken();
+            if (!token) {
+                setLoading(false);
+                return;
+            }
+
             try {
-                const { data: { session }, error } = await supabase.auth.getSession();
-                if (error) {
-                    console.warn('Auth session error:', error);
-                }
-                setSession(session);
-                setUser(session?.user ?? null);
+                const data = await apiRequest<{ user: AuthUser }>('/api/auth/me');
+                setUser(data.user);
+                setSession({ access_token: token, user: data.user });
             } catch (err) {
-                console.warn('Failed to get auth session:', err);
-                // Set to null state if auth fails
+                console.warn('Stored session invalid or expired:', err);
+                setAuthToken(null);
                 setSession(null);
                 setUser(null);
             } finally {
@@ -71,179 +80,113 @@ export const AuthProvider: FC<{ children: React.ReactNode }> = ({ children }) =>
         };
 
         initializeAuth();
+    }, []);
 
-        // Listen for auth changes with error handling
-        let subscription: any;
-        try {
-            const {
-                data: { subscription: authSubscription },
-            } = supabase.auth.onAuthStateChange(async (_event, session) => {
-                setSession(session);
-                setUser(session?.user ?? null);
-                setLoading(false);
-                
-                // Refresh credits when user changes
-                if (session?.user?.id) {
-                    await refreshCredits();
-                } else {
-                    setCredits(null);
-                    // Clear credits from localStorage on sign out
-                    localStorage.removeItem(`credits_${session?.user?.id}`);
-                }
-            });
-            subscription = authSubscription;
-        } catch (err) {
-            console.warn('Failed to set up auth state listener:', err);
-        }
-
-        return () => {
-            if (subscription) {
-                subscription.unsubscribe();
-            }
-        };
-    }, [refreshCredits]);
-
-    // Load credits when user is available
     useEffect(() => {
-        if (user?.id && !creditsLoading) {
+        if (user?.id) {
             refreshCredits();
+        } else {
+            setCredits(null);
         }
-    }, [user?.id, refreshCredits, creditsLoading]);
-
-    // Set up real-time subscription for credit updates
-    useEffect(() => {
-        if (!user?.id) return;
-
-        // Subscribe to credit transactions changes
-        const creditSubscription = supabase
-            .channel(`user_credits_${user.id}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'credit_transactions',
-                    filter: `user_id=eq.${user.id}`,
-                },
-                async (payload) => {
-                    console.log('Credit transaction change detected:', payload);
-                    // Refresh credits when any transaction occurs
-                    await refreshCredits();
-                }
-            )
-            .on(
-                'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'user_credits',
-                    filter: `user_id=eq.${user.id}`,
-                },
-                async (payload) => {
-                    console.log('User credits change detected:', payload);
-                    // Refresh credits when balance changes
-                    await refreshCredits();
-                }
-            )
-            .subscribe();
-
-        return () => {
-            creditSubscription.unsubscribe();
-        };
     }, [user?.id, refreshCredits]);
 
     const signIn = async (email: string, password: string) => {
         try {
-            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-            
-            if (error) {
-                console.error('Sign in error:', error);
-                return { error };
-            }
-            
+            const data = await apiRequest<{ user: AuthUser; token: string }>('/api/auth/login', {
+                method: 'POST',
+                body: JSON.stringify({ email, password }),
+            });
+
+            setAuthToken(data.token);
+            const newSession: AuthSession = { access_token: data.token, user: data.user };
+            setUser(data.user);
+            setSession(newSession);
+
             return { error: null };
         } catch (err: any) {
-            console.error('Sign in exception:', err);
-            return { 
+            console.error('Sign in error:', err);
+            return {
                 error: {
-                    message: err.message || 'Failed to connect to authentication server. Please check your internet connection.',
-                    name: 'NetworkError'
-                }
+                    message:
+                        err.message ||
+                        'Failed to connect to authentication server. Please check that the API server is running.',
+                    name: err.status ? 'AuthError' : 'NetworkError',
+                },
             };
         }
     };
 
     const signUp = async (email: string, password: string) => {
         try {
-            // Check if Supabase is properly configured
-            if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
-                return { 
-                    error: {
-                        message: 'Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env.local file. See https://supabase.com for setup instructions.',
-                        name: 'ConfigurationError'
-                    }
-                };
-            }
-
-            const { data, error } = await supabase.auth.signUp({ 
-                email, 
-                password,
-                options: {
-                    emailRedirectTo: `${window.location.origin}/dashboard`
-                }
+            const data = await apiRequest<{ user: AuthUser; token: string }>('/api/auth/signup', {
+                method: 'POST',
+                body: JSON.stringify({ email, password }),
             });
-            
-            if (error) {
-                console.error('Sign up error:', error);
-                return { error };
-            }
-            
-            // Check if user is signed in immediately (email confirmation disabled)
-            if (data.user && data.session) {
-                console.log('✅ User signed up and signed in successfully (email confirmation disabled)');
-                return { error: null, session: data.session };
-            }
-            
-            // If no session, email confirmation is required
-            if (data.user && !data.session) {
-                console.warn('⚠️ Email confirmation required - no session returned');
-                return { 
-                    error: {
-                        message: 'Email confirmation is enabled in Supabase. Please disable it in your Supabase dashboard (Authentication → Providers → Email → Toggle OFF "Confirm email")',
-                        name: 'EmailConfirmationRequired'
-                    }
-                };
-            }
-            
+
+            setAuthToken(data.token);
+            const newSession: AuthSession = { access_token: data.token, user: data.user };
+            setUser(data.user);
+            setSession(newSession);
+
+            return { error: null, session: newSession };
+        } catch (err: any) {
+            console.error('Sign up error:', err);
+            return {
+                error: {
+                    message:
+                        err.message ||
+                        'Failed to connect to authentication server. Please check that the API server is running.',
+                    name: err.status ? 'AuthError' : 'NetworkError',
+                },
+            };
+        }
+    };
+
+    const updateProfile = async (updates: { email?: string; password?: string }) => {
+        try {
+            const data = await apiRequest<{ user: AuthUser; token: string }>('/api/auth/profile', {
+                method: 'PATCH',
+                body: JSON.stringify(updates),
+            });
+
+            setAuthToken(data.token);
+            setUser(data.user);
+            setSession({ access_token: data.token, user: data.user });
+
             return { error: null };
         } catch (err: any) {
-            console.error('Sign up exception:', err);
-            
-            // Check for DNS resolution errors
-            if (err.message?.includes('ERR_NAME_NOT_RESOLVED') || err.message?.includes('Failed to fetch')) {
-                return { 
-                    error: {
-                        message: 'Unable to connect to Supabase. Please verify your Supabase project URL is correct in .env.local. The URL should be in format: https://xxxxx.supabase.co',
-                        name: 'NetworkError'
-                    }
-                };
-            }
-            
-            return { 
+            return {
                 error: {
-                    message: err.message || 'Failed to connect to authentication server. Please check your internet connection.',
-                    name: 'NetworkError'
-                }
+                    message: err.message || 'Failed to update profile',
+                },
             };
         }
     };
 
     const signOut = async () => {
-        await supabase.auth.signOut();
+        if (user?.id) {
+            localStorage.removeItem(`credits_${user.id}`);
+        }
+        setAuthToken(null);
+        setUser(null);
+        setSession(null);
+        setCredits(null);
     };
 
     return (
-        <AuthContext.Provider value={{ user, session, loading, credits, refreshCredits, signIn, signUp, signOut }}>
+        <AuthContext.Provider
+            value={{
+                user,
+                session,
+                loading,
+                credits,
+                refreshCredits,
+                signIn,
+                signUp,
+                updateProfile,
+                signOut,
+            }}
+        >
             {children}
         </AuthContext.Provider>
     );

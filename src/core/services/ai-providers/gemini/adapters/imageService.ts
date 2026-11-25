@@ -18,33 +18,58 @@ export const generateImage = async (
             // Rate limiting
             await imageGenRateLimiter.acquire('generate-image');
 
-            const fullPrompt = `${prompt} --no ${negativePrompt}`;
+            const fullPrompt = negativePrompt?.trim()
+                ? `${prompt}\n\nAvoid: ${negativePrompt.trim()}`
+                : prompt;
 
-            const response = await retryWithBackoff(
-                () => ai.models.generateImages({
-                    model: 'imagen-4.0-generate-001',
-                    prompt: fullPrompt,
-                    config: {
-                        numberOfImages: 1,
-                        aspectRatio: aspectRatio,
-                        outputMimeType: 'image/png'
-                    }
-                }),
-                {
-                    maxRetries: 2,
-                    initialDelayMs: 2000,
-                    retryableErrors: (error: any) => {
-                        return error.status === 429 || (error.status >= 500 && error.status < 600);
-                    },
-                }
+            const imageConfig = {
+                responseModalities: [Modality.IMAGE],
+                aspectRatio,
+            };
+
+            const response = await callWithFallback(
+                () =>
+                    retryWithBackoff(
+                        () =>
+                            ai.models.generateContent({
+                                model: getModelWithFallback('IMAGE', false),
+                                contents: { parts: [{ text: fullPrompt }] },
+                                config: imageConfig as any,
+                            }),
+                        {
+                            maxRetries: 2,
+                            initialDelayMs: 2000,
+                            retryableErrors: (error: any) =>
+                                error.status === 429 || (error.status >= 500 && error.status < 600),
+                        }
+                    ),
+                () =>
+                    retryWithBackoff(
+                        () =>
+                            ai.models.generateContent({
+                                model: getModelWithFallback('IMAGE', true),
+                                contents: { parts: [{ text: fullPrompt }] },
+                                config: imageConfig as any,
+                            }),
+                        {
+                            maxRetries: 2,
+                            initialDelayMs: 2000,
+                            retryableErrors: (error: any) =>
+                                error.status === 429 || (error.status >= 500 && error.status < 600),
+                        }
+                    ),
+                'Failed to generate image'
             );
 
-            if (response.generatedImages && response.generatedImages.length > 0) {
-                const genImage = response.generatedImages[0];
-                const base64 = genImage.image.imageBytes;
-                const mimeType = genImage.image.mimeType;
-                const url = `data:${mimeType};base64,${base64}`;
-                return { id: `gen_img_${Date.now()}`, url, base64, mimeType };
+            if (response.candidates?.[0]?.content?.parts) {
+                for (const part of response.candidates[0].content.parts) {
+                    if (part.inlineData && part.inlineData.mimeType.startsWith('image/')) {
+                        const base64 = part.inlineData.data;
+                        const mimeType = part.inlineData.mimeType;
+                        const url = `data:${mimeType};base64,${base64}`;
+                        return { id: `gen_img_${Date.now()}`, url, base64, mimeType };
+                    }
+                }
             }
             return null;
         } catch (error: any) {
@@ -151,10 +176,74 @@ export const editImage = async (
 };
 
 export const upscaleImage = async (ai: GoogleGenAI, image: ImageAsset): Promise<ImageAsset> => {
-    // Placeholder for a real upscale API call. For now, we simulate it.
-    await new Promise(res => setTimeout(res, 1500));
-    // In a real scenario, you'd send the image.base64 to an upscale model/API
-    // and receive a new, higher-resolution base64 string.
-    console.log("Upscaling image:", image.id);
-    return { ...image }; // Returning the same image for now.
+    return performanceMonitor.measureFunction('upscaleImage', async () => {
+        try {
+            await imageGenRateLimiter.acquire('upscale-image');
+
+            let optimizedOriginal = image;
+            try {
+                const optimized = await optimizeImageForAI(image.base64, image.mimeType);
+                optimizedOriginal = { ...image, base64: optimized.base64, mimeType: optimized.mimeType };
+            } catch (error) {
+                console.warn('Failed to optimize image before upscale, using original:', error);
+            }
+
+            const upscalePrompt =
+                'Upscale and enhance this image to ultra-crisp, high-definition studio clarity. Preserve the EXACT same subjects, faces, text, colors, and composition—do not add, remove, or alter any elements. Only sharpen fine details, clean up compression artifacts/noise, and make edges and typography razor sharp.';
+
+            const parts: Part[] = [
+                { inlineData: { data: optimizedOriginal.base64, mimeType: optimizedOriginal.mimeType } },
+                { text: upscalePrompt },
+            ];
+
+            const response = await callWithFallback(
+                () =>
+                    retryWithBackoff(
+                        () =>
+                            ai.models.generateContent({
+                                model: getModelWithFallback('IMAGE', false),
+                                contents: { parts },
+                                config: { responseModalities: [Modality.IMAGE] } as any,
+                            }),
+                        {
+                            maxRetries: 2,
+                            initialDelayMs: 2000,
+                            retryableErrors: (error: any) =>
+                                error.status === 429 || (error.status >= 500 && error.status < 600),
+                        }
+                    ),
+                () =>
+                    retryWithBackoff(
+                        () =>
+                            ai.models.generateContent({
+                                model: getModelWithFallback('IMAGE', true),
+                                contents: { parts },
+                                config: { responseModalities: [Modality.IMAGE] } as any,
+                            }),
+                        {
+                            maxRetries: 2,
+                            initialDelayMs: 2000,
+                            retryableErrors: (error: any) =>
+                                error.status === 429 || (error.status >= 500 && error.status < 600),
+                        }
+                    ),
+                'Failed to upscale image'
+            );
+
+            if (response.candidates?.[0]?.content?.parts) {
+                for (const part of response.candidates[0].content.parts) {
+                    if (part.inlineData && part.inlineData.mimeType.startsWith('image/')) {
+                        const base64 = part.inlineData.data;
+                        const mimeType = part.inlineData.mimeType;
+                        const url = `data:${mimeType};base64,${base64}`;
+                        return { ...image, base64, mimeType, url, id: `upscale_${image.id}` };
+                    }
+                }
+            }
+            throw new Error('Upscaling failed to return an enhanced image.');
+        } catch (error: any) {
+            errorTracker.trackAiError('upscaleImage', error, 'upscale');
+            throw error;
+        }
+    });
 };

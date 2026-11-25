@@ -1,5 +1,6 @@
 import React, { FC, useState } from 'react';
 import { toast } from 'react-toastify';
+import { apiRequest } from '../../lib/api';
 
 export const Newsletter: FC = () => {
     const [email, setEmail] = useState('');
@@ -13,9 +14,10 @@ export const Newsletter: FC = () => {
         }
         
         try {
-            // TODO: Integrate with email service (Supabase, SendGrid, etc.)
-            // For now, just simulate success
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await apiRequest('/api/newsletter/subscribe', {
+                method: 'POST',
+                body: JSON.stringify({ email }),
+            });
             setSubmitted(true);
             setEmail('');
             toast.success('Successfully subscribed! Check your email for updates.');

@@ -32,6 +32,8 @@ export const AppRoutePaths = {
     contentRepurpose: "/dashboard/content-repurpose",
     twitterCard: "/dashboard/twitter-card",
     tiktokThumbnail: "/dashboard/tiktok-thumbnail",
+    resizeImage: "/dashboard/resize",
+    youtubeTools: "/dashboard/youtube-tools",
   },
   
   // User Routes (Protected)
@@ -46,11 +48,13 @@ export const AppRoutePaths = {
 export const DashboardViewToPlatform = {
   'home': 'youtube_improve',
   'improve-thumbnail': 'youtube_improve',
-  'youtube-thumbnail': 'youtube_improve',
+  'youtube-thumbnail': 'youtube',
   'podcast-cover': 'podcast',
   'content-repurpose': 'repurpose',
   'twitter-card': 'twitter',
   'tiktok-thumbnail': 'tiktok',
+  'resize': 'resize',
+  'youtube-tools': 'youtube_tools',
 } as const;
 
 /**
@@ -58,8 +62,11 @@ export const DashboardViewToPlatform = {
  */
 export const PlatformToRoute = {
   'youtube_improve': '/dashboard/improve-thumbnail',
+  'youtube': '/dashboard/youtube-thumbnail',
   'podcast': '/dashboard/podcast-cover',
   'repurpose': '/dashboard/content-repurpose',
   'twitter': '/dashboard/twitter-card',
   'tiktok': '/dashboard/tiktok-thumbnail',
+  'resize': '/dashboard/resize',
+  'youtube_tools': '/dashboard/youtube-tools',
 } as const;

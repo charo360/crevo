@@ -5,15 +5,15 @@
  */
 
 export const GEMINI_MODELS = {
-    // Primary models (Gemini 3 Pro)
+    // Primary models via OpenRouter (Google Nano Banana 2.1 for image, Gemini 2.5 Flash for text)
     PRIMARY: {
-        IMAGE: 'gemini-3-pro-image-preview',
-        TEXT: 'gemini-3-pro-preview',
+        IMAGE: 'google/gemini-nano-banana-2.1',
+        TEXT: 'google/gemini-2.5-flash',
     },
-    // Fallback models (Gemini 2.5 Flash)
+    // Fallback models via OpenRouter (Nano Banana 2 / Gemini 3.1 Flash Image + Flash Lite)
     FALLBACK: {
-        IMAGE: 'gemini-2.5-flash-image',
-        TEXT: 'gemini-2.5-flash',
+        IMAGE: 'google/gemini-3.1-flash-image',
+        TEXT: 'google/gemini-2.5-flash-lite',
     }
 } as const;
 

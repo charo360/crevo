@@ -19,7 +19,7 @@ import {
     RepurposeMetadata 
 } from '../../../types/repurpose';
 import { analyzeVideoForViralMoments } from '../../../core/algorithms/content-analysis/viral-detection';
-import { processVideoClip, getVideoMetadata, generateThumbnail } from '../../../core/processors/video';
+import { processVideoClip, getVideoMetadata, generateThumbnail, clearCachedVideoInput } from '../../../core/processors/video';
 import { saveRepurposedVideo, saveViralClips, saveMLAnalysis } from './repurposeDatabase';
 import { extractFramesFromVideo } from '../../../shared/utils/video-utils';
 import { fetchTranscript } from '../../../shared/utils/youtube-utils';
@@ -28,12 +28,12 @@ import { toast } from 'react-toastify';
 
 const DEFAULT_OPTIONS: ClipGenerationOptions = {
     min_duration: 15,
-    max_duration: 60,
-    target_clip_count: 10,
+    max_duration: 45,
+    target_clip_count: 3,
     platforms: ['youtube_shorts', 'tiktok', 'instagram_reels'],
     include_captions: true,
     include_transitions: true,
-    virality_threshold: 70,
+    virality_threshold: 65,
     overlap_prevention: true,
 };
 
@@ -57,13 +57,14 @@ export async function repurposeVideo(
         toast.info('Analyzing video...');
         const metadata = await getVideoMetadata(videoFile);
         
-        // Step 2: Extract frames for ML analysis
+        // Step 2: Extract 8-14 evenly spaced frames for fast single-pass AI analysis
         onProgress?.(1, 6);
+        const targetFrames = Math.min(14, Math.max(6, Math.ceil(metadata.duration / 10)));
         const frames = await extractFramesFromVideo(
             videoUrl,
             0,
             metadata.duration,
-            Math.min(Math.ceil(metadata.duration / 2), 60)
+            targetFrames
         );
         onProgress?.(2, 6);
         
@@ -127,23 +128,31 @@ export async function repurposeVideo(
             filteredMoments.push(...topMoments);
         }
         
-        // Step 7: Generate clips for each platform
+        // Step 7: Generate clips — deduplicate by aspect ratio so identical 9:16 platforms only encode ONCE!
         const clips: ViralClip[] = [];
-        const processedTimes = new Set<string>(); // For overlap prevention
-        const totalClips = filteredMoments.length * finalOptions.platforms.length;
+        const processedTimes = new Set<string>();
+        const uniqueAspectPlatforms: string[] = [];
+        const seenAspects = new Set<string>();
+        for (const p of finalOptions.platforms) {
+            const aspect = getPlatformSettings(p).aspectRatio;
+            if (!seenAspects.has(aspect)) {
+                seenAspects.add(aspect);
+                uniqueAspectPlatforms.push(p);
+            }
+        }
+        const totalClips = filteredMoments.length * uniqueAspectPlatforms.length;
         let processedClips = 0;
-        
+
         for (const moment of filteredMoments) {
             if (finalOptions.overlap_prevention) {
                 const timeKey = `${Math.floor(moment.start_time)}-${Math.floor(moment.end_time)}`;
                 if (processedTimes.has(timeKey)) {
-                    continue; // Skip overlapping moments
+                    continue;
                 }
                 processedTimes.add(timeKey);
             }
-            
-            // Generate clips for each requested platform
-            for (const platform of finalOptions.platforms) {
+
+            for (const platform of uniqueAspectPlatforms) {
                 try {
                     const clip = await generateClipFromMoment(
                         videoFile,
@@ -155,7 +164,7 @@ export async function repurposeVideo(
                     clips.push(clip);
                     processedClips++;
                     if (totalClips > 0) {
-                        onProgress?.(4 + Math.round((processedClips / totalClips) * 1), 6); // Progress from 4 to 5
+                        onProgress?.(4 + Math.round((processedClips / totalClips) * 1), 6);
                     }
                 } catch (error: any) {
                     console.error(`Error generating clip for platform ${platform}:`, error);
@@ -207,6 +216,8 @@ export async function repurposeVideo(
         console.error('Error in repurposeVideo:', error);
         toast.error(`Failed to repurpose video: ${error.message}`);
         throw error;
+    } finally {
+        await clearCachedVideoInput();
     }
 }
 

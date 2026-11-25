@@ -29,10 +29,7 @@ export const LoginPage: FC = () => {
             const { error } = await signIn(email, password);
             
             if (error) {
-                // Handle specific Supabase errors
-                if (error.message?.includes('Email not confirmed')) {
-                    toast.error('Please check your email and click the confirmation link before signing in. If you didn\'t receive the email, check your spam folder or request a new confirmation email.');
-                } else if (error.message?.includes('Invalid login credentials')) {
+                if (error.message?.includes('Invalid login credentials')) {
                     toast.error('Invalid email or password. Please try again.');
                 } else {
                     toast.error(error.message || 'Failed to sign in');

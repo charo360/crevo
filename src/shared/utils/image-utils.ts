@@ -12,8 +12,8 @@ export const fileToBase64 = (file: File): Promise<{ base64: string, mimeType: st
 
 export const imageUrlToBase64 = async (url: string): Promise<{ base64: string, mimeType: string }> => {
     try {
-        // Use a CORS proxy to fetch the image data to avoid tainted canvas issues
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+        // Use our backend proxy to fetch external images cleanly without CORS issues
+        const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
         const response = await fetch(proxyUrl);
         
         if (!response.ok) {

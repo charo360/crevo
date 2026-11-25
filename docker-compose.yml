@@ -1,0 +1,12 @@
+services:
+  revo3:
+    build: .
+    container_name: revo3-app
+    restart: unless-stopped
+    ports:
+      - "80:4000"
+    env_file:
+      - .env.local
+    environment:
+      - NODE_ENV=production
+      - API_PORT=4000

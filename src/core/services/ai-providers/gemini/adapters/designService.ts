@@ -1,7 +1,7 @@
 import { GoogleGenAI, Part, Modality, GenerateContentResponse } from "@google/genai";
 import { 
     ImageAsset, LogoState, ColorsState, PreferencesState, Platform, 
-    TextState, DesignResult 
+    TextState, DesignResult, ThumbnailScore, ResizeOption 
 } from '../../../../../types';
 import { PLATFORM_CONFIGS } from '../../../../../constants';
 import { imageGenRateLimiter } from '../../../../infrastructure/rate-limiting';
@@ -10,6 +10,276 @@ import { optimizeImageForAI } from '../../../../processors/image';
 import { errorTracker } from '../../../../infrastructure/error-tracking';
 import { performanceMonitor } from '../../../../infrastructure/performance-monitoring';
 import { getModelWithFallback, callWithFallback } from '../config';
+
+interface ImprovementPlan {
+    originalScore: number;
+    weaknesses: string[];
+    variationPlans: Array<{ label: string; hookText?: string; instructions: string }>;
+}
+
+const DEFAULT_IMPROVE_PLANS: Array<{ label: string; hookText?: string; instructions: string }> = [
+    {
+        label: 'Clean Upgrade',
+        instructions:
+            'Keep the same recognizable subject and topic, but noticeably brighten and sharpen the subject with studio rim lighting, clean up/soften background distractions, boost color vibrancy, and make the text much bolder and easier to read on mobile.',
+    },
+    {
+        label: 'Bold Redesign',
+        instructions:
+            'Keep the exact same person/subject likeness and video topic, but noticeably upgrade the framing (tighter, more expressive rule-of-thirds crop), replace or dramatically re-light the background for strong foreground separation, and replace cluttered text with a punchy 2-4 word high-contrast headline.',
+    },
+    {
+        label: 'Viral High-CTR',
+        instructions:
+            'Keep the exact same person/subject likeness and core video story, but push visual drama and curiosity to the max: cinematic high-contrast color grading, dramatic lighting/depth glow around the focal point, bold viral typography, and clean visual hierarchy.',
+    },
+    {
+        label: 'Cinematic Spotlight',
+        instructions:
+            'Keep the exact same person/subject likeness and core story, but use moody cinematic lighting with a strong warm/cool split glow, dark atmospheric vignette around the edges, and ultra-clean hero typography placed for instant focal lock.',
+    },
+    {
+        label: 'Curiosity Twist',
+        instructions:
+            'Keep the exact same person/subject likeness and video topic, but emphasize emotional tension and curiosity: zoom in closer on facial expressions, heighten contrast between foreground and background, and use a bold, minimal 2-3 word hook that creates an irresistible curiosity gap.',
+    },
+];
+
+const DEFAULT_GENERATE_LABELS = [
+    'Close-Up Impact',
+    'Storytelling Split',
+    'Minimalist Viral',
+    'Cinematic Drama',
+    'Bold Contrast',
+];
+
+function safeParseJson<T>(raw: string | undefined): T | null {
+    if (!raw) return null;
+    try {
+        const cleaned = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+        return JSON.parse(cleaned) as T;
+    } catch {
+        const match = raw.match(/\{[\s\S]*\}/);
+        if (match) {
+            try {
+                return JSON.parse(match[0]) as T;
+            } catch {
+                return null;
+            }
+        }
+        return null;
+    }
+}
+
+function sampleTranscriptArc(transcript: string | null, maxChars = 9000): string {
+    if (!transcript) return '';
+    const trimmed = transcript.trim();
+    if (trimmed.length <= maxChars) return trimmed;
+    const sliceLen = Math.floor(maxChars / 3);
+    const midStart = Math.floor((trimmed.length - sliceLen) / 2);
+    const opening = trimmed.slice(0, sliceLen);
+    const middle = trimmed.slice(midStart, midStart + sliceLen);
+    const ending = trimmed.slice(trimmed.length - sliceLen);
+    return `[OPENING]: ${opening}\n\n[MIDDLE]: ${middle}\n\n[CLIMAX / ENDING]: ${ending}`;
+}
+
+async function analyzeThumbnailForImprovement(
+    ai: GoogleGenAI,
+    thumbnail: ImageAsset,
+    originalTitle: string,
+    transcript: string | null,
+    variationCount: number
+): Promise<ImprovementPlan> {
+    const planSlots = DEFAULT_IMPROVE_PLANS.slice(0, variationCount)
+        .map(
+            (p) =>
+                `    { "label": "${p.label}", "hookText": "<2-4 word viral, high-CTR thumbnail text hook in the video's language>", "instructions": "<specific visible improvements for ${p.label} while keeping the real subject likeness>" }`
+        )
+        .join(',\n');
+
+    const sampledTranscript = sampleTranscriptArc(transcript, 9000);
+
+    try {
+        const prompt = `You are a Top 0.1% YouTube Viral Hook Copywriter & Thumbnail CTR Strategist.
+Analyze the attached YouTube thumbnail, video title, and transcript critically.
+
+Video Title: "${originalTitle || 'Unknown'}"
+${sampledTranscript ? `Transcript (Opening, Middle & Climax):\n"${sampledTranscript}"` : ''}
+
+VIRAL THUMBNAIL CAPTION (hookText) RULES:
+- MUST be 2 to 4 words MAX (ultra-short, instant 0.5-second mobile scan).
+- NEVER repeat the full video title word-for-word — complement the title to create a powerful curiosity gap.
+- Pull the highest-stakes emotional, conflict, shock, or reveal angle from the transcript/title.
+- Match the language of the video title / original thumbnail with 100% accurate spelling (use ALL CAPS or punchy title case).
+- Give EACH variation a DIFFERENT psychological hook angle (e.g. Curiosity, Conflict/Drama, Bold Reveal, Shock Twist).
+
+Return ONLY valid JSON with this exact schema (${variationCount} distinct variationPlans):
+{
+  "originalScore": <integer 30-85 representing current CTR strength>,
+  "weaknesses": [<3 specific, concrete visual weaknesses in lighting, framing, contrast, background clutter, or text readability>],
+  "variationPlans": [
+${planSlots}
+  ]
+}`;
+
+        const response = await ai.models.generateContent({
+            model: getModelWithFallback('TEXT', false),
+            contents: {
+                parts: [
+                    { inlineData: { data: thumbnail.base64, mimeType: thumbnail.mimeType } },
+                    { text: prompt },
+                ],
+            },
+            config: {
+                responseMimeType: 'application/json',
+                temperature: 0.4,
+            } as any,
+        });
+
+        const parsed = safeParseJson<ImprovementPlan>(response.text);
+        if (
+            parsed &&
+            typeof parsed.originalScore === 'number' &&
+            Array.isArray(parsed.weaknesses) &&
+            Array.isArray(parsed.variationPlans) &&
+            parsed.variationPlans.length >= 1
+        ) {
+            // Pad with defaults if fewer plans were returned than requested
+            const plans = [...parsed.variationPlans];
+            while (plans.length < variationCount) {
+                plans.push(DEFAULT_IMPROVE_PLANS[plans.length % DEFAULT_IMPROVE_PLANS.length]);
+            }
+            return {
+                originalScore: Math.max(20, Math.min(95, Math.round(parsed.originalScore))),
+                weaknesses: parsed.weaknesses.slice(0, 4),
+                variationPlans: plans.slice(0, variationCount),
+            };
+        }
+    } catch (err) {
+        console.warn('Thumbnail pre-analysis failed, using default improvement plans:', err);
+    }
+
+    return {
+        originalScore: 58,
+        weaknesses: [
+            'Subject needs stronger lighting and separation from the background',
+            'Color contrast and visual hierarchy can be sharpened for small mobile screens',
+            'Text readability and focal hook can be made bolder and cleaner',
+        ],
+        variationPlans: DEFAULT_IMPROVE_PLANS.slice(0, variationCount),
+    };
+}
+
+async function scoreGeneratedThumbnails(
+    ai: GoogleGenAI,
+    results: DesignResult[],
+    variationLabels: string[],
+    platform: Platform,
+    originalScore?: number
+): Promise<DesignResult[]> {
+    const validEntries = results
+        .map((result, idx) => ({ result, idx, label: variationLabels[idx] || `Variation ${idx + 1}` }))
+        .filter((e) => Boolean(e.result.image));
+
+    if (validEntries.length === 0) return results;
+
+    try {
+        const label =
+            platform === 'youtube_improve' || platform === 'youtube' ? 'YouTube thumbnail' : `${platform} design`;
+
+        const parts: Part[] = [];
+        validEntries.forEach((entry, pos) => {
+            parts.push({ text: `Image ${pos + 1} (${entry.label}):` });
+            parts.push({
+                inlineData: {
+                    data: entry.result.image!.base64,
+                    mimeType: entry.result.image!.mimeType,
+                },
+            });
+        });
+
+        parts.push({
+            text: `Compare all ${validEntries.length} ${label} variation(s) side-by-side for mobile feed Click-Through Rate (CTR).
+IMPORTANT:
+- Evaluate each image critically and relatively against the others.
+- Do NOT assign identical overall scores or identical sub-scores to different variations—clearly differentiate which variation has stronger readability, contrast, and emotional hook.
+- Use a realistic spread (e.g. 68 to 95) based on actual visual differences.
+
+Return ONLY valid JSON with this exact schema:
+{
+  "scores": [
+    {
+      "index": 0,
+      "overall": <integer 55-98>,
+      "readability": <integer 50-99>,
+      "contrast": <integer 50-99>,
+      "curiosity": <integer 50-99>,
+      "summary": "<one short sentence (max 14 words) specific to THIS variation's unique strengths/tradeoffs>"
+    }
+  ]
+}
+Include exactly ${validEntries.length} items in "scores" ordered by index 0 to ${validEntries.length - 1}.`,
+        });
+
+        const response = await ai.models.generateContent({
+            model: getModelWithFallback('TEXT', false),
+            contents: { parts },
+            config: {
+                responseMimeType: 'application/json',
+                temperature: 0.4,
+            } as any,
+        });
+
+        const parsed = safeParseJson<{ scores: Array<Partial<ThumbnailScore> & { index?: number }> }>(response.text);
+        if (parsed && Array.isArray(parsed.scores) && parsed.scores.length > 0) {
+            const scored = [...results];
+            validEntries.forEach((entry, pos) => {
+                const item = parsed.scores.find((s) => s.index === pos) || parsed.scores[pos];
+                if (item && typeof item.overall === 'number') {
+                    const overall = Math.max(40, Math.min(99, Math.round(item.overall)));
+                    const score: ThumbnailScore = {
+                        overall,
+                        readability: Math.max(40, Math.min(99, Math.round(item.readability ?? overall))),
+                        contrast: Math.max(40, Math.min(99, Math.round(item.contrast ?? overall))),
+                        curiosity: Math.max(40, Math.min(99, Math.round(item.curiosity ?? overall))),
+                        summary: item.summary || 'Strong focal contrast and mobile readability.',
+                        variationLabel: entry.label,
+                        ...(originalScore !== undefined
+                            ? { originalScore, delta: overall - originalScore }
+                            : {}),
+                    };
+                    scored[entry.idx] = { ...scored[entry.idx], score };
+                }
+            });
+
+            // Highlight the single highest-scoring variation as Top Pick when multiple variations exist
+            if (scored.length > 1) {
+                let bestIdx = -1;
+                let bestScore = -1;
+                scored.forEach((item, idx) => {
+                    if (item.score && item.score.overall > bestScore) {
+                        bestScore = item.score.overall;
+                        bestIdx = idx;
+                    }
+                });
+                if (bestIdx >= 0 && scored[bestIdx].score) {
+                    scored[bestIdx] = {
+                        ...scored[bestIdx],
+                        score: { ...scored[bestIdx].score!, isTopPick: true },
+                    };
+                }
+            }
+
+            return scored;
+        }
+    } catch (err) {
+        console.warn('Comparative thumbnail scoring failed:', err);
+    }
+
+    return results;
+}
+
+export type ImproveMode = 'improve' | 'reimagine';
 
 export const generateDesign = async (
     ai: GoogleGenAI, 
@@ -20,9 +290,11 @@ export const generateDesign = async (
     platform: Platform, 
     transcript: string | null, 
     originalTitle: string, 
-    currentText: TextState
+    currentText: TextState,
+    improveMode: ImproveMode = 'improve'
 ): Promise<DesignResult[]> => {
     return performanceMonitor.measureFunction('generateDesign', async () => {
+        let finalPrompt = '';
         try {
             // Rate limiting: Acquire permission before making API calls
             await imageGenRateLimiter.acquire(`generate-${platform}`);
@@ -31,7 +303,6 @@ export const generateDesign = async (
             const originalYouTubeThumbnail = images.find(img => img.id.startsWith('yt_'));
             const userImages = images.filter(img => !img.id.startsWith('yt_'));
 
-            let finalPrompt: string;
             const allImageParts: Part[] = [];
 
             // Optimize images before sending to API
@@ -66,54 +337,10 @@ export const generateDesign = async (
             if (logoPart) allImageParts.push(logoPart);
 
 
+            let improvementPlan: ImprovementPlan | null = null;
+
             if (originalYouTubeThumbnail && platform === 'youtube_improve') {
-                let transcriptContext = transcript ? `\n**Video Transcript Context (Summary):** "${transcript.substring(0, 4000)}..."` : '';
-                let originalTitleContext = originalTitle ? `\n**Original Video Title:** "${originalTitle}"` : '';
-
-                finalPrompt = `
-            [START OF ABSOLUTE, NON-NEGOTIABLE TECHNICAL REQUIREMENTS]
-            1.  **OUTPUT ASPECT RATIO:** The generated image's aspect ratio MUST BE EXACTLY 16:9. This is the single most important rule. Failure to produce a 16:9 image means the entire task has failed.
-            2.  **OUTPUT FORMAT:** The final output must be a complete, final image, not a set of instructions or a description.
-            [END OF ABSOLUTE, NON-NEGOTIABLE TECHNICAL REQUIREMENTS]
-
-            ---
-
-            **Persona:** Act as a hybrid of a top YouTube strategist and a master graphic designer. Your single-minded goal is to improve an existing YouTube thumbnail for maximum Click-Through Rate (CTR), while strictly adhering to the technical requirements above.
-
-            **Guiding Philosophy: Surgical Improvement for Maximum CTR.** Your primary directive is NOT to create a completely new thumbnail, but to analyze and surgically *improve* the existing one.
-            - **Analyze First:** Critically evaluate the original thumbnail. Identify its strengths (what to keep) and its specific weaknesses (what to change).
-            - **Minimalism is Key:** If the design is already strong, make only minimal, high-impact changes. If only the text is weak, focus solely on that. If the composition is great but the colors are dull, just enhance the colors.
-            - **Justify Every Change:** Every alteration must be directly justified by its potential to increase CTR. Do not change elements that are already working effectively.
-
-            **Step 1: Deep Contextual Analysis**
-            - **Analyze the Original Thumbnail:** Identify its strengths (e.g., compelling subject expression) and weaknesses (e.g., unreadable text, cluttered background, poor color contrast). Your improvement plan will target these weaknesses.
-            - **Analyze Title & Transcript:** Synthesize this information to find the video's *emotional core*. What is the most surprising moment, the biggest promise, or the key question? The improved design must amplify this core hook.
-
-            **Step 2: The Redesign - Strategic & Justified Changes**
-            Based on your analysis, apply ONLY the necessary changes.
-            - **Subject Integrity (NON-NEGOTIABLE):** The primary human subject or key object is SACRED. Preserve their likeness, expression, and posture. You are enhancing the scene *around* them.
-            - **Targeted Improvements:**
-                - **If Background is Weak:** Enhance it for drama or replace it with something that better tells the story.
-                - **If Text is Weak:** Re-craft the text to be short, punchy, and emotionally charged. Render it with extreme readability (bold fonts, thick outlines, drop shadows).
-                - **If Colors are Weak:** Re-grade the entire image for a more cohesive, eye-catching mood that makes the subject pop.
-                - **If Composition is Weak:** Adjust framing, add subtle guides (arrows, circles), and use the subject's gaze to direct the viewer's eye towards the most important element.
-
-            **Strict Rules & What to Avoid:**
-            - **AVOID Unnecessary Changes:** If you analyze the thumbnail and determine it is already highly optimized, you have the authority to return a version with very minimal or even no changes. Confirm its quality in your thinking process.
-            - **AVOID Over-Designing:** Do not add elements that don't serve a clear, CTR-focused purpose.
-            - **AVOID THE "AI LOOK":** The final product must feel human-made. Use professional color grading, realistic lighting, and seamless blending. The final image should look like a high-quality, retouched photograph.
-
-            **User Inputs to Guide Your Design:**
-            ${originalTitleContext}
-            ${transcriptContext}
-            - **Vibe & Style to Execute:** ${preferences.style}
-            - **Inspirational Color Palette:** Primary: ${colors.primary}, Secondary: ${colors.secondary}, Accent: ${colors.accent}.
-            - **Desired Visual Drama Level:** ${preferences.drama}/5 (where 5 is maximum intensity).
-
-            **Final Check:** Before outputting, verify again that the aspect ratio is exactly 16:9.
-        `;
-                
-                // Optimize YouTube thumbnail
+                // Optimize YouTube thumbnail first
                 let optimizedThumbnail = originalYouTubeThumbnail;
                 try {
                     const optimized = await optimizeImageForAI(originalYouTubeThumbnail.base64, originalYouTubeThumbnail.mimeType);
@@ -121,6 +348,78 @@ export const generateDesign = async (
                 } catch (error) {
                     console.warn('Failed to optimize YouTube thumbnail, using original:', error);
                 }
+
+                const requestedVariations = Math.max(1, Math.min(5, preferences.variations || 1));
+
+                // Step 1: Analyze the original thumbnail to diagnose real weaknesses & concrete changes
+                improvementPlan = await analyzeThumbnailForImprovement(
+                    ai,
+                    optimizedThumbnail,
+                    originalTitle,
+                    transcript,
+                    requestedVariations
+                );
+
+                const transcriptContext = transcript ? `\n- **Video Transcript Context:** "${transcript.substring(0, 2500)}"` : '';
+                const originalTitleContext = originalTitle ? `\n- **Video Title:** "${originalTitle}"` : '';
+                const referenceImageDirective =
+                    optimizedImages.length > 0
+                        ? `\n- **Additional User Reference Images (${optimizedImages.length} attached after the original thumbnail):** Naturally incorporate the subject, face, product, or visual elements from these extra reference image(s) into the final thumbnail.`
+                        : '';
+                const weaknessesList = improvementPlan.weaknesses.map((w, idx) => `  ${idx + 1}. ${w}`).join('\n');
+
+                if (improveMode === 'reimagine') {
+                    finalPrompt = `
+            [START OF ABSOLUTE, NON-NEGOTIABLE TECHNICAL REQUIREMENTS]
+            1.  **COMPLETELY NEW CONCEPT FROM SCRATCH:** Do NOT copy the old thumbnail's layout, background, or composition. Invent a brand-new, scroll-stopping YouTube thumbnail concept based on the video's title and story!
+            2.  **KEEP REAL SUBJECT LIKENESS (IF PRESENT):** If there is a real person/host in the attached reference thumbnail or user reference images, preserve their recognizable face/likeness, but place them in a totally new, high-drama pose, angle, lighting, and scene.
+            3.  **CLEAN CORNERS (NO UI OVERLAYS):** Keep the bottom-right corner uncluttered with clean background only. NEVER draw any timestamp, video duration badge, clock, aspect ratio numbers, or YouTube UI elements anywhere on the image.
+            [END OF ABSOLUTE, NON-NEGOTIABLE TECHNICAL REQUIREMENTS]
+
+            ---
+
+            **Persona:** You are a world-class YouTube Creative Director for top 0.1% viral channels.
+
+            **Mission:** Reimagine this video's thumbnail from the ground up with a fresh, unmistakable curiosity gap that makes viewers stop scrolling immediately.
+            - **Completely New Visual Story:** Design a fresh scene, background, camera angle, and focal object that visually dramatizes the core hook of the video title and transcript.
+            - **Punchy 2–4 Word Hook:** Create bold, ultra-readable mobile typography (thick dark outline / drop shadow, strong contrast) that complements—not repeats—the full video title.
+            - **Cinematic Studio Quality:** Professional lighting, crisp foreground/background separation, natural skin tones, zero "AI plastic" look.
+
+            **Context:**${originalTitleContext}${transcriptContext}${referenceImageDirective}
+            - **Vibe & Style:** ${preferences.style}
+            - **Color Palette Inspiration:** Primary: ${colors.primary}, Secondary: ${colors.secondary}, Accent: ${colors.accent}
+            - **Visual Drama Level:** ${preferences.drama}/5
+
+            **Final Check:** Confirm this is a genuinely new, widescreen concept with zero UI overlays, timestamps, or ratio text on the image.
+        `;
+                } else {
+                    finalPrompt = `
+            [START OF ABSOLUTE, NON-NEGOTIABLE TECHNICAL REQUIREMENTS]
+            1.  **VISIBLE, REAL CTR UPGRADE REQUIRED (DO NOT RETURN AN UNCHANGED COPY):** You MUST make unmistakable, noticeable visual improvements to the attached original YouTube thumbnail so it performs dramatically better on mobile feeds. Returning a near-identical copy is a failure.
+            2.  **PRESERVE SUBJECT IDENTITY & TOPIC:** Keep the same real person/face/likeness and core video topic from the original thumbnail so viewers recognize it, while boldly upgrading lighting, framing, background separation, color grading, and typography.
+            3.  **CLEAN CORNERS (NO UI OVERLAYS):** Keep the bottom-right corner uncluttered with clean background only. NEVER draw any timestamp, video duration badge, clock, aspect ratio numbers, or YouTube UI elements anywhere on the image.
+            [END OF ABSOLUTE, NON-NEGOTIABLE TECHNICAL REQUIREMENTS]
+
+            ---
+
+            **Diagnosed Weaknesses in the Original Thumbnail (FIX ALL OF THESE):**
+${weaknessesList}
+
+            **Upgrade Directives:**
+            - **Subject Pop:** Sharpen the primary subject, enhance facial expression/clarity, add crisp studio rim lighting, and separate them cleanly from the background.
+            - **Background Upgrade:** Remove clutter, add cinematic depth-of-field blur or richer atmospheric lighting that makes the foreground jump out.
+            - **Typography Upgrade:** Make any headline short (2-4 punchy words), massive, bold sans-serif with high-contrast outline/drop shadow—never small or muddy.
+            - **Professional Finish:** High-end YouTube creator retouching (no plastic "AI look").
+
+            **Context:**${originalTitleContext}${transcriptContext}${referenceImageDirective}
+            - **Vibe & Style:** ${preferences.style}
+            - **Color Palette Inspiration:** Primary: ${colors.primary}, Secondary: ${colors.secondary}, Accent: ${colors.accent}
+            - **Visual Drama Level:** ${preferences.drama}/5
+
+            **Final Check:** Confirm the image is clearly upgraded compared to the original, with zero timestamps, duration badges, or ratio text drawn on the image.
+        `;
+                }
+
                 allImageParts.unshift({ inlineData: { data: optimizedThumbnail.base64, mimeType: optimizedThumbnail.mimeType } });
 
             } else if (platform === 'podcast') {
@@ -206,8 +505,46 @@ export const generateDesign = async (
 
             **Final Check:** Before outputting, verify again that the aspect ratio is exactly 9:16 (VERTICAL).
         `;
+            } else if (platform === 'youtube') {
+                const subheadlineLine = currentText.subheadline
+                    ? `\n            - **Subheadline / Secondary Tag:** "${currentText.subheadline}"`
+                    : '';
+
+                finalPrompt = `
+            [START OF ABSOLUTE, NON-NEGOTIABLE TECHNICAL REQUIREMENTS]
+            1.  **WIDESCREEN COMPOSITION:** Compose cleanly for a widescreen YouTube thumbnail. NEVER draw any timestamp, duration badge, aspect ratio numbers, or UI elements anywhere on the image.
+            2.  **CLEAN BOTTOM-RIGHT CORNER:** Keep the bottom-right corner uncluttered with clean background only (no critical text or logos there).
+            3.  **TEXT RENDERING:** Render the Headline clearly and accurately directly onto the thumbnail with extreme mobile readability.
+            [END OF ABSOLUTE, NON-NEGOTIABLE TECHNICAL REQUIREMENTS]
+
+            ---
+
+            **Persona:** You are an elite YouTube Thumbnail Designer & CTR Strategist who designs thumbnails for top-performing channels.
+
+            **Core Objective:** Create a scroll-stopping, high-CTR YouTube thumbnail that communicates the video's hook in under 1 second, even when viewed at tiny mobile feed size.
+
+            **Non-Negotiable YouTube CTR Rules:**
+            1.  **EXPRESSIVE FOCAL POINT:** Use the rule of thirds. Make the primary subject (person, face, or hero object from the provided images) large, crisp, and emotionally expressive with strong rim lighting or subtle edge separation from the background.
+            2.  **TYPOGRAPHY:** ${
+                currentText.headline?.trim()
+                    ? `Render ONLY this exact Headline text cleanly with zero typos: "${currentText.headline.trim()}" in massive, bold sans-serif typography with high contrast (thick dark outline or clean drop shadow). Do NOT render any other words or layout labels.`
+                    : 'No headline text was provided—create a clean, visual-first thumbnail with NO random text, NO placeholder words, and NO layout labels written on the image.'
+            }
+            3.  **HIGH-CONTRAST VISUAL HIERARCHY:** Use clean foreground/background separation (subtle depth-of-field blur on the background, vibrant color grading, intentional lighting). Avoid busy, noisy backgrounds.
+            4.  **AVOID THE "AI LOOK":** Make lighting, skin tones, and edges look like a professionally lit studio photograph and retouched graphic—not plastic or over-processed.
+
+            **User Creative Brief:**
+            - **Headline:** ${currentText.headline?.trim() ? `"${currentText.headline.trim()}"` : 'NONE (do not add text)'}${subheadlineLine}
+            - **Overall Vibe & Style:** ${preferences.style}
+            - **Color Palette Inspiration:** Primary: ${colors.primary}, Secondary: ${colors.secondary}, Accent: ${colors.accent}, Background: ${colors.background}
+            - **Visual Drama Level:** ${preferences.drama}/5
+            - **User-Provided Images:** Use the attached images as the primary subject/foundation and preserve the subject's likeness.
+            - **Logo:** If a logo is provided, place it subtly in the ${logo.position === 'bottom-right' ? 'top-right or top-left (avoiding the YouTube timestamp in bottom-right)' : logo.position.replace('-', ' ')}.
+
+            **Final Check:** Verify crisp readable text, an uncluttered bottom-right corner, and zero timestamps or ratio labels drawn on the image.
+        `;
             } else {
-                // Fallback for other platforms
+                // Fallback for other platforms (e.g. Twitter Card)
                 finalPrompt = `
             [START OF ABSOLUTE, NON-NEGOTIABLE TECHNICAL REQUIREMENTS]
             1.  **OUTPUT ASPECT RATIO:** The generated image's aspect ratio MUST BE EXACTLY ${platformConfig.aspectRatio}. This is the single most important rule. Failure to produce a ${platformConfig.aspectRatio} image means the entire task has failed.
@@ -233,66 +570,122 @@ export const generateDesign = async (
         `;
             }
             
-            // Generate multiple variations with fallback support
-            // Use rate limiting and retry logic for each request
-            const generationPromises: Promise<GenerateContentResponse>[] = [];
+            // Keep variation labels strictly in JS metadata (never include label names in prompt text so the model never renders them!)
+            const GENERATE_VARIATION_DIRECTIONS = [
+                'Composition Style: Use a tight, high-impact close-up framing with strong subject rim lighting. (Internal layout cue only—do not write these words on the image.)',
+                'Composition Style: Use a dynamic two-tone contrasting background split with shallow depth-of-field and eye-leading framing. (Internal layout cue only—do not write these words on the image.)',
+                'Composition Style: Use a clean, uncluttered minimalist composition with generous negative space and punchy contrast. (Internal layout cue only—do not write these words on the image.)',
+                'Composition Style: Use moody cinematic color grading with dramatic directional lighting and atmospheric depth. (Internal layout cue only—do not write these words on the image.)',
+                'Composition Style: Use a vibrant high-saturation color-blocked background with crisp subject edge glow. (Internal layout cue only—do not write these words on the image.)',
+            ];
 
-            for (let i = 0; i < preferences.variations; i++) {
-                // Acquire rate limit permission for each variation
+            const isImproveMode = Boolean(
+                originalYouTubeThumbnail && platform === 'youtube_improve' && improveMode === 'improve'
+            );
+            const improvePlans = improvementPlan?.variationPlans || DEFAULT_IMPROVE_PLANS;
+
+            const variationCount = Math.max(1, Math.min(5, preferences.variations || 1));
+            // Run sequentially (MAX_CONCURRENT = 1) so OpenRouter's in-flight credit holds never reject parallel variations
+            const MAX_CONCURRENT = 1;
+            const responses: Array<{ response: GenerateContentResponse; label: string; hookText?: string }> = [];
+            let lastError: any = null;
+
+            const runVariation = async (
+                i: number
+            ): Promise<{ response: GenerateContentResponse; label: string; hookText?: string }> => {
                 await imageGenRateLimiter.acquire(`generate-${platform}-variation-${i}`);
-                
-                const promise = callWithFallback(
-                    // Primary: Try Gemini 3 Pro first
-                    () => retryWithBackoff(
-                        () => ai.models.generateContent({
-                            model: getModelWithFallback('IMAGE', false),
-                            contents: { parts: [{ text: finalPrompt }, ...allImageParts] },
-                            config: {
-                                responseModalities: [Modality.IMAGE],
-                            },
-                        }),
-                        {
-                            maxRetries: 2,
-                            initialDelayMs: 2000,
-                            retryableErrors: (error: any) => {
-                                return error.status === 429 || (error.status >= 500 && error.status < 600);
-                            },
-                        }
-                    ),
-                    // Fallback: Use Gemini 2.5 Flash if primary fails
-                    () => retryWithBackoff(
-                        () => ai.models.generateContent({
-                            model: getModelWithFallback('IMAGE', true),
-                            contents: { parts: [{ text: finalPrompt }, ...allImageParts] },
-                            config: {
-                                responseModalities: [Modality.IMAGE],
-                            },
-                        }),
-                        {
-                            maxRetries: 2,
-                            initialDelayMs: 2000,
-                            retryableErrors: (error: any) => {
-                                return error.status === 429 || (error.status >= 500 && error.status < 600);
-                            },
-                        }
-                    ),
+
+                let variationDirective = '';
+                let variationLabel = `Variation ${i + 1}`;
+                let variationHookText: string | undefined;
+
+                if (platform === 'youtube_improve' && originalYouTubeThumbnail) {
+                    const plan = improvePlans[i % improvePlans.length];
+                    variationHookText = plan.hookText?.trim() || undefined;
+                    const hookDirective = variationHookText
+                        ? `\n- **EXACT THUMBNAIL TEXT TO RENDER (NON-NEGOTIABLE):** Render ONLY this short, ultra-readable viral hook text cleanly with zero spelling errors, thick outline, and high contrast: "${variationHookText}"`
+                        : '';
+
+                    if (isImproveMode) {
+                        variationLabel = plan.label;
+                        variationDirective = `Visual Upgrade Instructions (internal guidance only—never write instruction words on the image): ${plan.instructions}${hookDirective}`;
+                    } else {
+                        variationLabel = DEFAULT_GENERATE_LABELS[i % DEFAULT_GENERATE_LABELS.length];
+                        variationDirective = `${GENERATE_VARIATION_DIRECTIONS[i % GENERATE_VARIATION_DIRECTIONS.length]}${hookDirective}`;
+                    }
+                } else {
+                    variationLabel = DEFAULT_GENERATE_LABELS[i % DEFAULT_GENERATE_LABELS.length];
+                    variationDirective = GENERATE_VARIATION_DIRECTIONS[i % GENERATE_VARIATION_DIRECTIONS.length];
+                }
+
+                const variationPrompt = `${finalPrompt}\n\n${variationDirective}`;
+
+                const imageConfig = {
+                    responseModalities: [Modality.IMAGE],
+                    aspectRatio: platformConfig.aspectRatio,
+                };
+
+                const response = await callWithFallback(
+                    () =>
+                        retryWithBackoff(
+                            () =>
+                                ai.models.generateContent({
+                                    model: getModelWithFallback('IMAGE', false),
+                                    contents: { parts: [{ text: variationPrompt }, ...allImageParts] },
+                                    config: imageConfig as any,
+                                }),
+                            {
+                                maxRetries: 2,
+                                initialDelayMs: 2000,
+                                retryableErrors: (error: any) =>
+                                    error.status === 429 || (error.status >= 500 && error.status < 600),
+                            }
+                        ),
+                    () =>
+                        retryWithBackoff(
+                            () =>
+                                ai.models.generateContent({
+                                    model: getModelWithFallback('IMAGE', true),
+                                    contents: { parts: [{ text: variationPrompt }, ...allImageParts] },
+                                    config: imageConfig as any,
+                                }),
+                            {
+                                maxRetries: 2,
+                                initialDelayMs: 2000,
+                                retryableErrors: (error: any) =>
+                                    error.status === 429 || (error.status >= 500 && error.status < 600),
+                            }
+                        ),
                     'Failed to generate design variation'
                 );
-                generationPromises.push(promise);
+
+                return { response, label: variationLabel, hookText: variationHookText };
+            };
+
+            // True concurrency-limited batching + Promise.allSettled so successful variations aren't lost
+            for (let i = 0; i < variationCount; i += MAX_CONCURRENT) {
+                const batchIndices: number[] = [];
+                for (let j = i; j < Math.min(i + MAX_CONCURRENT, variationCount); j++) {
+                    batchIndices.push(j);
+                }
+                const settled = await Promise.allSettled(batchIndices.map((idx) => runVariation(idx)));
+                for (const outcome of settled) {
+                    if (outcome.status === 'fulfilled') {
+                        responses.push(outcome.value);
+                    } else {
+                        lastError = outcome.reason;
+                        console.warn('A design variation failed:', outcome.reason);
+                    }
+                }
             }
 
-            // Process requests with limited concurrency to avoid overwhelming the API
-            const MAX_CONCURRENT = 2;
-            const responses: GenerateContentResponse[] = [];
-            
-            for (let i = 0; i < generationPromises.length; i += MAX_CONCURRENT) {
-                const batch = generationPromises.slice(i, i + MAX_CONCURRENT);
-                const batchResults = await Promise.all(batch);
-                responses.push(...batchResults);
+            if (responses.length === 0 && lastError) {
+                throw lastError;
             }
 
             const results: DesignResult[] = [];
-            for (const response of responses) {
+            const resultLabels: string[] = [];
+            for (const { response, label, hookText } of responses) {
                 const candidate = response.candidates?.[0];
                 if (candidate?.content?.parts) {
                     for (const part of candidate.content.parts) {
@@ -303,20 +696,30 @@ export const generateDesign = async (
                                     base64: part.inlineData.data,
                                     mimeType: part.inlineData.mimeType,
                                     url: `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`
-                                }
+                                },
+                                ...(hookText ? { suggestedHeadline: hookText } : {}),
                             });
+                            resultLabels.push(label);
                             break;
                         }
                     }
                 }
             }
 
-
             if (results.length === 0) {
                 throw new Error("The model did not return any images. Please try adjusting your prompt or inputs.");
             }
 
-            return results;
+            // Score each generated thumbnail for CTR readability, contrast, and curiosity
+            const scoredResults = await scoreGeneratedThumbnails(
+                ai,
+                results,
+                resultLabels,
+                platform,
+                improvementPlan?.originalScore
+            );
+
+            return scoredResults;
         } catch (error: any) {
             errorTracker.trackAiError('generateDesign', error, finalPrompt);
             throw error;
@@ -377,7 +780,8 @@ export const adaptImageForPlatform = async (
                         ]},
                         config: {
                             responseModalities: [Modality.IMAGE],
-                        },
+                            aspectRatio: targetConfig.aspectRatio,
+                        } as any,
                     }),
                     {
                         maxRetries: 2,
@@ -397,7 +801,8 @@ export const adaptImageForPlatform = async (
                         ]},
                         config: {
                             responseModalities: [Modality.IMAGE],
-                        },
+                            aspectRatio: targetConfig.aspectRatio,
+                        } as any,
                     }),
                     {
                         maxRetries: 2,
@@ -434,6 +839,99 @@ export const adaptImageForPlatform = async (
             return results;
         } catch (error: any) {
             errorTracker.trackAiError('adaptImageForPlatform', error);
+            throw error;
+        }
+    });
+};
+
+export const resizeThumbnailForSize = async (
+    ai: GoogleGenAI,
+    sourceImage: ImageAsset,
+    option: ResizeOption
+): Promise<DesignResult> => {
+    return performanceMonitor.measureFunction('resizeThumbnailForSize', async () => {
+        try {
+            await imageGenRateLimiter.acquire(`resize-${option.id}`);
+
+            let optimizedImage = sourceImage;
+            try {
+                const optimized = await optimizeImageForAI(sourceImage.base64, sourceImage.mimeType);
+                optimizedImage = { ...sourceImage, base64: optimized.base64, mimeType: optimized.mimeType };
+            } catch (error) {
+                console.warn('Failed to optimize image for resize, using original:', error);
+            }
+
+            const prompt = `Recompose and resize this EXACT thumbnail to fit a ${option.description} layout.
+Rules:
+1. KEEP THE EXACT SAME THUMBNAIL DESIGN: Preserve the exact same people/faces, clothing, headline text, typography style, colors, lighting, and overall aesthetic from the attached thumbnail. Do NOT invent a new concept.
+2. SMART RECOMPOSITION: Reframe and naturally extend the background and reposition the text cleanly so nothing is awkwardly cropped or cut off in the new shape.
+3. CLEAN OUTPUT: Never draw any aspect ratio numbers, dimensions, timestamps, or UI overlays anywhere on the image.`;
+
+            const parts: Part[] = [
+                { inlineData: { data: optimizedImage.base64, mimeType: optimizedImage.mimeType } },
+                { text: prompt },
+            ];
+
+            const imageConfig = {
+                responseModalities: [Modality.IMAGE],
+                aspectRatio: option.aspectRatio,
+            };
+
+            const response = await callWithFallback(
+                () =>
+                    retryWithBackoff(
+                        () =>
+                            ai.models.generateContent({
+                                model: getModelWithFallback('IMAGE', false),
+                                contents: { parts },
+                                config: imageConfig as any,
+                            }),
+                        {
+                            maxRetries: 2,
+                            initialDelayMs: 2000,
+                            retryableErrors: (error: any) =>
+                                error.status === 429 || (error.status >= 500 && error.status < 600),
+                        }
+                    ),
+                () =>
+                    retryWithBackoff(
+                        () =>
+                            ai.models.generateContent({
+                                model: getModelWithFallback('IMAGE', true),
+                                contents: { parts },
+                                config: imageConfig as any,
+                            }),
+                        {
+                            maxRetries: 2,
+                            initialDelayMs: 2000,
+                            retryableErrors: (error: any) =>
+                                error.status === 429 || (error.status >= 500 && error.status < 600),
+                        }
+                    ),
+                'Failed to resize thumbnail'
+            );
+
+            if (response.candidates?.[0]?.content?.parts) {
+                for (const part of response.candidates[0].content.parts) {
+                    if (part.inlineData && part.inlineData.mimeType.startsWith('image/')) {
+                        const base64 = part.inlineData.data;
+                        const mimeType = part.inlineData.mimeType;
+                        return {
+                            image: {
+                                id: `resized_${option.id}_${Date.now()}`,
+                                base64,
+                                mimeType,
+                                url: `data:${mimeType};base64,${base64}`,
+                            },
+                            description: `Resized · ${option.label}`,
+                        };
+                    }
+                }
+            }
+
+            throw new Error('Resize failed to return an image.');
+        } catch (error: any) {
+            errorTracker.trackAiError('resizeThumbnailForSize', error, option.label);
             throw error;
         }
     });

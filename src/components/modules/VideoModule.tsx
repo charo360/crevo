@@ -3,7 +3,6 @@ import { toast } from 'react-toastify';
 import { VideoAsset, AnalysisResult, VeoAspectRatio, Platform } from '../../types';
 import { Module } from './Module';
 import { ICONS } from '../../constants';
-import { PLATFORM_CONFIGS } from '../../constants/platforms';
 import { VideoTrimmer } from './VideoTrimmer';
 
 interface VideoModuleProps {
@@ -26,70 +25,58 @@ interface VideoModuleProps {
 
 export const VideoModule: FC<VideoModuleProps> = (props) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const urlInputRef = useRef<HTMLInputElement>(null);
   const [videoDuration, setVideoDuration] = useState(0);
-  const [videoPrompt, setVideoPrompt] = useState('');
-  const [videoUrl, setVideoUrl] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
+
+  const loadVideoFile = (file: File) => {
+    try {
+      if (file.size > 150 * 1024 * 1024) {
+        toast.error('Video file size must be less than 150MB');
+        return;
+      }
+      if (!file.type.startsWith('video/')) {
+        toast.error('Please upload a valid video file (MP4, MOV, WebM)');
+        return;
+      }
+      if (props.videoAsset?.url?.startsWith('blob:')) {
+        URL.revokeObjectURL(props.videoAsset.url);
+      }
+      const url = URL.createObjectURL(file);
+      props.onVideoAssetChange({ id: `vid_${Date.now()}`, file, url });
+      props.onAnalysisResultChange(null);
+      toast.success('Video uploaded! Trim the clip or click Analyze Style / Generate.');
+    } catch (error: any) {
+      toast.error(`Failed to upload video: ${error.message || 'Unknown error'}`);
+    }
+  };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      try {
-        if (file.size > 100 * 1024 * 1024) {
-          toast.error('Video file size must be less than 100MB');
-          return;
-        }
-        if (!file.type.startsWith('video/')) {
-          toast.error('Please upload a valid video file');
-          return;
-        }
-        const url = URL.createObjectURL(file);
-        props.onVideoAssetChange({ id: `vid_${Date.now()}`, file, url });
-        props.onAnalysisResultChange(null);
-        setVideoUrl('');
-        toast.success('Video uploaded successfully!');
-      } catch (error: any) {
-        toast.error(`Failed to upload video: ${error.message || 'Unknown error'}`);
-      }
+      loadVideoFile(file);
     }
+    event.target.value = '';
   };
 
-  const handleUrlSubmit = async () => {
-    const url = urlInputRef.current?.value.trim();
-    if (!url) {
-      toast.error('Please enter a video URL');
-      return;
-    }
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragging) setIsDragging(true);
+  };
 
-    try {
-      setVideoUrl(url);
-      if (url.includes('youtube.com') || url.includes('youtu.be')) {
-        toast.info('YouTube URL detected. Processing for frame extraction and analysis.');
-        props.onVideoAssetChange({ id: `vid_${Date.now()}`, file: null, url });
-        props.onAnalysisResultChange(null);
-        toast.success('YouTube video URL loaded!');
-      } else {
-        toast.info('Loading video from URL...');
-        const response = await fetch(url, { method: 'GET', headers: { Accept: 'video/*' } });
-        if (!response.ok) {
-          throw new Error(`Cannot load video: ${response.statusText}`);
-        }
-        const blob = await response.blob();
-        if (!blob.type.startsWith('video/')) throw new Error('Invalid video file.');
-        const objectUrl = URL.createObjectURL(blob);
-        props.onVideoAssetChange({
-          id: `vid_${Date.now()}`,
-          file: new File([blob], 'video.mp4', { type: blob.type }),
-          url: objectUrl,
-        });
-        props.onAnalysisResultChange(null);
-        toast.success('Video URL loaded successfully!');
-      }
-    } catch (error: any) {
-      console.error('Error loading video:', error);
-      toast.error(`Failed to load video: ${error.message || 'Unknown error'}`);
-      setVideoUrl('');
-      if (urlInputRef.current) urlInputRef.current.value = '';
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      loadVideoFile(file);
     }
   };
 
@@ -99,237 +86,165 @@ export const VideoModule: FC<VideoModuleProps> = (props) => {
   };
 
   const handleRemoveVideo = () => {
+    if (props.videoAsset?.url?.startsWith('blob:')) {
+      URL.revokeObjectURL(props.videoAsset.url);
+    }
     props.onVideoAssetChange(null);
     setVideoDuration(0);
     props.onAnalysisResultChange(null);
-    setVideoUrl('');
-    if (urlInputRef.current) urlInputRef.current.value = '';
-  };
-
-  const handleGenerateClick = () => {
-    if (!videoPrompt || props.isGeneratingVideo) return;
-    const config = PLATFORM_CONFIGS[props.platform];
-    const aspectRatio: VeoAspectRatio = config.aspectRatio === '9:16' ? '9:16' : '16:9';
-    props.onGenerateVideo(videoPrompt, aspectRatio);
   };
 
   if (props.hideForImagePlatforms) return null;
 
   const title = props.isPrimary ? 'Start with a Video' : 'Or Upload a Video';
-  const showDivider = !props.isPrimary;
 
   return (
     <Module icon={ICONS.VIDEO} title={title}>
-      {showDivider && <div className="section-divider" />}
-
-      {/* === Uploaded or Linked Video === */}
       {props.videoAsset ? (
-        <>
-          {props.videoAsset.url.includes('youtube.com') || props.videoAsset.url.includes('youtu.be') ? (
-            <div className="p-6 text-center border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
-              <p className="font-semibold text-gray-800 mb-2">YouTube Video URL Loaded</p>
-              <p className="text-sm text-gray-600 break-all mb-3">{props.videoAsset.url}</p>
-              <p className="text-sm text-gray-500">
-                You can analyze frames or generate designs from this video.
-              </p>
-              <button
-                onClick={handleRemoveVideo}
-                className="mt-4 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-all"
-              >
-                Remove URL
-              </button>
-            </div>
-          ) : (
-            <>
-              <div className="relative rounded-lg overflow-hidden shadow-md border border-gray-200">
-                <video className="w-full rounded-t-lg" src={props.videoAsset.url} muted playsInline controls />
-                <button
-                  onClick={handleRemoveVideo}
-                  className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full w-7 h-7 flex items-center justify-center text-lg"
-                >
-                  &times;
-                </button>
-              </div>
-
-              <VideoTrimmer
-                videoUrl={props.videoAsset.url}
-                onVideoLoad={handleVideoLoad}
-                trimTimes={props.trimTimes}
-                onTrimTimesChange={props.onTrimTimesChange}
-                videoDuration={videoDuration}
-              />
-            </>
-          )}
-
-          <div className="flex flex-wrap gap-3 mt-5">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {/* Single clean VideoTrimmer player with Remove button */}
+          <div style={{ position: 'relative' }}>
+            <VideoTrimmer
+              videoUrl={props.videoAsset.url}
+              onVideoLoad={handleVideoLoad}
+              trimTimes={props.trimTimes}
+              onTrimTimesChange={props.onTrimTimesChange}
+              videoDuration={videoDuration}
+            />
             <button
+              type="button"
+              onClick={handleRemoveVideo}
+              title="Remove video"
+              aria-label="Remove video"
+              style={{
+                position: 'absolute',
+                top: '8px',
+                right: '8px',
+                zIndex: 5,
+                background: 'rgba(0, 0, 0, 0.72)',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '999px',
+                width: '26px',
+                height: '26px',
+                cursor: 'pointer',
+                fontSize: '16px',
+                lineHeight: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              ×
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
               onClick={props.onAnalyzeVideo}
-              disabled={props.isAnalyzing}
-              className="flex-1 sm:flex-none px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
+              disabled={props.isAnalyzing || props.isExtractingFaces}
+              style={{
+                flex: 1,
+                padding: '9px 12px',
+                borderRadius: '8px',
+                border: 'none',
+                background: 'var(--primary, #571c86)',
+                color: '#ffffff',
+                fontSize: '12.5px',
+                fontWeight: 600,
+                cursor: props.isAnalyzing ? 'wait' : 'pointer',
+                opacity: props.isAnalyzing ? 0.7 : 1,
+              }}
             >
               {props.isAnalyzing ? 'Analyzing...' : 'Analyze Style'}
             </button>
             <button
+              type="button"
               onClick={props.onExtractFaces}
-              disabled={props.isExtractingFaces}
-              className="flex-1 sm:flex-none px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
+              disabled={props.isExtractingFaces || props.isAnalyzing}
+              style={{
+                flex: 1,
+                padding: '9px 12px',
+                borderRadius: '8px',
+                border: '1px solid var(--border-color, #e4dcf2)',
+                background: 'var(--surface-2, #f3ecfa)',
+                color: 'var(--primary, #571c86)',
+                fontSize: '12.5px',
+                fontWeight: 600,
+                cursor: props.isExtractingFaces ? 'wait' : 'pointer',
+                opacity: props.isExtractingFaces ? 0.7 : 1,
+              }}
             >
               {props.isExtractingFaces ? 'Extracting...' : 'Extract Faces'}
             </button>
           </div>
 
-          {props.isAnalyzing && (
-            <div className="mt-4 flex items-center gap-2 text-gray-600 text-sm">
-              <div className="spinner border-indigo-500" />
-              <span>Analyzing video frames...</span>
+          {props.analysisResult && (
+            <div
+              style={{
+                padding: '8px 10px',
+                borderRadius: '8px',
+                background: 'var(--surface-2, #f3ecfa)',
+                border: '1px solid var(--border-color, #e4dcf2)',
+                fontSize: '12px',
+                color: 'var(--text-primary, #111111)',
+              }}
+            >
+              Suggested style applied: <strong>{props.analysisResult.suggestedStyle}</strong>
             </div>
           )}
-        </>
-      ) : props.isGeneratingVideo ? (
-        <div className="text-center py-8">
-          <div className="spinner mx-auto mb-3" />
-          <p className="text-gray-700 font-medium mb-1">Generating video...</p>
-          <p className="text-sm text-gray-500">This can take a few minutes. Please don’t close this window.</p>
         </div>
       ) : (
-        <>
-          {/* === Upload Area === */}
-          <div
-            onClick={() => fileInputRef.current?.click()}
-            className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-xl bg-gray-50 hover:bg-gray-100 transition-all cursor-pointer py-10 px-4 text-center"
+        <div
+          onClick={() => fileInputRef.current?.click()}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: isDragging
+              ? '2px dashed var(--primary, #571c86)'
+              : '2px dashed var(--border-color, #e4dcf2)',
+            borderRadius: '12px',
+            background: isDragging ? 'var(--surface-2, #f3ecfa)' : 'var(--background, #f8f5ed)',
+            padding: '28px 16px',
+            textAlign: 'center',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <svg
+            width="42"
+            height="42"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="var(--primary, #571c86)"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ opacity: 0.8, marginBottom: '8px' }}
           >
-            <svg
-              width="64"
-              height="64"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="text-indigo-500 opacity-70 mb-2"
-            >
-              <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
-              <circle cx="12" cy="13" r="3" />
-            </svg>
-            <p className="font-medium text-gray-700">Drag & drop your video here</p>
-            <p className="text-sm text-gray-500">or click to browse</p>
-            <p className="text-xs text-gray-400 mt-2">Supports MP4, MOV, AVI up to 100MB</p>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              accept="video/*"
-              className="hidden"
-            />
-          </div>
-
-          {/* === URL Input Section === */}
-         {/* === URL Input Section (Column Layout) === */}
-<div className="my-10">
-  <div className="flex items-center justify-center mb-6">
-    <div className="flex-grow border-t border-gray-200"></div>
-    <span className="mx-4 text-sm text-gray-500 font-medium tracking-wide">
-      OR PASTE A VIDEO URL
-    </span>
-    <div className="flex-grow border-t border-gray-200"></div>
-  </div>
-
-  <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-all max-w-md mx-auto">
-    <label htmlFor="video-url" className="block text-sm font-medium text-gray-700 mb-2 text-center">
-      Video URL
-    </label>
-
-    <div className="relative w-full mb-4">
-      <input
-        id="video-url"
-        type="text"
-        ref={urlInputRef}
-        placeholder="Paste YouTube, Vimeo, or direct video link..."
-        className="w-full pl-10 pr-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 transition-all"
-        onKeyDown={(e) => e.key === 'Enter' && handleUrlSubmit()}
-      />
-      <svg
-        className="absolute left-3 top-2.5 text-gray-400"
-        width="20"
-        height="20"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M17 10.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4.5l4 4v-11l-4 4z" />
-      </svg>
-    </div>
-
-    <button
-      onClick={handleUrlSubmit}
-      className="w-full px-5 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-1 transition-all"
-    >
-      Load Video
-    </button>
-
-    <p className="mt-4 text-xs text-gray-500 text-center">
-      Supports YouTube, Vimeo, or direct URLs (.mp4, .mov).<br />
-      Press{' '}
-      <kbd className="px-1 py-0.5 text-gray-700 bg-gray-100 rounded border text-xs">
-        Enter
-      </kbd>{' '}
-      to submit.
-    </p>
-  </div>
-</div>
-
-
-          {/* === Generate Video Section === */}
-          <div className="mt-10">
-            <div className="flex items-center justify-center mb-6">
-              <div className="flex-grow border-t border-gray-200"></div>
-              <span className="mx-4 text-sm text-gray-500 font-medium tracking-wide">
-                OR GENERATE A VIDEO BACKGROUND
-              </span>
-              <div className="flex-grow border-t border-gray-200"></div>
-            </div>
-
-            <label htmlFor="generate-video-prompt" className="block text-sm font-medium text-gray-700 mb-2">
-              Describe the video you want
-            </label>
-            <textarea
-              id="generate-video-prompt"
-              value={videoPrompt}
-              onChange={(e) => setVideoPrompt(e.target.value)}
-              placeholder="e.g., Abstract blue and purple flowing lines"
-              className="w-full h-24 text-sm border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none placeholder-gray-400 transition-all"
-            />
-
-            <button
-              onClick={handleGenerateClick}
-              disabled={props.isGeneratingVideo || !videoPrompt}
-              className="mt-4 w-full flex justify-center items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
-            >
-              {props.isGeneratingVideo ? (
-                <div className="spinner" />
-              ) : (
-                ICONS.VIDEO
-              )}
-              {props.isGeneratingVideo ? 'Generating...' : 'Generate Video'}
-            </button>
-
-            <p className="mt-3 text-xs text-gray-500 text-center">
-              Video generation is a premium feature. Ensure{' '}
-              <a
-                href="https://ai.google.dev/gemini-api/docs/billing"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-indigo-500 hover:underline"
-              >
-                billing is enabled
-              </a>{' '}
-              for your API key.
-            </p>
-          </div>
-        </>
+            <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+            <circle cx="12" cy="13" r="3" />
+          </svg>
+          <p style={{ margin: '0 0 4px', fontSize: '13.5px', fontWeight: 600, color: 'var(--text-primary, #111111)' }}>
+            {isDragging ? 'Drop your video here' : 'Drag & drop a video or click to browse'}
+          </p>
+          <p style={{ margin: 0, fontSize: '11.5px', color: 'var(--text-secondary, #5e5a67)' }}>
+            MP4, MOV, WebM up to 150MB — we extract key frames automatically
+          </p>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept="video/*"
+            style={{ display: 'none' }}
+          />
+        </div>
       )}
     </Module>
   );

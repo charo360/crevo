@@ -43,7 +43,19 @@ export const PLATFORM_CONFIGS: Record<Platform, {
         icon: ICONS.TWITTER,
         aspectRatio: "1.91:1",
         promptSnippet: "This is for a Twitter card image. The design should be bold and concise to work well in a fast-moving feed."
+    },
+    resize: {
+        title: "Resize Image",
+        icon: ICONS.ADAPT,
+        aspectRatio: "16:9",
+        promptSnippet: "Smart AI resize and recomposition for any image or thumbnail across aspect ratios."
+    },
+    youtube_tools: {
+        title: "Transcript & Thumb Downloader",
+        icon: ICONS.DOWNLOAD,
+        aspectRatio: "16:9",
+        promptSnippet: "Download HD YouTube thumbnails and extract full video transcripts for free."
     }
 };
 
-export const PLATFORM_ORDER: Platform[] = ['youtube_improve', 'youtube', 'podcast', 'tiktok', 'repurpose', 'twitter'];
+export const PLATFORM_ORDER: Platform[] = ['youtube_improve', 'youtube', 'resize', 'youtube_tools', 'podcast', 'tiktok', 'repurpose', 'twitter'];

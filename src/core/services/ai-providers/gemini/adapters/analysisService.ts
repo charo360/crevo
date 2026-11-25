@@ -66,9 +66,12 @@ export const analyzeVideoAndSuggestStyles = async (
     }));
     
     const prompt = `
-        Analyze the following video frames. Based on the visual content, mood, and subject matter, provide:
+        Analyze the following video frames as a YouTube/Social Media CTR Strategist. Based on the visual content, mood, expressions, and subject matter, provide:
         1. A suggested "Vibe & Style" from this list: ${VIBE_STYLES.join(', ')}.
-        2. A cohesive 4-color palette (primary, secondary, accent, background) in hex format. The colors should be harmonious and reflect the overall feel of the video.
+        2. A cohesive 4-color palette (primary, secondary, accent, background) in hex format.
+        3. "suggestedHeadline": One ultra-punchy, viral 2-4 word thumbnail headline hook that captures the emotion/story in the frames.
+        4. "suggestedSubheadline": A short optional 2-5 word supporting tagline (or empty string if not needed).
+        5. "headlineVariations": An array of 5 distinct, high-CTR 2-4 word headline hook variations (curiosity, shock, emotion, bold claim, story twist) so the creator can pick their favorite.
 
         Your response MUST be a valid JSON object in the following format, and nothing else:
         {
@@ -78,7 +81,16 @@ export const analyzeVideoAndSuggestStyles = async (
             "secondary": "#XXXXXX",
             "accent": "#XXXXXX",
             "background": "#XXXXXX"
-          }
+          },
+          "suggestedHeadline": "PUNCHY 2-4 WORD HOOK",
+          "suggestedSubheadline": "Short supporting line",
+          "headlineVariations": [
+            "HOOK OPTION 1",
+            "HOOK OPTION 2",
+            "HOOK OPTION 3",
+            "HOOK OPTION 4",
+            "HOOK OPTION 5"
+          ]
         }
     `;
 
@@ -137,11 +149,16 @@ export const analyzeVideoAndSuggestStyles = async (
     );
     
     try {
-        const jsonString = response.text.trim();
-        const parsedJson = JSON.parse(jsonString);
+        const raw = (response.text || '').replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        const parsedJson = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
         
         if (!VIBE_STYLES.includes(parsedJson.suggestedStyle)) {
             parsedJson.suggestedStyle = VIBE_STYLES[0];
+        }
+
+        if (!Array.isArray(parsedJson.headlineVariations)) {
+            parsedJson.headlineVariations = parsedJson.suggestedHeadline ? [parsedJson.suggestedHeadline] : [];
         }
 
         return parsedJson as AnalysisResult;

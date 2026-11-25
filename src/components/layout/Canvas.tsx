@@ -1,5 +1,5 @@
 import React, { FC } from 'react';
-import { DesignResult, Platform, ImageAsset } from '../../types';
+import { DesignResult, Platform, ImageAsset, ResizeOption } from '../../types';
 import { ICONS } from '../../constants';
 import { DesignResults } from '../design/DesignResults';
 
@@ -12,7 +12,8 @@ interface CanvasProps {
     onUpscale: (image: ImageAsset) => void;
     onDownload: (image: ImageAsset) => void;
     onPreview: (image: ImageAsset) => void;
-    onAdapt: (image: ImageAsset, platform: Platform) => void;
+    onAdapt: (image: ImageAsset, option: ResizeOption) => void;
+    onClearCanvas?: () => void;
     onAssistantToggle: () => void;
 }
 
@@ -26,6 +27,7 @@ export const Canvas: FC<CanvasProps> = ({
     onDownload, 
     onPreview, 
     onAdapt, 
+    onClearCanvas,
     onAssistantToggle 
 }) => (
     <main className="canvas-area">
@@ -37,16 +39,41 @@ export const Canvas: FC<CanvasProps> = ({
                 </div>
             </div>
         ) : results.length > 0 ? (
-            <DesignResults 
-                results={results} 
-                platform={platform} 
-                onEdit={onEdit} 
-                onAiEdit={onAiEdit} 
-                onUpscale={onUpscale} 
-                onDownload={onDownload} 
-                onPreview={onPreview} 
-                onAdapt={onAdapt} 
-            />
+            <div style={{ width: '100%' }}>
+                {onClearCanvas && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary, #5e5a67)' }}>
+                            {results.length} {results.length === 1 ? 'Design' : 'Designs'} on Canvas
+                        </span>
+                        <button
+                            type="button"
+                            onClick={onClearCanvas}
+                            style={{
+                                padding: '6px 13px',
+                                borderRadius: '8px',
+                                border: '1px solid var(--border-color, #e4dcf2)',
+                                background: 'var(--surface-1, #ffffff)',
+                                color: 'var(--text-secondary, #5e5a67)',
+                                fontSize: '12.5px',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                            }}
+                        >
+                            Clear Canvas
+                        </button>
+                    </div>
+                )}
+                <DesignResults 
+                    results={results} 
+                    platform={platform} 
+                    onEdit={onEdit} 
+                    onAiEdit={onAiEdit} 
+                    onUpscale={onUpscale} 
+                    onDownload={onDownload} 
+                    onPreview={onPreview} 
+                    onAdapt={onAdapt} 
+                />
+            </div>
         ) : (
             <div className="canvas-placeholder">
                 {ICONS.GENERATE}

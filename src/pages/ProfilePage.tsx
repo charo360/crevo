@@ -3,10 +3,9 @@ import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
 
 export const ProfilePage: FC = () => {
-    const { user, signOut, loading: authLoading, credits, refreshCredits } = useAuth();
+    const { user, signOut, updateProfile, loading: authLoading, credits, refreshCredits } = useAuth();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [email, setEmail] = useState('');
@@ -34,12 +33,11 @@ export const ProfilePage: FC = () => {
         setLoading(true);
 
         try {
-            const { error: updateError } = await supabase.auth.updateUser({ email });
+            const { error: updateError } = await updateProfile({ email });
             if (updateError) {
                 toast.error(updateError.message || 'Failed to update email');
             } else {
-                toast.success('Email update request sent! Please check your new email for confirmation.');
-                setEmail(user?.email || '');
+                toast.success('Email updated successfully!');
             }
         } catch (err: any) {
             toast.error(err.message || 'Failed to update email');
@@ -63,7 +61,7 @@ export const ProfilePage: FC = () => {
         setLoading(true);
 
         try {
-            const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+            const { error: updateError } = await updateProfile({ password: newPassword });
             if (updateError) {
                 toast.error(updateError.message || 'Failed to update password');
             } else {

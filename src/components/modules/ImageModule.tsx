@@ -20,6 +20,7 @@ export const ImageModule: FC<ImageModuleProps> = ({ images, onImagesChange, onGe
     const [genPrompt, setGenPrompt] = useState('');
     const [negativePrompt, setNegativePrompt] = useState('');
     const [aspectRatio, setAspectRatio] = useState<ImagenAspectRatio>('16:9');
+    const [isDragging, setIsDragging] = useState(false);
 
     useEffect(() => {
         const platformAspectRatio = PLATFORM_CONFIGS[platform].aspectRatio;
@@ -28,24 +29,46 @@ export const ImageModule: FC<ImageModuleProps> = ({ images, onImagesChange, onGe
         }
     }, [platform]);
 
-    const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (file) {
-            try {
-                // Check file size (max 10MB)
-                if (file.size > 10 * 1024 * 1024) {
-                    toast.error('Image file size must be less than 10MB');
-                    return;
-                }
-                
-                const { base64, mimeType } = await fileToBase64(file);
-                const newImage = { id: `img_${Date.now()}`, url: URL.createObjectURL(file), base64, mimeType };
-                onImagesChange([...images, newImage]);
-                toast.success('Image uploaded successfully!');
-            } catch (error: any) {
-                toast.error(`Failed to upload image: ${error.message || 'Unknown error'}`);
+    const addImageFiles = async (files: File[]) => {
+        const validFiles = files.filter((file) => {
+            if (!file.type.startsWith('image/')) {
+                toast.error(`Skipped "${file.name}": not an image`);
+                return false;
             }
+            if (file.size > 10 * 1024 * 1024) {
+                toast.error(`Skipped "${file.name}": must be less than 10MB`);
+                return false;
+            }
+            return true;
+        });
+
+        if (validFiles.length === 0) return;
+
+        try {
+            const added: ImageAsset[] = await Promise.all(
+                validFiles.map(async (file, idx) => {
+                    const { base64, mimeType } = await fileToBase64(file);
+                    return {
+                        id: `img_${Date.now()}_${idx}`,
+                        url: `data:${mimeType};base64,${base64}`,
+                        base64,
+                        mimeType,
+                    };
+                })
+            );
+            onImagesChange([...images, ...added]);
+            toast.success(`Uploaded ${added.length} image${added.length > 1 ? 's' : ''}!`);
+        } catch (error: any) {
+            toast.error(`Failed to upload image: ${error.message || 'Unknown error'}`);
         }
+    };
+
+    const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(event.target.files || []);
+        if (files.length > 0) {
+            await addImageFiles(files);
+        }
+        event.target.value = '';
     };
 
     const handleGenClick = async () => {
@@ -56,29 +79,63 @@ export const ImageModule: FC<ImageModuleProps> = ({ images, onImagesChange, onGe
     return (
         <Module icon={ICONS.IMAGE} title="Images">
             <label className="sub-label">Upload Images (Optional)</label>
-            <div className="upload-area" onClick={() => fileInputRef.current?.click()}>
-                <svg 
-                    width="64" 
-                    height="64" 
-                    viewBox="0 0 24 24" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth="2" 
-                    strokeLinecap="round" 
+            <div
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!isDragging) setIsDragging(true);
+                }}
+                onDragLeave={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDragging(false);
+                }}
+                onDrop={async (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDragging(false);
+                    const files = Array.from(e.dataTransfer.files || []);
+                    if (files.length > 0) await addImageFiles(files);
+                }}
+                style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px',
+                    padding: '16px 12px',
+                    borderRadius: '10px',
+                    border: isDragging
+                        ? '2px dashed var(--primary, #571c86)'
+                        : '2px dashed var(--border-color, #e4dcf2)',
+                    background: isDragging ? 'var(--surface-2, #f3ecfa)' : 'var(--background, #f8f5ed)',
+                    textAlign: 'center',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                }}
+            >
+                <svg
+                    width="28"
+                    height="28"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--primary, #571c86)"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
                     strokeLinejoin="round"
-                    style={{ 
-                        color: 'var(--primary)', 
-                        opacity: 0.7, 
-                        marginBottom: '0.5rem' 
-                    }}
+                    style={{ opacity: 0.8 }}
                 >
                     <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                     <circle cx="8.5" cy="8.5" r="1.5"></circle>
                     <polyline points="21 15 16 10 5 21"></polyline>
                 </svg>
-                <p>Drag & drop your images here</p>
-                <p style={{ fontSize: '0.95rem', color: 'var(--text-tertiary, #999)' }}>or <span>click to browse</span></p>
-                <p className="upload-hint">Supports JPG, PNG, WEBP up to 10MB</p>
+                <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--text-primary, #111111)' }}>
+                    {isDragging ? 'Drop images here' : 'Drop images or click to browse'}
+                </p>
+                <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-secondary, #5e5a67)' }}>
+                    JPG, PNG, WEBP up to 10MB
+                </p>
             </div>
             <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" style={{ display: 'none' }} multiple />
             {images.length > 0 && (

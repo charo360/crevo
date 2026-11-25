@@ -13,13 +13,43 @@ interface HeaderProps {
 
 export const Header: FC<HeaderProps> = ({ platform, onPlatformChange, onSidebarToggle, isSidebarOpen }) => {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+    const [moreMenuPos, setMoreMenuPos] = useState({ top: 0, left: 0 });
     const [userMenuOpen, setUserMenuOpen] = useState(false);
     const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
     const userMenuRef = useRef<HTMLDivElement>(null);
+    const moreMenuRef = useRef<HTMLDivElement>(null);
+    const moreButtonRef = useRef<HTMLButtonElement>(null);
     const buttonRef = useRef<HTMLButtonElement>(null);
     const { user, signOut } = useAuth();
     const navigate = useNavigate();
     const currentPlatform = PLATFORM_CONFIGS[platform];
+
+    const primaryPlatforms: Platform[] = ['youtube_improve', 'youtube', 'resize', 'youtube_tools', 'repurpose'];
+    const morePlatforms: Platform[] = PLATFORM_ORDER.filter((p) => !primaryPlatforms.includes(p));
+    const isMoreActive = morePlatforms.includes(platform);
+
+    const handleToggleMoreMenu = () => {
+        if (!moreMenuOpen && moreButtonRef.current) {
+            const rect = moreButtonRef.current.getBoundingClientRect();
+            setMoreMenuPos({
+                top: rect.bottom + 8,
+                left: Math.min(rect.left, window.innerWidth - 220),
+            });
+        }
+        setMoreMenuOpen((prev) => !prev);
+    };
+
+    useEffect(() => {
+        if (!moreMenuOpen) return;
+        const handleClickOutside = (event: MouseEvent) => {
+            if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
+                setMoreMenuOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [moreMenuOpen]);
 
     // Close user menu when clicking outside
     useEffect(() => {
@@ -146,8 +176,8 @@ export const Header: FC<HeaderProps> = ({ platform, onPlatformChange, onSidebarT
                     </div>
 
                     {/* Desktop Platform Nav */}
-                    <nav className="platform-nav">
-                        {PLATFORM_ORDER.map(key => {
+                    <nav className="platform-nav" style={{ overflow: 'visible' }}>
+                        {primaryPlatforms.map(key => {
                             const config = PLATFORM_CONFIGS[key];
                             return (
                                 <button
@@ -163,6 +193,81 @@ export const Header: FC<HeaderProps> = ({ platform, onPlatformChange, onSidebarT
                                 </button>
                             );
                         })}
+
+                        <div ref={moreMenuRef} style={{ position: 'relative' }}>
+                            <button
+                                ref={moreButtonRef}
+                                className={`platform-nav-btn ${isMoreActive ? 'active' : ''}`}
+                                onClick={handleToggleMoreMenu}
+                                type="button"
+                                aria-expanded={moreMenuOpen}
+                            >
+                                <span>{isMoreActive ? currentPlatform.title : 'More Tools'}</span>
+                                <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" style={{ marginLeft: '2px' }}>
+                                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                                </svg>
+                            </button>
+                            {moreMenuOpen && (
+                                <div
+                                    style={{
+                                        position: 'fixed',
+                                        top: `${moreMenuPos.top}px`,
+                                        left: `${moreMenuPos.left}px`,
+                                        width: '250px',
+                                        background: 'var(--surface-1, #ffffff)',
+                                        border: '1px solid var(--border-color, #e4dcf2)',
+                                        borderRadius: '14px',
+                                        boxShadow: '0 14px 36px rgba(87, 28, 134, 0.16)',
+                                        padding: '8px',
+                                        zIndex: 99999,
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: '4px',
+                                    }}
+                                >
+                                    {morePlatforms.map((key) => {
+                                        const config = PLATFORM_CONFIGS[key];
+                                        const active = key === platform;
+                                        const subtitle =
+                                            key === 'podcast'
+                                                ? 'Square 1:1 show artwork'
+                                                : key === 'tiktok'
+                                                  ? 'Vertical 9:16 video covers'
+                                                  : key === 'twitter'
+                                                    ? 'Wide 1.91:1 social cards'
+                                                    : config.aspectRatio;
+                                        return (
+                                            <button
+                                                key={key}
+                                                type="button"
+                                                className={`more-tools-item ${active ? 'active' : ''}`}
+                                                onClick={() => {
+                                                    onPlatformChange(key);
+                                                    setMoreMenuOpen(false);
+                                                }}
+                                            >
+                                                <span className="more-tools-icon">{config.icon}</span>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', minWidth: 0 }}>
+                                                    <span
+                                                        style={{
+                                                            fontSize: '13px',
+                                                            fontWeight: active ? 700 : 600,
+                                                            color: active ? 'var(--primary, #571c86)' : 'var(--text-primary, #111111)',
+                                                            whiteSpace: 'nowrap',
+                                                        }}
+                                                    >
+                                                        {config.title}
+                                                    </span>
+                                                    <span style={{ fontSize: '11px', color: 'var(--text-secondary, #5e5a67)', whiteSpace: 'nowrap' }}>
+                                                        {subtitle}
+                                                    </span>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
                     </nav>
                 </div>
 

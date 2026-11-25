@@ -1,9 +1,10 @@
 import React, { FC } from 'react';
 import {
     Platform, ImageAsset, VideoAsset, TextState, LogoState, ColorsState,
-    PreferencesState, AnalysisResult, ImagenAspectRatio, VeoAspectRatio
+    PreferencesState, AnalysisResult, ImagenAspectRatio, VeoAspectRatio, ResizeOption
 } from '../../types';
 import { YouTubeModule } from './YouTubeModule';
+import { ResizeModule } from './ResizeModule';
 import { VideoModule } from './VideoModule';
 import { ImageModule } from './ImageModule';
 import { TextContentModule } from './TextContentModule';
@@ -34,7 +35,7 @@ interface SidebarProps {
     onColorsChange: (c: ColorsState) => void;
     preferences: PreferencesState;
     onPreferencesChange: (p: PreferencesState) => void;
-    onGenerate: () => void;
+    onGenerate: (improveMode?: 'improve' | 'reimagine') => void;
     isGenerating: boolean;
     onGenerateImage: (p: string, np: string, ar: ImagenAspectRatio) => Promise<ImageAsset | null>;
     isGeneratingImage: boolean;
@@ -42,6 +43,8 @@ interface SidebarProps {
     isGeneratingVideo: boolean;
     onTranscriptChange: (t: string | null) => void;
     onOriginalTitleChange: (t: string) => void;
+    onBatchResize?: (sourceImage: ImageAsset, options: ResizeOption[]) => Promise<void>;
+    isBatchResizing?: boolean;
     isOpen?: boolean;
     onClose?: () => void;
 }
@@ -66,6 +69,13 @@ export const Sidebar: FC<SidebarProps> = (props) => {
                     isGenerating={props.isGenerating}
                     onTranscriptChange={props.onTranscriptChange}
                     onOriginalTitleChange={props.onOriginalTitleChange}
+                    preferences={props.preferences}
+                    onPreferencesChange={props.onPreferencesChange}
+                />
+            ) : props.platform === 'resize' && props.onBatchResize ? (
+                <ResizeModule
+                    onBatchResize={props.onBatchResize}
+                    isResizing={Boolean(props.isBatchResizing)}
                 />
             ) : (
                 <>
@@ -97,6 +107,7 @@ export const Sidebar: FC<SidebarProps> = (props) => {
                         platform={props.platform}
                         text={props.text}
                         onTextChange={props.onTextChange}
+                        suggestedHooks={props.analysisResult?.headlineVariations}
                     />
                     <LogoModule
                         logo={props.logo}
@@ -111,7 +122,7 @@ export const Sidebar: FC<SidebarProps> = (props) => {
                         onPreferencesChange={props.onPreferencesChange}
                     />
                     <GenerateButton
-                        onGenerate={props.onGenerate}
+                        onGenerate={() => props.onGenerate('improve')}
                         isGenerating={props.isGenerating}
                     />
                 </>
