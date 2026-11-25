@@ -190,161 +190,134 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
             <div className="repurpose-upload-section">
                 <div className="upload-content">
                     {/* File Upload with real drag-and-drop */}
-                    <div
-                        className="upload-area"
-                        onClick={() => {
-                            if (!videoPreviewUrl) {
-                                fileInputRef.current?.click();
-                            }
-                        }}
-                        onDragOver={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                        }}
-                        onDrop={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            const file = e.dataTransfer.files?.[0];
-                            if (file) {
-                                handleFileChange({ target: { files: [file] } } as any);
-                            }
-                        }}
-                    >
-                        {videoPreviewUrl ? (
-                            <div
-                                onClick={(e) => e.stopPropagation()}
+                    {videoPreviewUrl ? (
+                        <div
+                            style={{
+                                display: 'flex',
+                                flexWrap: 'wrap',
+                                alignItems: 'center',
+                                gap: '16px',
+                                padding: '14px',
+                                background: 'var(--surface-2, #f7f4fc)',
+                                border: '1px solid var(--border-color, #e4dcf2)',
+                                borderRadius: '14px',
+                            }}
+                        >
+                            <video
+                                src={videoPreviewUrl}
+                                controls
+                                preload="metadata"
                                 style={{
-                                    width: '100%',
-                                    maxWidth: '760px',
-                                    margin: '0 auto',
+                                    width: 'auto',
+                                    maxWidth: '100%',
+                                    maxHeight: '300px',
+                                    display: 'block',
+                                    borderRadius: '10px',
+                                    backgroundColor: '#000',
+                                    boxShadow: '0 6px 20px rgba(17, 17, 27, 0.14)',
+                                }}
+                            />
+                            <div
+                                style={{
                                     display: 'flex',
                                     flexDirection: 'column',
-                                    alignItems: 'center',
-                                    gap: '14px',
-                                    cursor: 'default',
+                                    gap: '10px',
+                                    minWidth: '200px',
+                                    flex: 1,
                                 }}
                             >
-                                <div
-                                    style={{
-                                        width: '100%',
-                                        background: '#0f0f17',
-                                        borderRadius: '14px',
-                                        padding: '12px',
-                                        boxShadow: '0 10px 28px rgba(17, 17, 27, 0.18)',
-                                        display: 'flex',
-                                        justifyContent: 'center',
-                                        alignItems: 'center',
-                                    }}
-                                >
-                                    <video
-                                        src={videoPreviewUrl}
-                                        controls
-                                        preload="metadata"
+                                <div>
+                                    <div
                                         style={{
-                                            width: 'auto',
-                                            maxWidth: '100%',
-                                            maxHeight: '420px',
-                                            display: 'block',
-                                            borderRadius: '8px',
-                                            backgroundColor: '#000',
+                                            fontSize: '15px',
+                                            fontWeight: 600,
+                                            color: 'var(--text-primary, #111)',
+                                            wordBreak: 'break-word',
                                         }}
-                                    />
+                                    >
+                                        {videoFile?.name || 'Uploaded video'}
+                                    </div>
+                                    {videoFile && (
+                                        <div
+                                            style={{
+                                                fontSize: '13px',
+                                                color: 'var(--text-secondary, #6b7280)',
+                                                marginTop: '2px',
+                                            }}
+                                        >
+                                            {videoFile.size >= 1024 * 1024 * 1024
+                                                ? `${(videoFile.size / (1024 * 1024 * 1024)).toFixed(2)} GB`
+                                                : `${(videoFile.size / (1024 * 1024)).toFixed(1)} MB`} • Ready to clip
+                                        </div>
+                                    )}
                                 </div>
-                                <div
-                                    style={{
-                                        width: '100%',
-                                        display: 'flex',
-                                        flexWrap: 'wrap',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        gap: '10px',
-                                        padding: '10px 14px',
-                                        background: 'var(--surface-1, #ffffff)',
-                                        border: '1px solid var(--border-color, #e4dcf2)',
-                                        borderRadius: '10px',
-                                    }}
-                                >
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
-                                        <span
-                                            style={{
-                                                fontSize: '13px',
-                                                fontWeight: 600,
-                                                color: 'var(--text-primary, #111)',
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                                whiteSpace: 'nowrap',
-                                            }}
-                                            title={videoFile?.name || 'Uploaded video'}
-                                        >
-                                            {videoFile?.name || 'Uploaded video'}
-                                        </span>
-                                        {videoFile && (
-                                            <span
-                                                style={{
-                                                    fontSize: '12px',
-                                                    color: 'var(--text-secondary, #6b7280)',
-                                                    whiteSpace: 'nowrap',
-                                                }}
-                                            >
-                                                ({videoFile.size >= 1024 * 1024 * 1024
-                                                    ? `${(videoFile.size / (1024 * 1024 * 1024)).toFixed(2)} GB`
-                                                    : `${(videoFile.size / (1024 * 1024)).toFixed(1)} MB`})
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                                        <button
-                                            type="button"
-                                            onClick={() => fileInputRef.current?.click()}
-                                            style={{
-                                                padding: '0.45rem 0.9rem',
-                                                background: 'var(--surface-2, #f3eefc)',
-                                                color: 'var(--primary, #571c86)',
-                                                border: '1px solid var(--border-color, #d8ccf0)',
-                                                borderRadius: '8px',
-                                                cursor: 'pointer',
-                                                fontWeight: 600,
-                                                fontSize: '13px',
-                                            }}
-                                        >
-                                            Change Video
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setVideoFile(null);
-                                                setVideoUrl('');
-                                                setVideoPreviewUrl('');
-                                            }}
-                                            className="remove-video-btn"
-                                            style={{
-                                                padding: '0.45rem 0.9rem',
-                                                background: '#ef4444',
-                                                color: 'white',
-                                                border: 'none',
-                                                borderRadius: '8px',
-                                                cursor: 'pointer',
-                                                fontWeight: 600,
-                                                fontSize: '13px',
-                                            }}
-                                        >
-                                            Remove
-                                        </button>
-                                    </div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => fileInputRef.current?.click()}
+                                        style={{
+                                            padding: '0.5rem 1rem',
+                                            background: 'var(--surface-1, #ffffff)',
+                                            color: 'var(--primary, #571c86)',
+                                            border: '1px solid var(--border-color, #d8ccf0)',
+                                            borderRadius: '8px',
+                                            cursor: 'pointer',
+                                            fontWeight: 600,
+                                            fontSize: '13px',
+                                        }}
+                                    >
+                                        Change Video
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setVideoFile(null);
+                                            setVideoUrl('');
+                                            setVideoPreviewUrl('');
+                                        }}
+                                        className="remove-video-btn"
+                                        style={{
+                                            padding: '0.5rem 1rem',
+                                            background: '#ef4444',
+                                            color: 'white',
+                                            border: 'none',
+                                            borderRadius: '8px',
+                                            cursor: 'pointer',
+                                            fontWeight: 600,
+                                            fontSize: '13px',
+                                        }}
+                                    >
+                                        Remove Video
+                                    </button>
                                 </div>
                             </div>
-                        ) : (
-                            <>
-                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--primary, #571c86)" strokeWidth="2">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                    <polyline points="17 8 12 3 7 8"></polyline>
-                                    <line x1="12" y1="3" x2="12" y2="15"></line>
-                                </svg>
-                                <p>Click to upload or drag &amp; drop a video</p>
-                                <p className="upload-hint">MP4, MOV, WebM up to 5GB — AI finds top viral moments &amp; clips them in seconds</p>
-                            </>
-                        )}
-                    </div>
+                        </div>
+                    ) : (
+                        <div
+                            className="upload-area"
+                            onClick={() => fileInputRef.current?.click()}
+                            onDragOver={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                            }}
+                            onDrop={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const file = e.dataTransfer.files?.[0];
+                                if (file) {
+                                    handleFileChange({ target: { files: [file] } } as any);
+                                }
+                            }}
+                        >
+                            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--primary, #571c86)" strokeWidth="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            <p>Click to upload or drag &amp; drop a video</p>
+                            <p className="upload-hint">MP4, MOV, WebM up to 5GB — AI finds top viral moments &amp; clips them in seconds</p>
+                        </div>
+                    )}
                     <input 
                         type="file" 
                         ref={fileInputRef} 
