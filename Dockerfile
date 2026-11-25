@@ -14,8 +14,8 @@ FROM node:20-alpine
 
 WORKDIR /usr/src/app
 
-# Install native FFmpeg (handles multi-GB video clipping cleanly on ARM64 & AMD64)
-RUN apk add --no-cache ffmpeg
+# Install native FFmpeg + DejaVu fonts for burned-in ASS subtitles
+RUN apk add --no-cache ffmpeg font-dejavu
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev

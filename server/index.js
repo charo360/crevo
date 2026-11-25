@@ -910,6 +910,152 @@ function isValidUploadId(id) {
     return typeof id === 'string' && /^[a-f0-9-]{16,64}$/i.test(id);
 }
 
+async function hasAudioStream(inputPath) {
+    try {
+        const { stdout } = await execFileAsync('ffprobe', [
+            '-v', 'error',
+            '-select_streams', 'a:0',
+            '-show_entries', 'stream=codec_type',
+            '-of', 'csv=p=0',
+            inputPath,
+        ]);
+        return stdout.trim().length > 0;
+    } catch {
+        return false;
+    }
+}
+
+function formatAssTime(sec) {
+    const clamped = Math.max(0, Number(sec) || 0);
+    const hrs = Math.floor(clamped / 3600);
+    const mins = Math.floor((clamped % 3600) / 60);
+    const secs = Math.floor(clamped % 60);
+    const centis = Math.floor((clamped - Math.floor(clamped)) * 100);
+    return `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${String(centis).padStart(2, '0')}`;
+}
+
+function escapeAssText(text) {
+    return String(text || '')
+        .replace(/\\/g, '')
+        .replace(/\{/g, '(')
+        .replace(/\}/g, ')')
+        .replace(/\r?\n/g, ' ')
+        .trim();
+}
+
+async function generateClipCaptionsAss(inputPath, start, duration, width, height) {
+    const openrouterKey = process.env.OPENROUTER_API_KEY;
+    if (!openrouterKey) return null;
+
+    const audioPath = path.join(VIDEO_TMP_DIR, `audio_${crypto.randomUUID()}.mp3`);
+    const assPath = path.join(VIDEO_TMP_DIR, `subs_${crypto.randomUUID()}.ass`);
+
+    try {
+        await execFileAsync('ffmpeg', [
+            '-y',
+            '-ss', start.toFixed(3),
+            '-i', inputPath,
+            '-t', duration.toFixed(3),
+            '-vn',
+            '-ac', '1',
+            '-ar', '16000',
+            '-b:a', '32k',
+            audioPath,
+        ], { maxBuffer: 5 * 1024 * 1024 });
+
+        if (!fs.existsSync(audioPath) || fs.statSync(audioPath).size < 256) {
+            return null;
+        }
+
+        const audioB64 = fs.readFileSync(audioPath).toString('base64');
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${openrouterKey}`,
+                'Content-Type': 'application/json',
+                'HTTP-Referer': 'https://revo3.ai',
+                'X-Title': 'Revo3.ai Auto Captions',
+            },
+            body: JSON.stringify({
+                model: 'google/gemini-2.5-flash',
+                temperature: 0.1,
+                messages: [
+                    {
+                        role: 'user',
+                        content: [
+                            {
+                                type: 'text',
+                                text: `Transcribe the spoken words in this ${duration.toFixed(1)}-second audio clip into short, punchy social-media subtitle cues (2 to 5 words per cue).
+Return ONLY valid JSON: {"cues":[{"start":0.0,"end":2.2,"text":"short phrase"}]}.
+Rules:
+- Timestamps must be in seconds from 0.0 to ${duration.toFixed(1)}.
+- Keep each cue 2-5 words so it looks clean on vertical video.
+- If there is only music, wind, background noise, or no clear speech, return {"cues":[]}.
+- No markdown fences, no commentary, ONLY JSON.`,
+                            },
+                            {
+                                type: 'input_audio',
+                                input_audio: {
+                                    data: audioB64,
+                                    format: 'mp3',
+                                },
+                            },
+                        ],
+                    },
+                ],
+            }),
+        });
+
+        if (!response.ok) return null;
+        const data = await response.json();
+        const raw = String(data?.choices?.[0]?.message?.content || '').trim();
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) return null;
+
+        const parsed = JSON.parse(jsonMatch[0]);
+        const cues = Array.isArray(parsed?.cues) ? parsed.cues : [];
+        const validCues = cues
+            .map((c) => ({
+                start: Math.max(0, Math.min(duration, Number(c.start) || 0)),
+                end: Math.max(0, Math.min(duration, Number(c.end) || 0)),
+                text: escapeAssText(c.text),
+            }))
+            .filter((c) => c.text.length > 0 && c.end > c.start + 0.15);
+
+        if (validCues.length === 0) return null;
+
+        const fontSize = width < height ? 46 : 38;
+        const marginV = width < height ? 210 : 70;
+        const header = `[Script Info]
+ScriptType: v4.00+
+PlayResX: ${width}
+PlayResY: ${height}
+WrapStyle: 0
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Viral,DejaVu Sans,${fontSize},&H00FFFFFF,&H0000FFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,2,2,40,40,${marginV},1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+`;
+        const lines = validCues.map(
+            (c) => `Dialogue: 0,${formatAssTime(c.start)},${formatAssTime(c.end)},Viral,,0,0,0,,${c.text.toUpperCase()}`
+        );
+        fs.writeFileSync(assPath, header + lines.join('\n') + '\n', 'utf8');
+        return assPath;
+    } catch (err) {
+        console.warn('Auto-caption generation skipped:', err?.message || err);
+        return null;
+    } finally {
+        try {
+            if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
+        } catch {
+            // ignore
+        }
+    }
+}
+
 app.post('/api/video/upload', requireAuth, (req, res) => {
     cleanupOldTempVideos();
     ensureVideoTmpDir();
@@ -979,6 +1125,8 @@ app.post('/api/video/clip', requireAuth, async (req, res) => {
         aspectRatio = '9:16',
         fps = 30,
         includeAudio = true,
+        includeTransitions = false,
+        includeCaptions = false,
     } = req.body || {};
 
     if (!isValidUploadId(uploadId)) {
@@ -1009,57 +1157,95 @@ app.post('/api/video/clip', requireAuth, async (req, res) => {
 
     const targetFps = Math.min(60, Math.max(15, Number(fps) || 30));
     const outputPath = path.join(VIDEO_TMP_DIR, `clip_${crypto.randomUUID()}.mp4`);
-    const filterComplex = `[0:v]scale=${outputWidth}:${outputHeight}:force_original_aspect_ratio=increase,crop=${outputWidth}:${outputHeight}[v]`;
+    let assPath = null;
 
-    const args = [
-        '-y',
-        '-ss', start.toFixed(3),
-        '-i', inputPath,
-        '-t', duration.toFixed(3),
-        '-filter_complex', filterComplex,
-        '-map', '[v]',
-        '-c:v', 'libx264',
-        '-preset', 'ultrafast',
-        '-crf', '23',
-        '-pix_fmt', 'yuv420p',
-        '-r', String(targetFps),
-        '-movflags', '+faststart',
-    ];
-
-    if (includeAudio !== false) {
-        args.push('-map', '0:a?', '-c:a', 'aac', '-b:a', '128k');
-    } else {
-        args.push('-an');
-    }
-
-    args.push(outputPath);
-
-    const removeOutput = () => {
+    const removeTempFiles = () => {
         try {
             if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+        } catch {
+            // ignore
+        }
+        try {
+            if (assPath && fs.existsSync(assPath)) fs.unlinkSync(assPath);
         } catch {
             // ignore
         }
     };
 
     try {
+        const audioAvailable = includeAudio !== false ? await hasAudioStream(inputPath) : false;
+
+        if (includeCaptions && audioAvailable) {
+            assPath = await generateClipCaptionsAss(inputPath, start, duration, outputWidth, outputHeight);
+        }
+
+        const videoFilters = [
+            `scale=${outputWidth}:${outputHeight}:force_original_aspect_ratio=increase`,
+            `crop=${outputWidth}:${outputHeight}`,
+        ];
+
+        if (assPath && fs.existsSync(assPath)) {
+            const escapedAss = assPath.replace(/\\/g, '/').replace(/:/g, '\\:');
+            videoFilters.push(`ass='${escapedAss}'`);
+        }
+
+        if (includeTransitions && duration >= 1.5) {
+            const fadeDur = 0.35;
+            const fadeOutStart = Math.max(0, duration - fadeDur).toFixed(3);
+            videoFilters.push(`fade=t=in:st=0:d=${fadeDur}`);
+            videoFilters.push(`fade=t=out:st=${fadeOutStart}:d=${fadeDur}`);
+        }
+
+        const filterParts = [`[0:v]${videoFilters.join(',')}[v]`];
+        let useAudioFilter = false;
+        if (audioAvailable && includeTransitions && duration >= 1.5) {
+            const aFadeDur = 0.3;
+            const aFadeOutStart = Math.max(0, duration - aFadeDur).toFixed(3);
+            filterParts.push(`[0:a]afade=t=in:st=0:d=${aFadeDur},afade=t=out:st=${aFadeOutStart}:d=${aFadeDur}[a]`);
+            useAudioFilter = true;
+        }
+
+        const args = [
+            '-y',
+            '-ss', start.toFixed(3),
+            '-i', inputPath,
+            '-t', duration.toFixed(3),
+            '-filter_complex', filterParts.join(';'),
+            '-map', '[v]',
+            '-c:v', 'libx264',
+            '-preset', 'ultrafast',
+            '-crf', '23',
+            '-pix_fmt', 'yuv420p',
+            '-r', String(targetFps),
+            '-movflags', '+faststart',
+        ];
+
+        if (audioAvailable) {
+            args.push('-map', useAudioFilter ? '[a]' : '0:a', '-c:a', 'aac', '-b:a', '128k');
+        } else {
+            args.push('-an');
+        }
+
+        args.push(outputPath);
+
         await execFileAsync('ffmpeg', args, { maxBuffer: 10 * 1024 * 1024 });
         const stat = fs.statSync(outputPath);
         res.setHeader('Content-Type', 'video/mp4');
         res.setHeader('Content-Length', String(stat.size));
         res.setHeader('X-Clip-Width', String(outputWidth));
         res.setHeader('X-Clip-Height', String(outputHeight));
+        res.setHeader('X-Captions-Applied', assPath ? 'true' : 'false');
         const readStream = fs.createReadStream(outputPath);
-        readStream.on('close', removeOutput);
+        readStream.on('close', removeTempFiles);
         readStream.on('error', (err) => {
-            removeOutput();
+            removeTempFiles();
             if (!res.headersSent) {
                 res.status(500).json({ error: `Failed to stream clip: ${err.message}` });
             }
         });
         return readStream.pipe(res);
     } catch (err) {
-        removeOutput();
+        removeTempFiles();
         if (err && err.code === 'ENOENT') {
             return res.status(501).json({
                 error: 'Native FFmpeg is not installed on this server',

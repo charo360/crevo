@@ -130,7 +130,7 @@ export async function repurposeVideo(
         
         // Step 7: Generate clips — deduplicate by aspect ratio so identical 9:16 platforms only encode ONCE!
         const clips: ViralClip[] = [];
-        const processedTimes = new Set<string>();
+        const selectedRanges: Array<{ start: number; end: number }> = [];
         const uniqueAspectPlatforms: string[] = [];
         const seenAspects = new Set<string>();
         for (const p of finalOptions.platforms) {
@@ -145,11 +145,13 @@ export async function repurposeVideo(
 
         for (const moment of filteredMoments) {
             if (finalOptions.overlap_prevention) {
-                const timeKey = `${Math.floor(moment.start_time)}-${Math.floor(moment.end_time)}`;
-                if (processedTimes.has(timeKey)) {
+                const start = Number(moment.start_time) || 0;
+                const end = Number(moment.end_time) || start + 1;
+                const overlaps = selectedRanges.some((r) => start < r.end - 0.5 && end > r.start + 0.5);
+                if (overlaps) {
                     continue;
                 }
-                processedTimes.add(timeKey);
+                selectedRanges.push({ start, end });
             }
 
             for (const platform of uniqueAspectPlatforms) {
@@ -261,6 +263,8 @@ async function generateClipFromMoment(
             resolution: platformSettings.resolution,
             fps: 30,
             includeAudio: true,
+            includeTransitions: options.include_transitions,
+            includeCaptions: options.include_captions,
         }
     );
     

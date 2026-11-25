@@ -58,6 +58,8 @@ async function processVideoClipOnServer(
         aspectRatio?: '9:16' | '16:9' | '1:1' | '4:5';
         fps?: number;
         includeAudio?: boolean;
+        includeTransitions?: boolean;
+        includeCaptions?: boolean;
     }
 ): Promise<{ blob: Blob; metadata: ClipMetadata } | null> {
     if (!serverFFmpegAvailable) return null;
@@ -97,6 +99,8 @@ async function processVideoClipOnServer(
             aspectRatio: options.aspectRatio || '9:16',
             fps,
             includeAudio: options.includeAudio !== false,
+            includeTransitions: options.includeTransitions === true,
+            includeCaptions: options.includeCaptions === true,
         }),
     });
 
@@ -113,6 +117,7 @@ async function processVideoClipOnServer(
     const blob = await clipRes.blob();
     const width = clipRes.headers.get('X-Clip-Width') || '720';
     const height = clipRes.headers.get('X-Clip-Height') || '1280';
+    const captionsApplied = clipRes.headers.get('X-Captions-Applied') === 'true';
 
     const metadata: ClipMetadata = {
         frame_count: Math.ceil(duration * fps),
@@ -120,7 +125,7 @@ async function processVideoClipOnServer(
         resolution: `${width}x${height}`,
         file_size: blob.size,
         audio_enabled: options.includeAudio !== false,
-        captions_enabled: false,
+        captions_enabled: captionsApplied,
     };
 
     return { blob, metadata };
@@ -175,6 +180,8 @@ export async function processVideoClip(
         resolution?: { width: number; height: number };
         fps?: number;
         includeAudio?: boolean;
+        includeTransitions?: boolean;
+        includeCaptions?: boolean;
     } = {}
 ): Promise<{ blob: Blob; metadata: ClipMetadata }> {
     // 1. Prefer fast native server-side FFmpeg (works on HTTP & HTTPS, handles large videos cleanly)
