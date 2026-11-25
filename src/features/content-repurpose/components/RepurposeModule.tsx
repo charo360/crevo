@@ -17,7 +17,7 @@ interface RepurposeModuleProps {
 }
 
 export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }) => {
-    const { user } = useAuth();
+    const { user, refreshCredits } = useAuth();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const urlInputRef = useRef<HTMLInputElement>(null);
     
@@ -83,11 +83,13 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
             return;
         }
 
-        // Check credits before repurposing (content repurpose costs 2 credits)
-        const { hasEnoughCredits, deductCredits, CREDITS_PER_GENERATION } = await import('../../../services/payments/creditService');
-        const hasCredits = await hasEnoughCredits(user.id, CREDITS_PER_GENERATION);
+        // Check credits before repurposing (3 credits for <=5 clips, 5 credits for 6+ clips)
+        const { hasEnoughCredits, CREDIT_COSTS } = await import('../../../services/payments/creditService');
+        const requestedClipCount = Number(options.target_clip_count || 3);
+        const repurposeCreditCost = requestedClipCount >= 6 ? CREDIT_COSTS.REPURPOSE_LARGE : CREDIT_COSTS.REPURPOSE_BASE;
+        const hasCredits = await hasEnoughCredits(user.id, repurposeCreditCost);
         if (!hasCredits) {
-            toast.error(`Insufficient credits. You need ${CREDITS_PER_GENERATION} credits to repurpose videos. Please purchase credits to continue.`);
+            toast.error(`Insufficient credits. You need ${repurposeCreditCost} credits to generate ${requestedClipCount} clips. Please purchase credits to continue.`);
             return;
         }
 
@@ -156,12 +158,14 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
                 setResults(result);
                 onResultsGenerated?.(result);
                 
-                // Deduct credits after successful repurpose
-                const { deductCredits, CREDITS_PER_GENERATION } = await import('../../../services/payments/creditService');
-                await deductCredits(user.id, 'Content Repurpose', CREDITS_PER_GENERATION, { 
+                // Deduct credits after successful repurpose (based on actual clips generated)
+                const { deductCredits, CREDIT_COSTS: POST_COSTS } = await import('../../../services/payments/creditService');
+                const actualCreditCost = result.clips.length >= 6 ? POST_COSTS.REPURPOSE_LARGE : POST_COSTS.REPURPOSE_BASE;
+                await deductCredits(user.id, 'Content Repurpose', actualCreditCost, { 
                     feature: 'content_repurpose', 
                     clipCount: result.clips.length 
                 });
+                await refreshCredits();
                 
                 toast.success(`Successfully generated ${result.clips.length} viral clips!`);
             } finally {

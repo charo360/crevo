@@ -22,6 +22,22 @@ export interface CreditUsage {
 
 const CREDITS_PER_GENERATION = 2;
 
+/**
+ * Profit-safe credit pricing per activity (protects 50%–85%+ margin even on Enterprise $0.096/credit floor).
+ */
+export const CREDIT_COSTS = {
+    DESIGN_PER_VARIATION: 2, // 2 credits × variations (1=2, 2=4, 3=6, 4=8)
+    AI_IMAGE: 2,             // 2 credits per generated AI image
+    AI_EDIT: 2,              // 2 credits per AI image edit
+    AI_UPSCALE: 2,           // 2 credits per AI image upscale
+    RESIZE_PER_SIZE: 1,      // 1 credit per resized image (single or batch)
+    EXTRACT_FACES: 1,        // 1 credit per face extraction
+    ANALYZE_VIDEO: 1,        // 1 credit per video analysis
+    REPURPOSE_BASE: 3,       // 3 credits for up to 5 viral clips
+    REPURPOSE_LARGE: 5,      // 5 credits for 6+ viral clips
+    AI_VIDEO: 10,            // 10 credits per AI video generation
+} as const;
+
 export async function getUserCredits(userId: string, forceRefresh: boolean = true): Promise<CreditBalance | null> {
     try {
         if (!forceRefresh && typeof window !== 'undefined') {

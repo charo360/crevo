@@ -28,7 +28,7 @@ import { RepurposeModule } from './features/content-repurpose/components/Repurpo
 import { YouTubeToolsView } from './components/modules/YouTubeToolsView';
 import { CreditManagement } from './components/dashboard/CreditManagement';
 import { useAuth } from './contexts/AuthContext';
-import { hasEnoughCredits, deductCredits, CREDITS_PER_GENERATION } from './services/payments/creditService';
+import { hasEnoughCredits, deductCredits, CREDIT_COSTS } from './services/payments/creditService';
 import { saveImageToLibrary } from './services/libraryService';
 
 declare global {
@@ -189,11 +189,14 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
     const handleGenerate = async (improveMode: 'improve' | 'reimagine' = 'improve') => {
         if (isGenerating) return;
 
-        // Check credits before generating
+        const requestedVariations = Math.max(1, Number(preferences.variations || 1));
+        const requiredCredits = requestedVariations * CREDIT_COSTS.DESIGN_PER_VARIATION;
+
+        // Check credits before generating (2 credits per generated image variation)
         if (user) {
-            const hasCredits = await hasEnoughCredits(user.id, CREDITS_PER_GENERATION);
+            const hasCredits = await hasEnoughCredits(user.id, requiredCredits);
             if (!hasCredits) {
-                toast.error(`Insufficient credits. You need ${CREDITS_PER_GENERATION} credits to generate designs. Please purchase credits to continue.`);
+                toast.error(`Insufficient credits. Generating ${requestedVariations} image${requestedVariations > 1 ? 's' : ''} requires ${requiredCredits} credits. Please purchase credits to continue.`);
                 return;
             }
         }
@@ -222,10 +225,12 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                 improveMode
             );
             
-            // Deduct credits after successful generation and refresh navbar balance immediately
+            // Deduct credits based on actual generated images (2 credits per image) and refresh navbar balance
             if (user) {
                 const platformName = PLATFORM_CONFIGS[platform].title;
-                await deductCredits(user.id, `Generate ${platformName}`, CREDITS_PER_GENERATION, { platform });
+                const actualCount = Math.max(1, results.length);
+                const actualCredits = actualCount * CREDIT_COSTS.DESIGN_PER_VARIATION;
+                await deductCredits(user.id, `Generate ${platformName} (${actualCount}x)`, actualCredits, { platform, count: actualCount });
                 await refreshCredits();
             }
             
@@ -251,12 +256,25 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
 
     const handleAnalyzeVideo = async () => {
         if (!videoAsset || isAnalyzing) return;
+
+        if (user) {
+            const hasCredits = await hasEnoughCredits(user.id, CREDIT_COSTS.ANALYZE_VIDEO);
+            if (!hasCredits) {
+                toast.error(`Insufficient credits. Analyzing video requires ${CREDIT_COSTS.ANALYZE_VIDEO} credit.`);
+                return;
+            }
+        }
+
         setIsAnalyzing(true);
         setAnalysisResult(null);
 
         try {
             const frames = await extractFramesFromVideo(videoAsset.url, trimTimes.start, trimTimes.end, 5);
             const result = await analyzeVideoAndSuggestStyles(ai.current, frames);
+            if (user) {
+                await deductCredits(user.id, 'Analyze Video', CREDIT_COSTS.ANALYZE_VIDEO, { feature: 'analyze_video' });
+                await refreshCredits();
+            }
             setAnalysisResult(result);
             setColors(result.suggestedColors);
             setPreferences(prev => ({ ...prev, style: result.suggestedStyle }));
@@ -278,6 +296,15 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
 
     const handleExtractFaces = async () => {
         if (!videoAsset || isExtractingFaces) return;
+
+        if (user) {
+            const hasCredits = await hasEnoughCredits(user.id, CREDIT_COSTS.EXTRACT_FACES);
+            if (!hasCredits) {
+                toast.error(`Insufficient credits. Extracting faces requires ${CREDIT_COSTS.EXTRACT_FACES} credit.`);
+                return;
+            }
+        }
+
         setIsExtractingFaces(true);
         try {
             const frame = (await extractFramesFromVideo(videoAsset.url, trimTimes.start, trimTimes.end, 1))[0];
@@ -285,6 +312,10 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                 throw new Error("Could not extract a frame from the video.");
             }
             const faces = await extractFacesFromImage(ai.current, frame);
+            if (user) {
+                await deductCredits(user.id, 'Extract Faces', CREDIT_COSTS.EXTRACT_FACES, { feature: 'extract_faces', count: faces.length });
+                await refreshCredits();
+            }
             setCutoutAssets(prev => [...prev, ...faces]);
             setImages(prev => [...prev, ...faces]);
             toast.success(`Extracted ${faces.length} face(s) and added to your Images!`);
@@ -337,6 +368,14 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
     };
 
     const handleAdaptDesign = async (sourceImage: ImageAsset, option: ResizeOption) => {
+        if (user) {
+            const hasCredits = await hasEnoughCredits(user.id, CREDIT_COSTS.RESIZE_PER_SIZE);
+            if (!hasCredits) {
+                toast.error(`Insufficient credits. Resizing requires ${CREDIT_COSTS.RESIZE_PER_SIZE} credit per size.`);
+                return;
+            }
+        }
+
         const tempId = `resizing_${option.id}_${Date.now()}`;
         const placeholderCard: DesignResult = {
             image: { ...sourceImage, id: tempId },
@@ -350,6 +389,10 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
 
         try {
             const resizedResult = await resizeThumbnailForSize(ai.current, sourceImage, option);
+            if (user) {
+                await deductCredits(user.id, `Smart Resize (${option.label})`, CREDIT_COSTS.RESIZE_PER_SIZE, { platform: 'resize', count: 1 });
+                await refreshCredits();
+            }
             setResults(prev => prev.map(item => (item.image?.id === tempId ? resizedResult : item)));
             toast.success(`Resized to ${option.label} and added to canvas!`);
         } catch (e: any) {
@@ -362,10 +405,11 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
     const handleBatchResize = async (sourceImage: ImageAsset, options: ResizeOption[]) => {
         if (isBatchResizing || options.length === 0) return;
 
+        const requiredCredits = options.length * CREDIT_COSTS.RESIZE_PER_SIZE;
         if (user) {
-            const hasCredits = await hasEnoughCredits(user.id, CREDITS_PER_GENERATION);
+            const hasCredits = await hasEnoughCredits(user.id, requiredCredits);
             if (!hasCredits) {
-                toast.error(`Insufficient credits. You need ${CREDITS_PER_GENERATION} credits to resize images.`);
+                toast.error(`Insufficient credits. Resizing ${options.length} size${options.length > 1 ? 's' : ''} requires ${requiredCredits} credit${requiredCredits > 1 ? 's' : ''}.`);
                 return;
             }
         }
@@ -408,7 +452,8 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
 
         if (successCount > 0) {
             if (user) {
-                await deductCredits(user.id, 'Smart Resize', CREDITS_PER_GENERATION, { platform: 'resize', count: successCount });
+                const actualCredits = successCount * CREDIT_COSTS.RESIZE_PER_SIZE;
+                await deductCredits(user.id, `Smart Resize (${successCount}x)`, actualCredits, { platform: 'resize', count: successCount });
                 await refreshCredits();
             }
             toast.success(`Resized into ${successCount} size${successCount > 1 ? 's' : ''}!`);
@@ -420,9 +465,9 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
     const handleGenerateImage = async (prompt: string, negativePrompt: string, aspectRatio: ImagenAspectRatio): Promise<ImageAsset | null> => {
         // Check credits before generating
         if (user) {
-            const hasCredits = await hasEnoughCredits(user.id, CREDITS_PER_GENERATION);
+            const hasCredits = await hasEnoughCredits(user.id, CREDIT_COSTS.AI_IMAGE);
             if (!hasCredits) {
-                toast.error(`Insufficient credits. You need ${CREDITS_PER_GENERATION} credits to generate images. Please purchase credits to continue.`);
+                toast.error(`Insufficient credits. You need ${CREDIT_COSTS.AI_IMAGE} credits to generate images. Please purchase credits to continue.`);
                 return null;
             }
         }
@@ -433,7 +478,8 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
             if (image) {
                 // Deduct credits after successful generation
                 if (user) {
-                    await deductCredits(user.id, 'Generate AI Image', CREDITS_PER_GENERATION, { feature: 'image_generation', aspectRatio });
+                    await deductCredits(user.id, 'Generate AI Image', CREDIT_COSTS.AI_IMAGE, { feature: 'image_generation', aspectRatio });
+                    await refreshCredits();
                 }
                 setImages(prev => [...prev, image]);
                 toast.success('Image generated successfully!');
@@ -449,11 +495,11 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
     };
 
     const handleGenerateVideo = async (prompt: string, aspectRatio: VeoAspectRatio) => {
-        // Check credits before generating (videos cost more - using 2 credits for now)
+        // Check credits before generating video (10 credits)
         if (user) {
-            const hasCredits = await hasEnoughCredits(user.id, CREDITS_PER_GENERATION);
+            const hasCredits = await hasEnoughCredits(user.id, CREDIT_COSTS.AI_VIDEO);
             if (!hasCredits) {
-                toast.error(`Insufficient credits. You need ${CREDITS_PER_GENERATION} credits to generate videos. Please purchase credits to continue.`);
+                toast.error(`Insufficient credits. You need ${CREDIT_COSTS.AI_VIDEO} credits to generate videos. Please purchase credits to continue.`);
                 return;
             }
         }
@@ -509,7 +555,8 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
             
             // Deduct credits after successful generation
             if (user) {
-                await deductCredits(user.id, 'Generate AI Video', CREDITS_PER_GENERATION, { feature: 'video_generation', aspectRatio });
+                await deductCredits(user.id, 'Generate AI Video', CREDIT_COSTS.AI_VIDEO, { feature: 'video_generation', aspectRatio });
+                await refreshCredits();
             }
             
             setVideoAsset({
@@ -532,11 +579,23 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
         const resultIndex = results.findIndex(r => r.image?.id === originalId);
         if (resultIndex === -1) return;
 
+        if (user) {
+            const hasCredits = await hasEnoughCredits(user.id, CREDIT_COSTS.AI_EDIT);
+            if (!hasCredits) {
+                toast.error(`Insufficient credits. Editing an image requires ${CREDIT_COSTS.AI_EDIT} credits.`);
+                return;
+            }
+        }
+
         setResults(prev => prev.map((r, i) => i === resultIndex ? { ...r, isEditing: true } : r));
         setEditingImage(null);
 
         try {
             const editedImage = await editImage(ai.current, originalImage, prompt, mask);
+            if (user) {
+                await deductCredits(user.id, 'AI Image Edit', CREDIT_COSTS.AI_EDIT, { feature: 'image_edit' });
+                await refreshCredits();
+            }
             const newResults = results.map(r => r.image?.id === originalId ? { ...r, image: editedImage } : r);
             setResults(newResults);
             toast.success('Image edited successfully!');
@@ -552,11 +611,23 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
         const originalId = imageToUpscale.id;
         const resultIndex = results.findIndex(r => r.image?.id === originalId);
         if (resultIndex === -1) return;
+
+        if (user) {
+            const hasCredits = await hasEnoughCredits(user.id, CREDIT_COSTS.AI_UPSCALE);
+            if (!hasCredits) {
+                toast.error(`Insufficient credits. Upscaling an image requires ${CREDIT_COSTS.AI_UPSCALE} credits.`);
+                return;
+            }
+        }
         
         setResults(prev => prev.map((r, i) => i === resultIndex ? { ...r, isUpscaling: true } : r));
 
         try {
             const upscaledImage = await upscaleImage(ai.current, imageToUpscale);
+            if (user) {
+                await deductCredits(user.id, 'AI Image Upscale', CREDIT_COSTS.AI_UPSCALE, { feature: 'image_upscale' });
+                await refreshCredits();
+            }
             const newResults = results.map(r => r.image?.id === originalId ? { ...r, image: upscaledImage } : r);
             setResults(newResults);
             toast.success('Image upscaled successfully!');
