@@ -6,7 +6,9 @@ export const Navbar: FC = () => {
     const { user, signOut } = useAuth();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [platformsDropdownOpen, setPlatformsDropdownOpen] = useState(false);
+    const [toolsDropdownOpen, setToolsDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const toolsDropdownRef = useRef<HTMLDivElement>(null);
 
     // Close dropdown when clicking outside on mobile
     useEffect(() => {
@@ -101,8 +103,54 @@ export const Navbar: FC = () => {
                         </div>
                     </div>
                     <Link to="/features" className="navbar-link" onClick={() => setMobileMenuOpen(false)}>Features</Link>
+                    <div
+                        ref={toolsDropdownRef}
+                        className={`navbar-dropdown ${toolsDropdownOpen ? 'active' : ''}`}
+                        onMouseEnter={() => {
+                            if (window.innerWidth >= 769) {
+                                setToolsDropdownOpen(true);
+                            }
+                        }}
+                        onMouseLeave={() => {
+                            if (window.innerWidth >= 769) {
+                                setToolsDropdownOpen(false);
+                            }
+                        }}
+                    >
+                        <button
+                            className="navbar-link platforms-toggle"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setToolsDropdownOpen(!toolsDropdownOpen);
+                            }}
+                            aria-expanded={toolsDropdownOpen}
+                            aria-haspopup="true"
+                        >
+                            Free Tools
+                            <svg className="dropdown-arrow" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M3 4.5L6 7.5L9 4.5"/>
+                            </svg>
+                        </button>
+                        <div className={`dropdown-menu ${toolsDropdownOpen ? 'open' : ''}`}>
+                            <Link to="/tools/image-resizer" className="dropdown-item" onClick={() => { setToolsDropdownOpen(false); setMobileMenuOpen(false); }}>
+                                <span>🪄 AI Smart Image Resizer</span>
+                            </Link>
+                            <Link to="/tools/youtube-transcript" className="dropdown-item" onClick={() => { setToolsDropdownOpen(false); setMobileMenuOpen(false); }}>
+                                <span>📝 YouTube Transcript &amp; Thumb</span>
+                            </Link>
+                            <Link to="/tools/youtube-thumbnail-resizer" className="dropdown-item" onClick={() => { setToolsDropdownOpen(false); setMobileMenuOpen(false); }}>
+                                <span>🖼️ YouTube 1280×720 Resizer</span>
+                            </Link>
+                            <Link to="/tools/tiktok-image-resizer" className="dropdown-item" onClick={() => { setToolsDropdownOpen(false); setMobileMenuOpen(false); }}>
+                                <span>📱 TikTok &amp; Shorts 9:16 Resizer</span>
+                            </Link>
+                            <Link to="/tools/instagram-image-resizer" className="dropdown-item" onClick={() => { setToolsDropdownOpen(false); setMobileMenuOpen(false); }}>
+                                <span>📸 Instagram 4:5 Resizer</span>
+                            </Link>
+                        </div>
+                    </div>
                     <Link to="/pricing" className="navbar-link" onClick={() => setMobileMenuOpen(false)}>Pricing</Link>
-                    <Link to="/business" className="navbar-link" onClick={() => setMobileMenuOpen(false)}>Business</Link>
                     
                     {user ? (
                         <>
