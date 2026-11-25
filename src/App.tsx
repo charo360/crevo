@@ -11,7 +11,7 @@ import {
 import { VIBE_STYLES, PLATFORM_CONFIGS } from './constants';
 import { 
     generateDesign, resizeThumbnailForSize, generateImage, editImage, 
-    upscaleImage, analyzeVideoAndSuggestStyles, extractFacesFromImage, 
+    upscaleImage, analyzeVideoAndSuggestStyles, extractBestFacesFromVideoFrames, 
     getAssistantResponse 
 } from './core/services/ai-providers/gemini';
 import { extractFramesFromVideo } from './shared/utils/video-utils';
@@ -307,18 +307,28 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
 
         setIsExtractingFaces(true);
         try {
-            const frame = (await extractFramesFromVideo(videoAsset.url, trimTimes.start, trimTimes.end, 1))[0];
-            if (!frame) {
-                throw new Error("Could not extract a frame from the video.");
+            // Scan 6 evenly spaced frames across the selected clip range instead of only frame 0
+            const frames = await extractFramesFromVideo(videoAsset.url, trimTimes.start, trimTimes.end, 6);
+            if (!frames || frames.length === 0) {
+                throw new Error("Could not extract frames from the video.");
             }
-            const faces = await extractFacesFromImage(ai.current, frame);
+            const { cutouts, selectedMoments, scannedCount } = await extractBestFacesFromVideoFrames(ai.current, frames);
+            const allExtracted = [...cutouts, ...selectedMoments];
             if (user) {
-                await deductCredits(user.id, 'Extract Faces', CREDIT_COSTS.EXTRACT_FACES, { feature: 'extract_faces', count: faces.length });
+                await deductCredits(user.id, 'Extract Faces', CREDIT_COSTS.EXTRACT_FACES, {
+                    feature: 'extract_faces',
+                    count: allExtracted.length,
+                    scannedFrames: scannedCount,
+                });
                 await refreshCredits();
             }
-            setCutoutAssets(prev => [...prev, ...faces]);
-            setImages(prev => [...prev, ...faces]);
-            toast.success(`Extracted ${faces.length} face(s) and added to your Images!`);
+            setCutoutAssets(prev => [...prev, ...allExtracted]);
+            setImages(prev => [...prev, ...allExtracted]);
+            toast.success(
+                selectedMoments.length > 0
+                    ? `Scanned ${scannedCount} frames — added ${cutouts.length} face cutout + ${selectedMoments.length} best video shot(s) for a realistic thumbnail!`
+                    : `Scanned ${scannedCount} frames — extracted ${cutouts.length} sharpest face cutout and added to your Images!`
+            );
         } catch (e: any) {
             console.error(e);
             toast.error(`Failed to extract faces: ${e.message || 'Unknown error'}`);

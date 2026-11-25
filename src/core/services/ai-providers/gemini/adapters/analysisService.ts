@@ -57,6 +57,93 @@ export const extractFacesFromImage = async (
     return results;
 };
 
+/**
+ * Scans multiple frames across a video clip to find:
+ * 1. The sharpest, eyes-open, most expressive face frame for a clean studio cutout.
+ * 2. Up to 2 additional distinct, high-impact real frames (different angle, person, or moment)
+ *    so the thumbnail generator has authentic, realistic visual references from across the video.
+ */
+export const extractBestFacesFromVideoFrames = async (
+    ai: GoogleGenAI,
+    frames: ImageAsset[]
+): Promise<{ cutouts: ImageAsset[]; selectedMoments: ImageAsset[]; scannedCount: number }> => {
+    if (!frames || frames.length === 0) {
+        throw new Error("No video frames available to extract faces from.");
+    }
+
+    let bestIndices: number[] = [0];
+
+    if (frames.length > 1) {
+        try {
+            const parts: Part[] = [];
+            frames.forEach((frame, idx) => {
+                parts.push({ text: `Frame ${idx}:` });
+                parts.push({ inlineData: { data: frame.base64, mimeType: frame.mimeType } });
+            });
+            parts.push({
+                text: `You are selecting the BEST thumbnail reference photos from ${frames.length} frames of a video (indexed 0 to ${frames.length - 1}).
+Choose up to 3 frame indices in priority order:
+- Index #1 MUST be the sharpest, clearest, well-lit, eyes-open, most expressive human face / main subject (avoid motion blur, blinking, half-closed mouth, or backs of heads).
+- Indices #2 and #3 (optional, only if visually distinct) should show a different person, different strong expression, or a compelling real scene/object from another part of the video so the final thumbnail looks realistic and authentic to the video.
+
+Return ONLY valid JSON: { "bestFrameIndices": [0, 2, 4] }`,
+            });
+
+            const pickResponse = await callWithFallback(
+                () =>
+                    ai.models.generateContent({
+                        model: getModelWithFallback('TEXT', false),
+                        contents: { parts },
+                        config: { responseMimeType: 'application/json' },
+                    }),
+                () =>
+                    ai.models.generateContent({
+                        model: getModelWithFallback('TEXT', true),
+                        contents: { parts },
+                        config: { responseMimeType: 'application/json' },
+                    }),
+                'Frame selection fallback'
+            );
+
+            const raw = (pickResponse.text || '').replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+            const jsonMatch = raw.match(/\{[\s\S]*\}/);
+            const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
+            if (Array.isArray(parsed?.bestFrameIndices)) {
+                const valid = Array.from(
+                    new Set(
+                        parsed.bestFrameIndices
+                            .map((n: any) => Number(n))
+                            .filter((n: number) => Number.isInteger(n) && n >= 0 && n < frames.length)
+                    )
+                ) as number[];
+                if (valid.length > 0) {
+                    bestIndices = valid.slice(0, 3);
+                }
+            }
+        } catch (pickErr) {
+            console.warn('Smart multi-frame face selector fell back to middle frame:', pickErr);
+            bestIndices = [Math.floor(frames.length / 2)];
+        }
+    }
+
+    const primaryFrame = frames[bestIndices[0]] || frames[0];
+    const cutouts = await extractFacesFromImage(ai, primaryFrame);
+
+    // Include up to 2 distinct secondary real frames from across the video for realistic thumbnail context
+    const selectedMoments: ImageAsset[] = bestIndices
+        .slice(1, 3)
+        .map((idx, pos) => ({
+            ...frames[idx],
+            id: `video_moment_${Date.now()}_${pos}`,
+        }));
+
+    return {
+        cutouts,
+        selectedMoments,
+        scannedCount: frames.length,
+    };
+};
+
 export const analyzeVideoAndSuggestStyles = async (
     ai: GoogleGenAI, 
     frames: ImageAsset[]
