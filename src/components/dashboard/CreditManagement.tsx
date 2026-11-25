@@ -610,9 +610,9 @@ export const CreditManagement: FC = () => {
                             <h3 className="text-lg font-semibold text-gray-900 mb-6">Available Credit Packs</h3>
                             <div className="grid gap-6 md:grid-cols-3">
                                 {[
-                                    { id: 'price_1SWEQdI1WHS4nwXdb9wSvgKl', name: 'Pay As You Go', credits: 50, price: 9, billing: 'One-time purchase • No subscription', cta: 'Buy 50 Credits', popular: false },
-                                    { id: 'price_1SWEUAI1WHS4nwXduy1uQkYn', name: 'Pro Plan', credits: 200, price: 29, billing: 'Monthly subscription • Cancel anytime', cta: 'Subscribe ($29/mo)', popular: true },
-                                    { id: 'price_1SWF5BI1WHS4nwXdQCv58CeN', name: 'Enterprise Plan', credits: 1000, price: 99, billing: 'Monthly subscription • Cancel anytime', cta: 'Subscribe ($99/mo)', popular: false }
+                                    { id: 'price_1UfkBAELJu3kIHjxxWOcwsh0', name: 'Pay As You Go', credits: 50, price: 9, billing: 'One-time purchase • No subscription', cta: 'Buy 50 Credits', popular: false },
+                                    { id: 'price_1UfkBBELJu3kIHjxvfZceTS4', name: 'Pro Plan', credits: 200, price: 29, billing: 'Monthly subscription • Cancel anytime', cta: 'Subscribe ($29/mo)', popular: true },
+                                    { id: 'price_1UfkBCELJu3kIHjxPeUkdZJp', name: 'Enterprise Plan', credits: 1000, price: 99, billing: 'Monthly subscription • Cancel anytime', cta: 'Subscribe ($99/mo)', popular: false }
                                 ].map((plan) => (
                                     <div
                                         key={plan.id}

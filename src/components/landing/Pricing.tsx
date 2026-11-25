@@ -22,11 +22,11 @@ export const Pricing: FC = () => {
             return;
         }
 
-        // Map plan names to Stripe Price IDs
+        // Map plan names to live Stripe Price IDs
         const priceIdMap: Record<string, string> = {
-            'Pay As You Go': 'price_1SWEQdI1WHS4nwXdb9wSvgKl',
-            'Pro Plan': 'price_1SWEUAI1WHS4nwXduy1uQkYn',
-            'Enterprise Plan': 'price_1SWF5BI1WHS4nwXdQCv58CeN',
+            'Pay As You Go': 'price_1UfkBAELJu3kIHjxxWOcwsh0',
+            'Pro Plan': 'price_1UfkBBELJu3kIHjxvfZceTS4',
+            'Enterprise Plan': 'price_1UfkBCELJu3kIHjxPeUkdZJp',
         };
 
         const priceId = priceIdMap[plan.name];

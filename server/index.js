@@ -726,8 +726,9 @@ app.post('/api/stripe/create-checkout-session', requireAuth, async (req, res) =>
 
         // Auto-detect whether this Stripe Price is recurring (subscription) or one-time ($9 pay-as-you-go)
         let checkoutMode = 'payment';
+        let stripePrice = null;
         try {
-            const stripePrice = await stripe.prices.retrieve(priceId);
+            stripePrice = await stripe.prices.retrieve(priceId);
             if (stripePrice?.type === 'recurring') {
                 checkoutMode = 'subscription';
             }
@@ -735,17 +736,23 @@ app.post('/api/stripe/create-checkout-session', requireAuth, async (req, res) =>
             console.warn('Could not inspect Stripe price type, defaulting to payment:', priceErr?.message);
         }
 
+        const resolvedCredits =
+            pack?.credits ||
+            Number(stripePrice?.metadata?.credits || 0) ||
+            (stripePrice?.unit_amount >= 9000 ? 1000 : stripePrice?.unit_amount >= 2500 ? 200 : 50);
+
         const session = await stripe.checkout.sessions.create({
             mode: checkoutMode,
             customer_email: req.user.email,
             client_reference_id: req.user.id,
+            allow_promotion_codes: true,
             line_items: [{ price: priceId, quantity: 1 }],
             success_url: `${origin}/dashboard/credits?payment=success&session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: `${origin}/dashboard/credits?payment=cancelled`,
             metadata: {
                 user_id: req.user.id,
-                credits: String(pack?.credits || 0),
-                pack_name: pack?.name || '',
+                credits: String(resolvedCredits),
+                pack_name: pack?.name || stripePrice?.nickname || (checkoutMode === 'subscription' ? 'Crevo AI Subscription' : 'Pay As You Go'),
                 billing_mode: checkoutMode,
             },
         });
@@ -2295,6 +2302,39 @@ async function start() {
             serverSelectionTimeoutMS: 10000,
         });
         console.log(`✅ Connected to MongoDB Atlas (db: ${MONGODB_DB_NAME})`);
+
+        // Ensure live Crevo AI Stripe credit packs exist in MongoDB
+        const defaultPacks = [
+            {
+                stripe_price_id: process.env.STRIPE_PRICE_PAYG || 'price_1UfkBAELJu3kIHjxxWOcwsh0',
+                name: 'Pay As You Go',
+                credits: 50,
+                price_cents: 900,
+                active: true,
+            },
+            {
+                stripe_price_id: process.env.STRIPE_PRICE_PRO || 'price_1UfkBBELJu3kIHjxvfZceTS4',
+                name: 'Pro Plan',
+                credits: 200,
+                price_cents: 2900,
+                active: true,
+            },
+            {
+                stripe_price_id: process.env.STRIPE_PRICE_ENTERPRISE || 'price_1UfkBCELJu3kIHjxPeUkdZJp',
+                name: 'Enterprise Plan',
+                credits: 1000,
+                price_cents: 9900,
+                active: true,
+            },
+        ];
+        for (const pack of defaultPacks) {
+            await CreditPack.findOneAndUpdate(
+                { stripe_price_id: pack.stripe_price_id },
+                { $set: pack },
+                { upsert: true, new: true }
+            );
+        }
+        console.log('✅ Synced live Stripe CreditPacks in MongoDB');
     } catch (err) {
         console.error('❌ Failed to connect to MongoDB:', err.message);
         process.exit(1);
