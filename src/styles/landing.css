@@ -167,21 +167,21 @@
 
 .hero-feature-marquee {
     width: 100%;
-    max-width: 980px;
-    margin: 1.5rem auto 1.65rem;
+    max-width: 1080px;
+    margin: 1.75rem auto 1.85rem;
     overflow: hidden;
     position: relative;
-    mask-image: linear-gradient(to right, transparent 0%, #000 8%, #000 92%, transparent 100%);
-    -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 8%, #000 92%, transparent 100%);
+    mask-image: linear-gradient(to right, transparent 0%, #000 6%, #000 94%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 6%, #000 94%, transparent 100%);
 }
 
 .hero-feature-track {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 16px;
     width: max-content;
-    animation: crevoHeroMarquee 32s linear infinite;
-    padding: 4px 0;
+    animation: crevoHeroMarquee 65s linear infinite;
+    padding: 8px 0;
 }
 
 .hero-feature-marquee:hover .hero-feature-track {
@@ -191,41 +191,53 @@
 .hero-feature-pill {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 9px 15px;
-    border-radius: 999px;
-    background: #ffffff;
-    border: 1px solid #e4dcf2;
-    color: #1f1633;
+    gap: 10px;
+    padding: 12px 18px;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #ffffff 0%, #faf6ff 100%);
+    border: 1.5px solid #d4bdf7;
+    color: #1a102b;
     text-decoration: none;
-    font-size: 0.9rem;
-    font-weight: 600;
+    font-size: 0.95rem;
+    font-weight: 700;
     white-space: nowrap;
-    box-shadow: 0 3px 12px rgba(87, 28, 134, 0.08);
-    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 6px 20px rgba(87, 28, 134, 0.13);
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
     flex-shrink: 0;
 }
 
 .hero-feature-pill:hover {
-    transform: translateY(-2px);
+    transform: translateY(-3px);
     border-color: #7e22ce;
-    box-shadow: 0 8px 20px rgba(87, 28, 134, 0.16);
+    background: #ffffff;
+    box-shadow: 0 12px 28px rgba(87, 28, 134, 0.22);
     color: #571c86;
 }
 
 .hero-feature-pill-icon {
-    font-size: 1rem;
+    font-size: 1.15rem;
     line-height: 1;
 }
 
 .hero-feature-pill-badge {
-    padding: 2px 8px;
+    padding: 3px 9px;
     border-radius: 999px;
-    background: #f3e8ff;
-    color: #571c86;
+    background: linear-gradient(135deg, #571c86, #9333ea);
+    color: #ffffff;
     font-size: 0.72rem;
     font-weight: 700;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.03em;
+}
+
+.hero-feature-pill-arrow {
+    color: #7e22ce;
+    font-weight: 800;
+    font-size: 0.95rem;
+    transition: transform 0.2s ease;
+}
+
+.hero-feature-pill:hover .hero-feature-pill-arrow {
+    transform: translateX(3px);
 }
 
 @keyframes crevoHeroMarquee {

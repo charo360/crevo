@@ -31,6 +31,7 @@ export const Hero: FC = () => {
                                 <span className="hero-feature-pill-icon">{item.icon}</span>
                                 <span className="hero-feature-pill-label">{item.label}</span>
                                 <span className="hero-feature-pill-badge">{item.badge}</span>
+                                <span className="hero-feature-pill-arrow" aria-hidden="true">→</span>
                             </Link>
                         ))}
                     </div>
