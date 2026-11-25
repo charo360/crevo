@@ -65,6 +65,7 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
     };
     
     const [images, setImages] = useState<ImageAsset[]>([]);
+    const [referenceThumbnail, setReferenceThumbnail] = useState<ImageAsset | null>(null);
     const [videoAsset, setVideoAsset] = useState<VideoAsset | null>(null);
     const [trimTimes, setTrimTimes] = useState({ start: 0, end: 1 });
     const [cutoutAssets, setCutoutAssets] = useState<ImageAsset[]>([]);
@@ -222,7 +223,8 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                 youtubeTranscript,
                 originalYoutubeTitle,
                 text,
-                improveMode
+                improveMode,
+                referenceThumbnail
             );
             
             // Deduct credits based on actual generated images (2 credits per image) and refresh navbar balance
@@ -782,6 +784,7 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                         platform={platform}
                         text={text} onTextChange={setText}
                         images={images} onImagesChange={setImages}
+                        referenceThumbnail={referenceThumbnail} onReferenceThumbnailChange={setReferenceThumbnail}
                         videoAsset={videoAsset} onVideoAssetChange={handleVideoAssetChange}
                         trimTimes={trimTimes} onTrimTimesChange={setTrimTimes}
                         isAnalyzing={isAnalyzing} onAnalyzeVideo={handleAnalyzeVideo}

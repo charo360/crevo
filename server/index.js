@@ -1244,6 +1244,41 @@ app.get('/api/youtube/transcript', async (req, res) => {
     }
 });
 
+app.get('/api/youtube/thumbnail', async (req, res) => {
+    try {
+        const videoUrl = String(req.query.url || '').trim();
+        const videoId = extractYouTubeVideoId(videoUrl);
+        if (!videoId) {
+            return res.status(400).json({ error: 'Please paste a valid YouTube video or Shorts link.' });
+        }
+
+        const qualities = ['maxresdefault', 'sddefault', 'hqdefault'];
+        for (const q of qualities) {
+            const thumbUrl = `https://i.ytimg.com/vi/${videoId}/${q}.jpg`;
+            const imgRes = await fetch(thumbUrl);
+            if (imgRes.ok) {
+                const buf = Buffer.from(await imgRes.arrayBuffer());
+                if (buf.length > 2000) {
+                    const mimeType = imgRes.headers.get('content-type') || 'image/jpeg';
+                    const base64 = buf.toString('base64');
+                    return res.json({
+                        videoId,
+                        quality: q,
+                        mimeType,
+                        base64,
+                        dataUrl: `data:${mimeType};base64,${base64}`,
+                    });
+                }
+            }
+        }
+
+        return res.status(404).json({ error: 'Could not fetch thumbnail for that YouTube video.' });
+    } catch (err) {
+        console.error('YouTube thumbnail fetch error:', err.message);
+        return res.status(500).json({ error: 'Failed to fetch YouTube thumbnail.' });
+    }
+});
+
 // ==================== PROXY ROUTE (YouTube thumbnails & transcripts) ====================
 
 const ALLOWED_PROXY_HOSTS = new Set([

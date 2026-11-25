@@ -7,6 +7,7 @@ import { YouTubeModule } from './YouTubeModule';
 import { ResizeModule } from './ResizeModule';
 import { VideoModule } from './VideoModule';
 import { ImageModule } from './ImageModule';
+import { ReferenceThumbnailModule } from './ReferenceThumbnailModule';
 import { TextContentModule } from './TextContentModule';
 import { LogoModule } from './LogoModule';
 import { ColorPaletteModule } from './ColorPaletteModule';
@@ -19,6 +20,8 @@ interface SidebarProps {
     onTextChange: React.Dispatch<React.SetStateAction<TextState>>;
     images: ImageAsset[];
     onImagesChange: (i: ImageAsset[]) => void;
+    referenceThumbnail: ImageAsset | null;
+    onReferenceThumbnailChange: (img: ImageAsset | null) => void;
     videoAsset: VideoAsset | null;
     onVideoAssetChange: (v: VideoAsset | null) => void;
     trimTimes: { start: number; end: number };
@@ -102,6 +105,10 @@ export const Sidebar: FC<SidebarProps> = (props) => {
                         onImagesChange={props.onImagesChange}
                         onGenerateImage={props.onGenerateImage}
                         isGeneratingImage={props.isGeneratingImage}
+                    />
+                    <ReferenceThumbnailModule
+                        referenceThumbnail={props.referenceThumbnail}
+                        onReferenceThumbnailChange={props.onReferenceThumbnailChange}
                     />
                     <TextContentModule
                         platform={props.platform}

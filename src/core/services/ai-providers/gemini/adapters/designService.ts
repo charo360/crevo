@@ -291,7 +291,8 @@ export const generateDesign = async (
     transcript: string | null, 
     originalTitle: string, 
     currentText: TextState,
-    improveMode: ImproveMode = 'improve'
+    improveMode: ImproveMode = 'improve',
+    referenceThumbnail: ImageAsset | null = null
 ): Promise<DesignResult[]> => {
     return performanceMonitor.measureFunction('generateDesign', async () => {
         let finalPrompt = '';
@@ -332,7 +333,27 @@ export const generateDesign = async (
             const logoPart: Part | null = (optimizedLogo.base64 && optimizedLogo.mimeType)
                 ? { inlineData: { data: optimizedLogo.base64, mimeType: optimizedLogo.mimeType } }
                 : null;
-                
+
+            if (referenceThumbnail) {
+                let optimizedRef = referenceThumbnail;
+                try {
+                    const optimized = await optimizeImageForAI(referenceThumbnail.base64, referenceThumbnail.mimeType);
+                    optimizedRef = { ...referenceThumbnail, base64: optimized.base64, mimeType: optimized.mimeType };
+                } catch (error) {
+                    console.warn('Failed to optimize reference thumbnail, using original:', error);
+                }
+                allImageParts.push({
+                    text: 'IMAGE ROLE — REFERENCE THUMBNAIL BLUEPRINT (copy this exact layout, camera framing, background style, lighting, color mood, and text placement, but DO NOT keep the original person or original text from this reference):',
+                });
+                allImageParts.push({ inlineData: { data: optimizedRef.base64, mimeType: optimizedRef.mimeType } });
+
+                if (optimizedImages.length > 0) {
+                    allImageParts.push({
+                        text: 'IMAGE ROLE — USER SUBJECTS & PHOTOS (use THESE exact real people/subjects to replace the people in the reference blueprint, preserving their 100% physical likeness):',
+                    });
+                }
+            }
+
             optimizedImages.forEach(img => allImageParts.push({ inlineData: { data: img.base64, mimeType: img.mimeType } }));
             if (logoPart) allImageParts.push(logoPart);
 
@@ -626,7 +647,14 @@ ${weaknessesList}
 - **Multi-Person & Story Authenticity:** If multiple distinct people or real video moments are attached, compose them naturally into one cohesive, realistic thumbnail scene with clear foreground/background hierarchy and authentic lighting—never looking like pasted stickers or plastic AI art.`
                         : '';
 
-                const variationPrompt = `${finalPrompt}${designerLikenessDirective}\n\n${variationDirective}`;
+                const referenceBlueprintDirective = referenceThumbnail
+                    ? `\n\n[REFERENCE THUMBNAIL RECREATION MODE — NON-NEGOTIABLE]
+- **Exact Structural Blueprint:** Recreate the EXACT visual layout, composition, subject placement, camera angle, background environment, lighting mood, contrast, and typography placement/styling of the attached REFERENCE THUMBNAIL BLUEPRINT.
+- **100% Subject Swap:** Completely REMOVE every person/face from the reference thumbnail and REPLACE them with the USER'S OWN PEOPLE from the attached user photos/cutouts — preserving the user's exact 100% physical likeness while matching the pose, scale, and high-CTR expression of the reference composition.
+- **100% Information & Text Swap:** Completely REMOVE all original text, logos, and watermarks from the reference thumbnail. Replace the text in the same visual style & position using ONLY the user's Headline ("${currentText.headline || ''}") and Subheadline ("${currentText.subheadline || ''}"). NEVER copy words or branding from the reference thumbnail.`
+                    : '';
+
+                const variationPrompt = `${finalPrompt}${referenceBlueprintDirective}${designerLikenessDirective}\n\n${variationDirective}`;
 
                 const imageConfig = {
                     responseModalities: [Modality.IMAGE],
