@@ -25,8 +25,10 @@ import {
     RepurposeJob,
     NewsletterSubscriber,
     FreeTrialUsage,
+    UserWork,
 } from './models.js';
 import { signToken, requireAuth } from './authMiddleware.js';
+import jwt from 'jsonwebtoken';
 import { generateWithOpenRouter } from './openrouter.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -636,10 +638,21 @@ app.post('/api/stripe/create-checkout-session', requireAuth, async (req, res) =>
         }
 
         const pack = await CreditPack.findOne({ stripe_price_id: priceId }).lean();
-        const origin = req.headers.origin || 'http://localhost:3000';
+        const origin = req.headers.origin || process.env.FRONTEND_URL || 'https://crevo.app';
+
+        // Auto-detect whether this Stripe Price is recurring (subscription) or one-time ($9 pay-as-you-go)
+        let checkoutMode = 'payment';
+        try {
+            const stripePrice = await stripe.prices.retrieve(priceId);
+            if (stripePrice?.type === 'recurring') {
+                checkoutMode = 'subscription';
+            }
+        } catch (priceErr) {
+            console.warn('Could not inspect Stripe price type, defaulting to payment:', priceErr?.message);
+        }
 
         const session = await stripe.checkout.sessions.create({
-            mode: 'payment',
+            mode: checkoutMode,
             customer_email: req.user.email,
             client_reference_id: req.user.id,
             line_items: [{ price: priceId, quantity: 1 }],
@@ -649,6 +662,7 @@ app.post('/api/stripe/create-checkout-session', requireAuth, async (req, res) =>
                 user_id: req.user.id,
                 credits: String(pack?.credits || 0),
                 pack_name: pack?.name || '',
+                billing_mode: checkoutMode,
             },
         });
 
@@ -1743,6 +1757,256 @@ app.post('/api/admin/users/:userId/credits', requireAdmin, async (req, res) => {
     }
 });
 
+// ==================== 7-DAY TEMPORARY USER WORK LIBRARY ====================
+
+const LIBRARY_DIR = process.env.USER_WORK_DIR || path.join(os.tmpdir(), 'revo3-library');
+const LIBRARY_TTL_DAYS = 7;
+const LIBRARY_TTL_MS = LIBRARY_TTL_DAYS * 24 * 60 * 60 * 1000;
+const MAX_LIBRARY_CLIP_BYTES = 200 * 1024 * 1024; // 200 MB per saved clip
+
+function ensureLibraryDir() {
+    if (!fs.existsSync(LIBRARY_DIR)) {
+        fs.mkdirSync(LIBRARY_DIR, { recursive: true });
+    }
+}
+
+async function cleanupExpiredUserWork() {
+    try {
+        ensureLibraryDir();
+        const now = new Date();
+        const expired = await UserWork.find({ expires_at: { $lte: now } }).lean();
+        if (expired.length === 0) return;
+
+        for (const item of expired) {
+            const fullPath = path.join(LIBRARY_DIR, path.basename(item.file_name));
+            try {
+                if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+            } catch {
+                // ignore file deletion error
+            }
+        }
+        await UserWork.deleteMany({ _id: { $in: expired.map((i) => i._id) } });
+        console.log(`[Library] Cleaned up ${expired.length} expired work item(s).`);
+    } catch (err) {
+        console.warn('[Library] Cleanup error:', err?.message || err);
+    }
+}
+
+app.post('/api/library/save-image', requireAuth, async (req, res) => {
+    try {
+        ensureLibraryDir();
+        const { dataUrl, type = 'thumbnail', title = 'Untitled Design', platform = '', aspectRatio = '' } = req.body || {};
+        if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) {
+            return res.status(400).json({ error: 'Valid image dataUrl is required' });
+        }
+
+        const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+        if (!match) {
+            return res.status(400).json({ error: 'Malformed image dataUrl' });
+        }
+
+        const mimeType = match[1];
+        const ext = mimeType.includes('jpeg') || mimeType.includes('jpg') ? 'jpg' : mimeType.includes('webp') ? 'webp' : 'png';
+        const buffer = Buffer.from(match[2], 'base64');
+        if (buffer.length > 25 * 1024 * 1024) {
+            return res.status(413).json({ error: 'Image exceeds 25 MB limit' });
+        }
+
+        const fileName = `${crypto.randomUUID()}.${ext}`;
+        fs.writeFileSync(path.join(LIBRARY_DIR, fileName), buffer);
+
+        const safeType = type === 'resize' ? 'resize' : 'thumbnail';
+        const doc = await UserWork.create({
+            user_id: req.user.id,
+            type: safeType,
+            title: String(title || 'Untitled Design').slice(0, 120),
+            platform: String(platform || '').slice(0, 60),
+            aspect_ratio: String(aspectRatio || '').slice(0, 20),
+            mime_type: mimeType,
+            file_name: fileName,
+            file_size: buffer.length,
+            expires_at: new Date(Date.now() + LIBRARY_TTL_MS),
+        });
+
+        return res.status(201).json({
+            id: doc._id.toString(),
+            expires_at: doc.expires_at,
+        });
+    } catch (err) {
+        console.error('Library save-image error:', err);
+        return res.status(500).json({ error: 'Failed to save image to library' });
+    }
+});
+
+app.post('/api/library/save-video', requireAuth, (req, res) => {
+    ensureLibraryDir();
+    const fileName = `${crypto.randomUUID()}.mp4`;
+    const filePath = path.join(LIBRARY_DIR, fileName);
+    const writeStream = fs.createWriteStream(filePath);
+    let totalBytes = 0;
+    let aborted = false;
+
+    const removePartial = () => {
+        try {
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        } catch {
+            // ignore
+        }
+    };
+
+    req.on('data', (chunk) => {
+        if (aborted) return;
+        totalBytes += chunk.length;
+        if (totalBytes > MAX_LIBRARY_CLIP_BYTES) {
+            aborted = true;
+            writeStream.destroy();
+            removePartial();
+            if (!res.headersSent) res.status(413).json({ error: 'Clip exceeds 200 MB limit' });
+            req.destroy();
+        }
+    });
+
+    req.on('error', () => {
+        aborted = true;
+        writeStream.destroy();
+        removePartial();
+        if (!res.headersSent) res.status(500).json({ error: 'Upload stream failed' });
+    });
+
+    writeStream.on('error', () => {
+        aborted = true;
+        removePartial();
+        if (!res.headersSent) res.status(500).json({ error: 'Failed writing clip to disk' });
+    });
+
+    writeStream.on('finish', async () => {
+        if (aborted || res.headersSent) return;
+        if (totalBytes === 0) {
+            removePartial();
+            return res.status(400).json({ error: 'Empty clip upload' });
+        }
+        try {
+            const doc = await UserWork.create({
+                user_id: req.user.id,
+                type: 'clip',
+                title: String(req.query.title || 'Viral Short Clip').slice(0, 120),
+                platform: String(req.query.platform || '9:16').slice(0, 80),
+                aspect_ratio: String(req.query.aspectRatio || '9:16').slice(0, 20),
+                mime_type: 'video/mp4',
+                file_name: fileName,
+                file_size: totalBytes,
+                expires_at: new Date(Date.now() + LIBRARY_TTL_MS),
+            });
+            return res.status(201).json({
+                id: doc._id.toString(),
+                expires_at: doc.expires_at,
+            });
+        } catch (err) {
+            removePartial();
+            console.error('Library save-video DB error:', err);
+            return res.status(500).json({ error: 'Failed to save clip record' });
+        }
+    });
+
+    req.pipe(writeStream);
+});
+
+app.get('/api/library', requireAuth, async (req, res) => {
+    try {
+        const now = new Date();
+        const items = await UserWork.find({
+            user_id: req.user.id,
+            expires_at: { $gt: now },
+        })
+            .sort({ created_at: -1 })
+            .limit(100)
+            .lean();
+
+        return res.json({
+            retention_days: LIBRARY_TTL_DAYS,
+            items: items.map((item) => {
+                const msLeft = Math.max(0, new Date(item.expires_at).getTime() - now.getTime());
+                const daysLeft = Math.max(1, Math.ceil(msLeft / (24 * 60 * 60 * 1000)));
+                return {
+                    id: item._id.toString(),
+                    type: item.type,
+                    title: item.title,
+                    platform: item.platform,
+                    aspect_ratio: item.aspect_ratio,
+                    mime_type: item.mime_type,
+                    file_size: item.file_size,
+                    created_at: item.created_at,
+                    expires_at: item.expires_at,
+                    days_left: daysLeft,
+                    file_url: `/api/library/file/${item._id.toString()}`,
+                };
+            }),
+        });
+    } catch (err) {
+        console.error('Library list error:', err);
+        return res.status(500).json({ error: 'Failed to load library' });
+    }
+});
+
+app.get('/api/library/file/:id', async (req, res) => {
+    try {
+        let token = '';
+        const authHeader = req.headers.authorization || '';
+        if (authHeader.startsWith('Bearer ')) {
+            token = authHeader.slice(7).trim();
+        } else if (typeof req.query.token === 'string') {
+            token = req.query.token.trim();
+        }
+        if (!token) {
+            return res.status(401).json({ error: 'Authentication required' });
+        }
+
+        let payload;
+        try {
+            payload = jwt.verify(token, process.env.JWT_SECRET || 'revo3-dev-jwt-secret-change-in-production');
+        } catch {
+            return res.status(401).json({ error: 'Invalid or expired token' });
+        }
+
+        const item = await UserWork.findOne({ _id: req.params.id, user_id: String(payload.sub || payload.id) }).lean();
+        if (!item) {
+            return res.status(404).json({ error: 'File not found or expired' });
+        }
+
+        const fullPath = path.join(LIBRARY_DIR, path.basename(item.file_name));
+        if (!fs.existsSync(fullPath)) {
+            return res.status(404).json({ error: 'File no longer exists on server' });
+        }
+
+        res.setHeader('Content-Type', item.mime_type || 'application/octet-stream');
+        res.setHeader('Cache-Control', 'private, max-age=3600');
+        return res.sendFile(fullPath);
+    } catch (err) {
+        console.error('Library stream error:', err);
+        return res.status(500).json({ error: 'Failed to load file' });
+    }
+});
+
+app.delete('/api/library/:id', requireAuth, async (req, res) => {
+    try {
+        const item = await UserWork.findOne({ _id: req.params.id, user_id: req.user.id });
+        if (!item) {
+            return res.status(404).json({ error: 'Item not found' });
+        }
+        const fullPath = path.join(LIBRARY_DIR, path.basename(item.file_name));
+        try {
+            if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+        } catch {
+            // ignore
+        }
+        await item.deleteOne();
+        return res.json({ ok: true });
+    } catch (err) {
+        console.error('Library delete error:', err);
+        return res.status(500).json({ error: 'Failed to delete item' });
+    }
+});
+
 // ==================== PRODUCTION STATIC FRONTEND + SERVER-SIDE SEO META ====================
 
 const SSR_SEO_ROUTES = {
@@ -1889,6 +2153,10 @@ async function start() {
     });
     // Allow long-running multi-GB video uploads without Node's default 5-minute request timeout
     server.requestTimeout = 0;
+
+    // Run 7-day temporary work cleanup on startup and every hour
+    cleanupExpiredUserWork();
+    setInterval(cleanupExpiredUserWork, 60 * 60 * 1000);
 }
 
 start();

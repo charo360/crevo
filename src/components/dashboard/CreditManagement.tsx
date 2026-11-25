@@ -610,10 +610,9 @@ export const CreditManagement: FC = () => {
                             <h3 className="text-lg font-semibold text-gray-900 mb-6">Available Credit Packs</h3>
                             <div className="grid gap-6 md:grid-cols-3">
                                 {[
-                                    { id: 'price_1SWENdI1WHS4nwXdw2ZCIf1H', name: 'Free Starter', credits: 10, price: 0, popular: false },
-                                    { id: 'price_1SWEQdI1WHS4nwXdb9wSvgKl', name: 'Starter Pack', credits: 50, price: 9, popular: false },
-                                    { id: 'price_1SWEUAI1WHS4nwXduy1uQkYn', name: 'Pro Pack', credits: 200, price: 29, popular: true },
-                                    { id: 'price_1SWF5BI1WHS4nwXdQCv58CeN', name: 'Enterprise Pack', credits: 1000, price: 99, popular: false }
+                                    { id: 'price_1SWEQdI1WHS4nwXdb9wSvgKl', name: 'Pay As You Go', credits: 50, price: 9, billing: 'One-time purchase • No subscription', cta: 'Buy 50 Credits', popular: false },
+                                    { id: 'price_1SWEUAI1WHS4nwXduy1uQkYn', name: 'Pro Plan', credits: 200, price: 29, billing: 'Monthly subscription • Cancel anytime', cta: 'Subscribe ($29/mo)', popular: true },
+                                    { id: 'price_1SWF5BI1WHS4nwXdQCv58CeN', name: 'Enterprise Plan', credits: 1000, price: 99, billing: 'Monthly subscription • Cancel anytime', cta: 'Subscribe ($99/mo)', popular: false }
                                 ].map((plan) => (
                                     <div
                                         key={plan.id}
@@ -633,16 +632,19 @@ export const CreditManagement: FC = () => {
                                         </div>
                                         <div className="space-y-4">
                                             <div>
-                                                <p className="text-3xl font-bold text-gray-900">${plan.price}</p>
-                                                <p className="text-sm text-gray-500">One-time purchase</p>
+                                                <p className="text-3xl font-bold text-gray-900">
+                                                    ${plan.price}
+                                                    {plan.price > 9 && <span className="text-base font-medium text-gray-500">/mo</span>}
+                                                </p>
+                                                <p className="text-sm text-gray-500">{plan.billing}</p>
                                             </div>
                                             <div>
-                                                <p className="font-semibold text-gray-900">{plan.credits} Credits</p>
-                                                {plan.price > 0 && (
-                                                    <p className="text-sm text-gray-500">
-                                                        ${(plan.price / plan.credits).toFixed(3)} per credit
-                                                    </p>
-                                                )}
+                                                <p className="font-semibold text-gray-900">
+                                                    {plan.credits} Credits{plan.price > 9 ? ' / month' : ''}
+                                                </p>
+                                                <p className="text-sm text-gray-500">
+                                                    ${(plan.price / plan.credits).toFixed(3)} per credit
+                                                </p>
                                             </div>
                                             <button
                                                 onClick={() => handleBuyCredits(plan.id)}
@@ -652,7 +654,7 @@ export const CreditManagement: FC = () => {
                                                         : 'bg-gray-100 text-[#571c86] hover:bg-gray-200 border border-[#571c86]'
                                                 }`}
                                             >
-                                                {plan.price === 0 ? 'Get Started' : `Purchase ${plan.name}`}
+                                                {plan.cta}
                                             </button>
                                         </div>
                                     </div>

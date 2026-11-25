@@ -220,6 +220,24 @@ const freeTrialUsageSchema = new mongoose.Schema(
 freeTrialUsageSchema.index({ tool: 1, ip: 1 });
 freeTrialUsageSchema.index({ tool: 1, fingerprint: 1 });
 
+const userWorkSchema = new mongoose.Schema(
+    {
+        user_id: { type: String, required: true, index: true },
+        type: { type: String, enum: ['thumbnail', 'resize', 'clip'], default: 'thumbnail', index: true },
+        title: { type: String, default: 'Untitled Design' },
+        platform: { type: String, default: '' },
+        aspect_ratio: { type: String, default: '' },
+        mime_type: { type: String, default: 'image/png' },
+        file_name: { type: String, required: true },
+        file_size: { type: Number, default: 0 },
+        expires_at: { type: Date, required: true, index: true },
+    },
+    {
+        timestamps: { createdAt: 'created_at', updatedAt: false },
+    }
+);
+userWorkSchema.index({ user_id: 1, created_at: -1 });
+
 export const User = mongoose.models.User || mongoose.model('User', userSchema);
 export const UserCredits = mongoose.models.UserCredits || mongoose.model('UserCredits', userCreditsSchema);
 export const CreditTransaction =
@@ -236,3 +254,5 @@ export const NewsletterSubscriber =
     mongoose.models.NewsletterSubscriber || mongoose.model('NewsletterSubscriber', newsletterSubscriberSchema);
 export const FreeTrialUsage =
     mongoose.models.FreeTrialUsage || mongoose.model('FreeTrialUsage', freeTrialUsageSchema);
+export const UserWork =
+    mongoose.models.UserWork || mongoose.model('UserWork', userWorkSchema);

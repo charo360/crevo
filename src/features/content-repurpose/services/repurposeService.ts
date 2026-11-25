@@ -21,6 +21,7 @@ import {
 import { analyzeVideoForViralMoments } from '../../../core/algorithms/content-analysis/viral-detection';
 import { processVideoClip, getVideoMetadata, generateThumbnail, clearCachedVideoInput } from '../../../core/processors/video';
 import { saveRepurposedVideo, saveViralClips, saveMLAnalysis } from './repurposeDatabase';
+import { saveVideoClipToLibrary } from '../../../services/libraryService';
 import { extractFramesFromVideo } from '../../../shared/utils/video-utils';
 import { fetchTranscript } from '../../../shared/utils/youtube-utils';
 import { imageGenRateLimiter } from '../../../core/infrastructure/rate-limiting';
@@ -302,6 +303,13 @@ async function generateClipFromMoment(
     
     // Create clip URL (in production, upload to storage)
     const clipUrl = URL.createObjectURL(blob);
+
+    // Fire-and-forget save to user's 7-day temporary cloud library
+    saveVideoClipToLibrary(blob, {
+        title: `Viral Clip (${Math.round(startTime)}s-${Math.round(endTime)}s)`,
+        platform: platform.replace('_', ' '),
+        aspectRatio: platformSettings.aspectRatio,
+    });
     
     // Get transcript snippet if available
     const transcriptSnippet = moment.reasoning || '';

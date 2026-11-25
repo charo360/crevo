@@ -73,6 +73,9 @@ const CreditManagementPage = lazy(() =>
 const AdminPage = lazy(() =>
   import('../pages/AdminPage').then(m => ({ default: m.AdminPage }))
 );
+const LibraryPage = lazy(() =>
+  import('../pages/LibraryPage').then(m => ({ default: m.LibraryPage }))
+);
 
 // ==================== Loading Fallback ====================
 const LoadingFallback: FC = () => (
@@ -255,6 +258,14 @@ export const AppRoutes: FC = () => {
           />
 
           {/* Profile & Admin Routes */}
+          <Route
+            path="/dashboard/library"
+            element={
+              <ProtectedRoute>
+                <LibraryPage />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/admin"
             element={

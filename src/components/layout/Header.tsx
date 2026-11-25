@@ -437,6 +437,39 @@ export const Header: FC<HeaderProps> = ({ platform, onPlatformChange, onSidebarT
                                         </Link>
                                     )}
                                     <Link
+                                        to="/dashboard/library"
+                                        className="user-menu-item-link"
+                                        onClick={() => setUserMenuOpen(false)}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '12px',
+                                            width: '100%',
+                                            padding: '12px 16px',
+                                            background: 'transparent',
+                                            border: 'none',
+                                            color: 'var(--text-primary)',
+                                            fontSize: '14px',
+                                            fontWeight: 500,
+                                            cursor: 'pointer',
+                                            textDecoration: 'none',
+                                            transition: 'all 0.15s',
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.backgroundColor = 'var(--surface-2)';
+                                            e.currentTarget.style.color = 'var(--primary)';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.backgroundColor = 'transparent';
+                                            e.currentTarget.style.color = 'var(--text-primary)';
+                                        }}
+                                    >
+                                        <svg style={{ width: '20px', height: '20px', flexShrink: 0 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                                        </svg>
+                                        <span>My Library (7-Day)</span>
+                                    </Link>
+                                    <Link
                                         to="/dashboard/credits"
                                         className="user-menu-item-link"
                                         onClick={() => {

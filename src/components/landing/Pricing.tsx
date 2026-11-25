@@ -24,9 +24,9 @@ export const Pricing: FC = () => {
 
         // Map plan names to Stripe Price IDs
         const priceIdMap: Record<string, string> = {
-            'Starter Pack': 'price_1SWEQdI1WHS4nwXdb9wSvgKl',
-            'Pro Pack': 'price_1SWEUAI1WHS4nwXduy1uQkYn',
-            'Enterprise Pack': 'price_1SWF5BI1WHS4nwXdQCv58CeN',
+            'Pay As You Go': 'price_1SWEQdI1WHS4nwXdb9wSvgKl',
+            'Pro Plan': 'price_1SWEUAI1WHS4nwXduy1uQkYn',
+            'Enterprise Plan': 'price_1SWF5BI1WHS4nwXdQCv58CeN',
         };
 
         const priceId = priceIdMap[plan.name];
@@ -61,56 +61,53 @@ export const Pricing: FC = () => {
             isFree: true
         },
         {
-            name: 'Starter Pack',
+            name: 'Pay As You Go',
             price: '$9',
             period: ' one-time',
             credits: 50,
-            description: 'Perfect for creators just starting out',
+            description: 'Pay once, no subscription — credits never expire',
             features: [
-                '50 credits',
-                'All platform types',
-                'Basic AI editing',
-                'Standard resolution',
-                'Email support'
+                '50 credits (one-time)',
+                'All AI thumbnail & resize tools',
+                '5GB video-to-Shorts repurposing',
+                'AI auto-captions & transitions',
+                '7-day cloud work library',
             ],
-            cta: 'Buy Credits',
+            cta: 'Buy 50 Credits',
             popular: false
         },
         {
-            name: 'Pro Pack',
+            name: 'Pro Plan',
             price: '$29',
-            period: ' one-time',
+            period: '/month',
             credits: 200,
-            description: 'For professional content creators',
+            description: 'Monthly subscription for active creators — cancel anytime',
             features: [
-                '200 credits',
-                'All platform types',
-                'Advanced AI editing',
-                'HD & 4K resolution',
+                '200 credits every month',
+                'All AI thumbnail & resize tools',
+                '5GB video-to-Shorts repurposing',
+                'HD & 4K thumbnail upscaling',
+                '7-day cloud work library',
                 'Priority support',
-                'Custom brand integration',
-                'Bulk generation'
             ],
-            cta: 'Buy Credits',
+            cta: 'Subscribe to Pro',
             popular: true
         },
         {
-            name: 'Enterprise Pack',
+            name: 'Enterprise Plan',
             price: '$99',
-            period: ' one-time',
+            period: '/month',
             credits: 1000,
-            description: 'For teams and agencies',
+            description: 'Monthly subscription for teams & agencies — cancel anytime',
             features: [
-                '1000 credits',
-                'All platform types',
-                'Premium AI features',
-                'Custom resolutions',
+                '1,000 credits every month',
+                'All AI thumbnail & video tools',
+                'HD & 4K exports + bulk resize',
+                '7-day cloud work library',
                 'Dedicated support',
-                'Team collaboration',
-                'API access',
-                'Custom integrations'
+                'Team & agency workflows',
             ],
-            cta: 'Buy Credits',
+            cta: 'Subscribe to Enterprise',
             popular: false
         }
     ];

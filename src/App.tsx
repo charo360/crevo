@@ -29,6 +29,7 @@ import { YouTubeToolsView } from './components/modules/YouTubeToolsView';
 import { CreditManagement } from './components/dashboard/CreditManagement';
 import { useAuth } from './contexts/AuthContext';
 import { hasEnoughCredits, deductCredits, CREDITS_PER_GENERATION } from './services/payments/creditService';
+import { saveImageToLibrary } from './services/libraryService';
 
 declare global {
     interface AIStudio {
@@ -110,6 +111,8 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
         }
     });
 
+    const savedLibraryIdsRef = useRef<Set<string>>(new Set());
+
     useEffect(() => {
         try {
             const finishedResults = results.filter(
@@ -117,6 +120,21 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
             );
             if (finishedResults.length > 0) {
                 sessionStorage.setItem('revo3.latestResults', JSON.stringify(finishedResults));
+                if (user) {
+                    for (const item of finishedResults) {
+                        const key = item.image?.id || item.image?.url?.slice(0, 80);
+                        if (key && item.image?.url?.startsWith('data:image/') && !savedLibraryIdsRef.current.has(key)) {
+                            savedLibraryIdsRef.current.add(key);
+                            saveImageToLibrary({
+                                dataUrl: item.image.url,
+                                type: platform === 'resize' || item.resizedFrom ? 'resize' : 'thumbnail',
+                                title: item.variationName || PLATFORM_CONFIGS[platform]?.title || 'Generated Design',
+                                platform,
+                                aspectRatio: item.resizeSpec?.aspectRatio || PLATFORM_CONFIGS[platform]?.aspectRatio || '',
+                            });
+                        }
+                    }
+                }
             } else {
                 sessionStorage.removeItem('revo3.latestResults');
             }
