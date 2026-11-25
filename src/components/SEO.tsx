@@ -107,6 +107,18 @@ const ROUTE_SEO: Record<string, SEOConfig> = {
         path: '/signup',
         noIndex: true,
     },
+    '/forgot-password': {
+        title: 'Forgot Password — Crevo Studio',
+        description: 'Reset your Crevo Studio account password.',
+        path: '/forgot-password',
+        noIndex: true,
+    },
+    '/reset-password': {
+        title: 'Reset Password — Crevo Studio',
+        description: 'Set a new password for your Crevo Studio account.',
+        path: '/reset-password',
+        noIndex: true,
+    },
 };
 
 function upsertMeta(selector: string, attrs: Record<string, string>) {

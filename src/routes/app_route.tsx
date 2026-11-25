@@ -21,6 +21,12 @@ const LoginPage = lazy(() =>
 const SignupPage = lazy(() => 
   import('../pages/SignupPage').then(m => ({ default: m.SignupPage }))
 );
+const ForgotPasswordPage = lazy(() =>
+  import('../pages/ForgotPasswordPage').then(m => ({ default: m.ForgotPasswordPage }))
+);
+const ResetPasswordPage = lazy(() =>
+  import('../pages/ResetPasswordPage').then(m => ({ default: m.ResetPasswordPage }))
+);
 const FeaturesPage = lazy(() => 
   import('../pages/FeaturesPage').then(m => ({ default: m.FeaturesPage }))
 );
@@ -133,6 +139,8 @@ export const AppRoutes: FC = () => {
           />
           <Route path={AppRoutePaths.login} element={<LoginPage />} />
           <Route path={AppRoutePaths.signup} element={<SignupPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path={AppRoutePaths.features} element={<FeaturesPage />} />
           <Route path={AppRoutePaths.pricing} element={<PricingPage />} />
           <Route path={AppRoutePaths.business} element={<BusinessPage />} />

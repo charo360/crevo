@@ -282,6 +282,122 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
+async function sendPasswordResetEmail(toEmail, resetUrl) {
+    const resendKey = process.env.RESEND_API_KEY;
+    const fromEmail = process.env.EMAIL_FROM || 'Crevo AI <noreply@crevo.app>';
+
+    if (!resendKey) {
+        console.warn(`[Auth] RESEND_API_KEY not set — password reset link for ${toEmail}: ${resetUrl}`);
+        return { sent: false, reason: 'no_provider' };
+    }
+
+    const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${resendKey}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            from: fromEmail,
+            to: [toEmail],
+            subject: 'Reset your Crevo AI password',
+            html: `
+                <div style="font-family: Inter, Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; color: #111827;">
+                    <h2 style="color: #571c86; margin: 0 0 12px;">Reset your Crevo AI password</h2>
+                    <p style="font-size: 15px; line-height: 1.6; color: #374151;">
+                        We received a request to reset your password for <strong>${toEmail}</strong>. Click the button below to choose a new password. This link expires in 1 hour.
+                    </p>
+                    <p style="margin: 24px 0;">
+                        <a href="${resetUrl}" style="display: inline-block; padding: 12px 24px; background: #571c86; color: #ffffff; text-decoration: none; border-radius: 10px; font-weight: 700;">
+                            Reset Password
+                        </a>
+                    </p>
+                    <p style="font-size: 13px; color: #6b7280;">
+                        If you didn't request this, you can safely ignore this email.
+                    </p>
+                </div>
+            `,
+        }),
+    });
+
+    if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        console.error('Resend email error:', res.status, text);
+        return { sent: false, reason: 'provider_error' };
+    }
+
+    return { sent: true };
+}
+
+app.post('/api/auth/forgot-password', async (req, res) => {
+    try {
+        const email = String(req.body?.email || '').trim().toLowerCase();
+        if (!email || !email.includes('@')) {
+            return res.status(400).json({ error: 'Please enter a valid email address.' });
+        }
+
+        const canonicalEmail = normalizeCanonicalEmail(email);
+        const user = await User.findOne({ $or: [{ email }, { canonicalEmail }] });
+
+        if (user) {
+            const rawToken = crypto.randomBytes(32).toString('hex');
+            const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+            user.resetPasswordTokenHash = tokenHash;
+            user.resetPasswordExpiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+            await user.save();
+
+            const baseUrl = (process.env.FRONTEND_URL || 'https://crevo.app').replace(/\/$/, '');
+            const resetUrl = `${baseUrl}/reset-password?token=${rawToken}`;
+            await sendPasswordResetEmail(user.email, resetUrl);
+        }
+
+        return res.json({
+            ok: true,
+            message: 'If an account exists with that email, a password reset link has been sent.',
+        });
+    } catch (err) {
+        console.error('Forgot password error:', err);
+        return res.status(500).json({ error: 'Failed to process password reset request.' });
+    }
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+    try {
+        const token = String(req.body?.token || '').trim();
+        const password = String(req.body?.password || '');
+
+        if (!token || token.length < 32) {
+            return res.status(400).json({ error: 'Invalid or missing password reset token.' });
+        }
+        if (password.length < 6) {
+            return res.status(400).json({ error: 'New password must be at least 6 characters.' });
+        }
+
+        const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+        const user = await User.findOne({
+            resetPasswordTokenHash: tokenHash,
+            resetPasswordExpiresAt: { $gt: new Date() },
+        });
+
+        if (!user) {
+            return res.status(400).json({ error: 'This reset link is invalid or has expired. Please request a new one.' });
+        }
+
+        user.passwordHash = await bcrypt.hash(password, 10);
+        user.resetPasswordTokenHash = null;
+        user.resetPasswordExpiresAt = null;
+        await user.save();
+
+        return res.json({
+            ok: true,
+            message: 'Password updated successfully! You can now sign in.',
+        });
+    } catch (err) {
+        console.error('Reset password error:', err);
+        return res.status(500).json({ error: 'Failed to reset password.' });
+    }
+});
+
 app.get('/api/auth/me', requireAuth, async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
