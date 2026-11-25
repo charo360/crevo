@@ -2,6 +2,7 @@ import React, { FC, useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { apiRequest } from '../lib/api';
+import { AdminInboxPanel } from '../components/admin/AdminInboxPanel';
 
 interface AdminUserRow {
     id: string;
@@ -81,7 +82,7 @@ export const AdminPage: FC = () => {
     const [data, setData] = useState<AdminOverviewData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<'users' | 'payments' | 'trials' | 'leads'>('users');
+    const [activeTab, setActiveTab] = useState<'users' | 'payments' | 'trials' | 'leads' | 'inbox'>('users');
     const [search, setSearch] = useState('');
     const [userFilter, setUserFilter] = useState<'all' | 'paid' | 'free'>('all');
     const [grantModalUser, setGrantModalUser] = useState<AdminUserRow | null>(null);
@@ -284,6 +285,7 @@ export const AdminPage: FC = () => {
                             {[
                                 { id: 'users', label: `Users (${data.users.length})` },
                                 { id: 'payments', label: `Payments (${data.payments.length})` },
+                                { id: 'inbox', label: '📬 Inbox (sam@crevo.app)' },
                                 { id: 'trials', label: `Free Trials (${data.free_trials.length})` },
                                 { id: 'leads', label: `Newsletter (${data.subscribers.length})` },
                             ].map((t) => {
@@ -478,6 +480,9 @@ export const AdminPage: FC = () => {
                                 </table>
                             </div>
                         )}
+
+                        {/* Inbox Tab (sam@crevo.app via Mailbux JMAP) */}
+                        {activeTab === 'inbox' && <AdminInboxPanel />}
 
                         {/* Free Trials Tab */}
                         {activeTab === 'trials' && (

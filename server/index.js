@@ -42,6 +42,12 @@ import {
     sendBonusCreditsEmail,
     sendNewsletterWelcomeEmail,
 } from './emailService.js';
+import {
+    listMailMessages,
+    getMailMessage,
+    deleteMailMessage,
+    sendMailMessage,
+} from './mailbuxService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1840,6 +1846,55 @@ app.post('/api/admin/users/:userId/credits', requireAdmin, async (req, res) => {
     } catch (err) {
         console.error('Admin credit update error:', err);
         return res.status(500).json({ error: 'Failed to update user credits' });
+    }
+});
+
+// ==================== ADMIN MAILBUX INBOX (OWNER-ONLY) ====================
+
+app.get('/api/admin/mail/messages', requireAdmin, async (req, res) => {
+    try {
+        const folder = String(req.query.folder || 'inbox');
+        const limit = Number(req.query.limit || 30);
+        const result = await listMailMessages(folder, limit);
+        return res.json(result);
+    } catch (err) {
+        console.error('Admin mail list error:', err?.message || err);
+        return res.status(500).json({ error: err?.message || 'Failed to load mailbox' });
+    }
+});
+
+app.get('/api/admin/mail/messages/:id', requireAdmin, async (req, res) => {
+    try {
+        const msg = await getMailMessage(req.params.id);
+        if (!msg) return res.status(404).json({ error: 'Message not found' });
+        return res.json(msg);
+    } catch (err) {
+        console.error('Admin mail get error:', err?.message || err);
+        return res.status(500).json({ error: err?.message || 'Failed to load message' });
+    }
+});
+
+app.delete('/api/admin/mail/messages/:id', requireAdmin, async (req, res) => {
+    try {
+        await deleteMailMessage(req.params.id);
+        return res.json({ ok: true });
+    } catch (err) {
+        console.error('Admin mail delete error:', err?.message || err);
+        return res.status(500).json({ error: err?.message || 'Failed to delete message' });
+    }
+});
+
+app.post('/api/admin/mail/send', requireAdmin, async (req, res) => {
+    try {
+        const { to, subject, body, inReplyTo } = req.body || {};
+        if (!to || !subject || !body) {
+            return res.status(400).json({ error: 'Recipient, subject, and message body are required.' });
+        }
+        const result = await sendMailMessage({ to, subject, body, inReplyTo });
+        return res.json(result);
+    } catch (err) {
+        console.error('Admin mail send error:', err?.message || err);
+        return res.status(500).json({ error: err?.message || 'Failed to send email' });
     }
 });
 
