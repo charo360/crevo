@@ -1190,18 +1190,18 @@ app.post('/api/video/clip', requireAuth, async (req, res) => {
         }
 
         if (includeTransitions && duration >= 1.5) {
-            const fadeDur = 0.35;
+            // Keep instant hook at 0:00 (no black opening frame!) and apply smooth outro fade
+            const fadeDur = 0.4;
             const fadeOutStart = Math.max(0, duration - fadeDur).toFixed(3);
-            videoFilters.push(`fade=t=in:st=0:d=${fadeDur}`);
             videoFilters.push(`fade=t=out:st=${fadeOutStart}:d=${fadeDur}`);
         }
 
         const filterParts = [`[0:v]${videoFilters.join(',')}[v]`];
         let useAudioFilter = false;
         if (audioAvailable && includeTransitions && duration >= 1.5) {
-            const aFadeDur = 0.3;
+            const aFadeDur = 0.35;
             const aFadeOutStart = Math.max(0, duration - aFadeDur).toFixed(3);
-            filterParts.push(`[0:a]afade=t=in:st=0:d=${aFadeDur},afade=t=out:st=${aFadeOutStart}:d=${aFadeDur}[a]`);
+            filterParts.push(`[0:a]afade=t=out:st=${aFadeOutStart}:d=${aFadeDur}[a]`);
             useAudioFilter = true;
         }
 

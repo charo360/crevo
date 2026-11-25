@@ -385,6 +385,7 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
                                     {clip.clip_url && (
                                         <video 
                                             src={clip.clip_url} 
+                                            poster={clip.thumbnail_url || undefined}
                                             controls 
                                             preload="metadata"
                                             style={{ 
