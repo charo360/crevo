@@ -24,6 +24,7 @@ import {
     MLAnalysis,
     RepurposeJob,
     NewsletterSubscriber,
+    FreeTrialUsage,
 } from './models.js';
 import { signToken, requireAuth } from './authMiddleware.js';
 import { generateWithOpenRouter } from './openrouter.js';
@@ -44,6 +45,7 @@ const stripeSecretKey = process.env.STRIPE_SECRET_KEY || '';
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 
 const app = express();
+app.set('trust proxy', 1);
 
 app.use(
     cors({
@@ -133,6 +135,55 @@ app.get('/api/health', (_req, res) => {
     });
 });
 
+// ==================== ANTI-ABUSE HELPERS ====================
+
+const DISPOSABLE_EMAIL_DOMAINS = new Set([
+    'mailinator.com', 'guerrillamail.com', 'guerrillamailblock.com', 'sharklasers.com',
+    'tempmail.com', 'temp-mail.org', 'temp-mail.io', '10minutemail.com', '10minutemail.net',
+    'yopmail.com', 'yopmail.fr', 'trashmail.com', 'dispostable.com', 'getnada.com',
+    'mohmal.com', 'fakeinbox.com', 'throwawaymail.com', 'maildrop.cc', 'mintemail.com',
+    'emailondeck.com', 'burnermail.io', 'grr.la', 'mailnesia.com', 'spamgourmet.com',
+]);
+
+function getClientIp(req) {
+    const xff = req.headers['x-forwarded-for'];
+    if (typeof xff === 'string' && xff.trim()) {
+        return xff.split(',')[0].trim();
+    }
+    const xReal = req.headers['x-real-ip'];
+    if (typeof xReal === 'string' && xReal.trim()) {
+        return xReal.trim();
+    }
+    return req.ip || req.socket?.remoteAddress || 'unknown';
+}
+
+function getClientFingerprint(req) {
+    const fp = req.headers['x-client-fp'];
+    if (typeof fp !== 'string') return '';
+    return fp.trim().slice(0, 64).replace(/[^a-zA-Z0-9_-]/g, '');
+}
+
+function normalizeCanonicalEmail(email) {
+    const lower = String(email || '').trim().toLowerCase();
+    const parts = lower.split('@');
+    if (parts.length !== 2) return lower;
+    let [local, domain] = parts;
+    if (domain === 'googlemail.com') domain = 'gmail.com';
+    // Strip +alias tags (e.g. user+1@gmail.com -> user@gmail.com)
+    const plusIdx = local.indexOf('+');
+    if (plusIdx !== -1) local = local.slice(0, plusIdx);
+    // Gmail ignores dots in the local part
+    if (domain === 'gmail.com') {
+        local = local.replace(/\./g, '');
+    }
+    return `${local}@${domain}`;
+}
+
+function isDisposableEmail(email) {
+    const domain = String(email || '').trim().toLowerCase().split('@')[1] || '';
+    return DISPOSABLE_EMAIL_DOMAINS.has(domain);
+}
+
 // ==================== AUTH ROUTES ====================
 
 app.post('/api/auth/signup', async (req, res) => {
@@ -147,14 +198,37 @@ app.post('/api/auth/signup', async (req, res) => {
         }
 
         const normalizedEmail = email.trim().toLowerCase();
-        const existing = await User.findOne({ email: normalizedEmail });
+        if (isDisposableEmail(normalizedEmail)) {
+            return res.status(400).json({ error: 'Disposable or temporary email addresses are not allowed. Please use a permanent email.' });
+        }
+
+        const canonicalEmail = normalizeCanonicalEmail(normalizedEmail);
+        const existing = await User.findOne({
+            $or: [{ email: normalizedEmail }, { canonicalEmail }],
+        });
         if (existing) {
-            return res.status(409).json({ error: 'An account with this email already exists.' });
+            return res.status(409).json({ error: 'An account with this email already exists. Please sign in instead.' });
+        }
+
+        const signupIp = getClientIp(req);
+        if (signupIp && signupIp !== 'unknown') {
+            const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+            const recentIpSignups = await User.countDocuments({
+                signupIp,
+                created_at: { $gte: thirtyDaysAgo },
+            });
+            if (recentIpSignups >= 2) {
+                return res.status(429).json({
+                    error: 'Account creation limit reached for this network. Please sign in to your existing account.',
+                });
+            }
         }
 
         const passwordHash = await bcrypt.hash(password, 10);
         const user = await User.create({
             email: normalizedEmail,
+            canonicalEmail,
+            signupIp,
             passwordHash,
         });
 
@@ -1270,6 +1344,115 @@ app.delete('/api/video/upload/:uploadId', requireAuth, (req, res) => {
         }
     }
     return res.json({ ok: true });
+});
+
+// ==================== PUBLIC FREE TRIAL AI RESIZE (IP + FINGERPRINT GUARDED) ====================
+
+const PUBLIC_FREE_AI_RESIZE_LIMIT = 2;
+
+async function countFreeTrialUses(tool, ip, fingerprint) {
+    const orClauses = [{ ip }];
+    if (fingerprint) {
+        orClauses.push({ fingerprint });
+    }
+    return FreeTrialUsage.countDocuments({ tool, $or: orClauses });
+}
+
+app.get('/api/public/trial-status', async (req, res) => {
+    try {
+        const tool = String(req.query.tool || 'ai_resize');
+        const ip = getClientIp(req);
+        const fingerprint = getClientFingerprint(req);
+        const used = await countFreeTrialUses(tool, ip, fingerprint);
+        const limit = PUBLIC_FREE_AI_RESIZE_LIMIT;
+        return res.json({
+            tool,
+            used,
+            limit,
+            remaining: Math.max(0, limit - used),
+        });
+    } catch (err) {
+        console.error('Trial status error:', err);
+        return res.json({ tool: 'ai_resize', used: 0, limit: PUBLIC_FREE_AI_RESIZE_LIMIT, remaining: PUBLIC_FREE_AI_RESIZE_LIMIT });
+    }
+});
+
+app.post('/api/public/ai-resize', async (req, res) => {
+    try {
+        const ip = getClientIp(req);
+        const fingerprint = getClientFingerprint(req);
+        const used = await countFreeTrialUses('ai_resize', ip, fingerprint);
+
+        if (used >= PUBLIC_FREE_AI_RESIZE_LIMIT) {
+            return res.status(429).json({
+                error: 'You have used your 2 free AI Smart Resizes. Create a free Crevo account to continue!',
+                code: 'FREE_TRIAL_LIMIT_REACHED',
+                used,
+                limit: PUBLIC_FREE_AI_RESIZE_LIMIT,
+                remaining: 0,
+            });
+        }
+
+        const { imageBase64, mimeType = 'image/jpeg', aspectRatio = '16:9', targetLabel = 'YouTube Thumbnail (16:9)' } = req.body || {};
+        if (!imageBase64 || typeof imageBase64 !== 'string') {
+            return res.status(400).json({ error: 'Please upload an image to resize.' });
+        }
+
+        const validRatios = new Set(['16:9', '9:16', '1:1', '4:5', '1.91:1', '4:3', '3:4']);
+        const safeRatio = validRatios.has(aspectRatio) ? aspectRatio : '16:9';
+        const openrouterRatio = safeRatio === '1.91:1' ? '16:9' : safeRatio;
+
+        const prompt = `Recompose and smart-resize this exact image to fit a ${safeRatio} (${targetLabel}) frame.
+STRICT RULES:
+1. Keep the EXACT same main subject, faces, products, colors, lighting, and any existing text sharp, uncropped, and centered cleanly in the new ${safeRatio} composition.
+2. Intelligently extend/outpaint the background naturally to fill the new ${safeRatio} aspect ratio — NEVER stretch or distort the subject, and NEVER add black bars or borders.
+3. Do NOT add any new watermarks, aspect ratio labels, or extra text that was not in the original image.
+4. Output a crisp, studio-quality ${safeRatio} image ready for publishing.`;
+
+        const contents = {
+            parts: [
+                { inlineData: { data: imageBase64, mimeType } },
+                { text: prompt },
+            ],
+        };
+
+        let result = null;
+        const models = ['google/gemini-nano-banana-2.1', 'google/gemini-3.1-flash-image'];
+        let lastErr = null;
+        for (const model of models) {
+            try {
+                result = await generateWithOpenRouter({
+                    model,
+                    contents,
+                    config: {
+                        responseModalities: ['IMAGE', 'TEXT'],
+                        imageConfig: { aspectRatio: openrouterRatio },
+                    },
+                });
+                const imgPart = result?.candidates?.[0]?.content?.parts?.find((p) => p?.inlineData?.data);
+                if (imgPart?.inlineData?.data) {
+                    await FreeTrialUsage.create({ tool: 'ai_resize', ip, fingerprint });
+                    const newUsed = used + 1;
+                    return res.json({
+                        imageDataUrl: `data:${imgPart.inlineData.mimeType || 'image/png'};base64,${imgPart.inlineData.data}`,
+                        used: newUsed,
+                        limit: PUBLIC_FREE_AI_RESIZE_LIMIT,
+                        remaining: Math.max(0, PUBLIC_FREE_AI_RESIZE_LIMIT - newUsed),
+                    });
+                }
+            } catch (err) {
+                lastErr = err;
+                console.warn(`Public AI resize failed on ${model}:`, err?.message || err);
+            }
+        }
+
+        return res.status(502).json({
+            error: lastErr?.message || 'AI Smart Resize failed. Please try again.',
+        });
+    } catch (err) {
+        console.error('Public AI resize error:', err);
+        return res.status(500).json({ error: 'Failed to process AI Smart Resize.' });
+    }
 });
 
 // ==================== PRODUCTION STATIC FRONTEND ====================

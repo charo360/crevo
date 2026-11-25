@@ -10,6 +10,16 @@ const userSchema = new mongoose.Schema(
             trim: true,
             index: true,
         },
+        canonicalEmail: {
+            type: String,
+            lowercase: true,
+            trim: true,
+            index: true,
+        },
+        signupIp: {
+            type: String,
+            index: true,
+        },
         passwordHash: {
             type: String,
             required: true,
@@ -188,6 +198,19 @@ const newsletterSubscriberSchema = new mongoose.Schema(
     }
 );
 
+const freeTrialUsageSchema = new mongoose.Schema(
+    {
+        tool: { type: String, required: true, index: true },
+        ip: { type: String, required: true, index: true },
+        fingerprint: { type: String, default: '', index: true },
+    },
+    {
+        timestamps: { createdAt: 'created_at', updatedAt: false },
+    }
+);
+freeTrialUsageSchema.index({ tool: 1, ip: 1 });
+freeTrialUsageSchema.index({ tool: 1, fingerprint: 1 });
+
 export const User = mongoose.models.User || mongoose.model('User', userSchema);
 export const UserCredits = mongoose.models.UserCredits || mongoose.model('UserCredits', userCreditsSchema);
 export const CreditTransaction =
@@ -202,3 +225,5 @@ export const MLAnalysis = mongoose.models.MLAnalysis || mongoose.model('MLAnalys
 export const RepurposeJob = mongoose.models.RepurposeJob || mongoose.model('RepurposeJob', repurposeJobSchema);
 export const NewsletterSubscriber =
     mongoose.models.NewsletterSubscriber || mongoose.model('NewsletterSubscriber', newsletterSubscriberSchema);
+export const FreeTrialUsage =
+    mongoose.models.FreeTrialUsage || mongoose.model('FreeTrialUsage', freeTrialUsageSchema);

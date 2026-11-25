@@ -23,18 +23,84 @@ const PRESETS: SizePreset[] = [
     { id: 'podcast', label: 'Podcast Cover Art', platform: 'Spotify / Apple', width: 1400, height: 1400, ratio: '1:1' },
 ];
 
-const FREE_LIMIT = 1;
-const STORAGE_KEY = 'crevo.free.resize_uses';
+function computeBrowserFingerprint(): string {
+    try {
+        const raw = [
+            navigator.userAgent,
+            navigator.language,
+            Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+            `${window.screen.width}x${window.screen.height}x${window.screen.colorDepth}`,
+            String(navigator.hardwareConcurrency || ''),
+            String(navigator.maxTouchPoints || ''),
+        ].join('|');
+        let hash = 2166136261;
+        for (let i = 0; i < raw.length; i++) {
+            hash ^= raw.charCodeAt(i);
+            hash = Math.imul(hash, 16777619);
+        }
+        return `fp_${(hash >>> 0).toString(36)}`;
+    } catch {
+        return '';
+    }
+}
+
+function fileToCompressedBase64(file: File): Promise<{ base64: string; mimeType: string }> {
+    return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+            const maxDim = 1536;
+            const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(img.width * scale));
+            canvas.height = Math.max(1, Math.round(img.height * scale));
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                reject(new Error('Canvas unavailable'));
+                return;
+            }
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+            const base64 = dataUrl.split(',')[1] || '';
+            resolve({ base64, mimeType: 'image/jpeg' });
+        };
+        img.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error('Could not read image file'));
+        };
+        img.src = url;
+    });
+}
 
 export const ImageResizerToolPage: FC = () => {
     const { user } = useAuth();
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const [sourceUrl, setSourceUrl] = useState<string>('');
+    const [fingerprint] = useState<string>(() => computeBrowserFingerprint());
+
+    const [sourceFile, setSourceFile] = useState<File | null>(null);
+    const [sourcePreviewUrl, setSourcePreviewUrl] = useState<string>('');
     const [sourceName, setSourceName] = useState<string>('image');
     const [selectedPreset, setSelectedPreset] = useState<SizePreset>(PRESETS[0]);
-    const [fitMode, setFitMode] = useState<'cover' | 'contain'>('cover');
-    const [previewDataUrl, setPreviewDataUrl] = useState<string>('');
+
+    const [isResizing, setIsResizing] = useState(false);
+    const [aiResultUrl, setAiResultUrl] = useState<string>('');
+    const [remainingFree, setRemainingFree] = useState<number>(2);
+    const [freeLimit, setFreeLimit] = useState<number>(2);
     const [gateReason, setGateReason] = useState<string | null>(null);
+
+    // Fetch real server-side remaining free tries (IP + Fingerprint enforced)
+    useEffect(() => {
+        fetch('/api/public/trial-status?tool=ai_resize', {
+            headers: fingerprint ? { 'X-Client-FP': fingerprint } : undefined,
+        })
+            .then((r) => r.json())
+            .then((data) => {
+                if (typeof data?.remaining === 'number') setRemainingFree(data.remaining);
+                if (typeof data?.limit === 'number') setFreeLimit(data.limit);
+            })
+            .catch(() => {});
+    }, [fingerprint]);
 
     // Inject WebApplication + FAQPage JSON-LD for Google & AI Search Engines
     useEffect(() => {
@@ -46,39 +112,39 @@ export const ImageResizerToolPage: FC = () => {
             '@graph': [
                 {
                     '@type': 'WebApplication',
-                    name: 'Crevo AI Free Social Media Image Resizer',
+                    name: 'Crevo AI Smart Image Resizer',
                     url: 'https://crevo.app/tools/image-resizer',
                     applicationCategory: 'DesignApplication',
                     operatingSystem: 'Web',
                     offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
                     description:
-                        'Resize images instantly for YouTube thumbnails (1280x720), TikTok & Shorts (1080x1920), Instagram (1080x1080, 1080x1350), Twitter/X, and Podcast covers.',
+                        'AI Smart Image Resizer that recomposes and extends backgrounds to fit YouTube (16:9), Shorts/TikTok/Reels (9:16), Instagram (1:1 & 4:5), X/Twitter, and Podcast covers without cropping subjects.',
                 },
                 {
                     '@type': 'FAQPage',
                     mainEntity: [
                         {
                             '@type': 'Question',
-                            name: 'What is the best size for a YouTube thumbnail?',
+                            name: 'How does Crevo AI Smart Resize work?',
                             acceptedAnswer: {
                                 '@type': 'Answer',
-                                text: 'The recommended YouTube thumbnail size is 1280x720 pixels (16:9 aspect ratio) in JPG or PNG format under 2MB.',
+                                text: 'Unlike standard crop tools that cut off faces or text, Crevo AI Smart Resize intelligently recomposes your image and extends the background naturally to fit 16:9, 9:16, 1:1, or 4:5 frames.',
                             },
                         },
                         {
                             '@type': 'Question',
-                            name: 'What size should I use for TikTok, YouTube Shorts, and Instagram Reels covers?',
+                            name: 'Can I test Crevo AI Image Resizer for free?',
                             acceptedAnswer: {
                                 '@type': 'Answer',
-                                text: 'Use 1080x1920 pixels (9:16 vertical aspect ratio) for crisp full-screen TikTok, YouTube Shorts, and Instagram Reels covers.',
+                                text: 'Yes. Every visitor can test 2 free AI Smart Resizes directly at crevo.app/tools/image-resizer with no signup required, then create an account for full studio access.',
                             },
                         },
                         {
                             '@type': 'Question',
-                            name: 'Can Crevo resize images without cropping out important parts?',
+                            name: 'What is the best size for YouTube thumbnails and TikTok/Shorts covers?',
                             acceptedAnswer: {
                                 '@type': 'Answer',
-                                text: 'Yes. Use Contain mode in the free resizer or sign in free to Crevo Studio to use AI Smart Resize, which intelligently extends backgrounds to fit any aspect ratio.',
+                                text: 'Use 1280x720 (16:9) for YouTube thumbnails and 1080x1920 (9:16) for TikTok, YouTube Shorts, and Instagram Reels covers.',
                             },
                         },
                     ],
@@ -91,78 +157,77 @@ export const ImageResizerToolPage: FC = () => {
         };
     }, []);
 
-    // Render live resized preview on an offscreen canvas whenever image/preset/fit changes
-    useEffect(() => {
-        if (!sourceUrl) {
-            setPreviewDataUrl('');
-            return;
-        }
-        const img = new Image();
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = selectedPreset.width;
-            canvas.height = selectedPreset.height;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) return;
-
-            ctx.fillStyle = '#0f0f17';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            const scale =
-                fitMode === 'cover'
-                    ? Math.max(canvas.width / img.width, canvas.height / img.height)
-                    : Math.min(canvas.width / img.width, canvas.height / img.height);
-            const drawW = img.width * scale;
-            const drawH = img.height * scale;
-            const dx = (canvas.width - drawW) / 2;
-            const dy = (canvas.height - drawH) / 2;
-
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
-            ctx.drawImage(img, dx, dy, drawW, drawH);
-
-            setPreviewDataUrl(canvas.toDataURL('image/png'));
-        };
-        img.src = sourceUrl;
-    }, [sourceUrl, selectedPreset, fitMode]);
-
     const handleFile = (file?: File) => {
         if (!file) return;
         if (!file.type.startsWith('image/')) {
             toast.error('Please upload a PNG, JPG, or WebP image.');
             return;
         }
-        if (sourceUrl) URL.revokeObjectURL(sourceUrl);
-        setSourceUrl(URL.createObjectURL(file));
+        if (sourcePreviewUrl) URL.revokeObjectURL(sourcePreviewUrl);
+        setSourceFile(file);
+        setSourcePreviewUrl(URL.createObjectURL(file));
         setSourceName(file.name.replace(/\.[^.]+$/, ''));
+        setAiResultUrl('');
     };
 
-    const getFreeUses = () => {
-        try {
-            return Number(localStorage.getItem(STORAGE_KEY) || '0');
-        } catch {
-            return 0;
-        }
-    };
-
-    const handleDownload = () => {
-        if (!previewDataUrl) return;
-        if (!user && getFreeUses() >= FREE_LIMIT) {
-            setGateReason('You used your free trial resize. Create a free Crevo AI account for unlimited resizing, batch exports, and AI Smart Expand!');
+    const handleAiSmartResize = async () => {
+        if (!sourceFile) {
+            toast.error('Please upload an image first.');
             return;
         }
-        if (!user) {
-            try {
-                localStorage.setItem(STORAGE_KEY, String(getFreeUses() + 1));
-            } catch {
-                // ignore
-            }
+
+        if (remainingFree <= 0) {
+            setGateReason('You have used your 2 free AI Smart Resizes on this device/network. Sign in or create a Crevo account to keep resizing in Crevo Studio!');
+            return;
         }
+
+        setIsResizing(true);
+        setAiResultUrl('');
+        try {
+            const { base64, mimeType } = await fileToCompressedBase64(sourceFile);
+            const res = await fetch('/api/public/ai-resize', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(fingerprint ? { 'X-Client-FP': fingerprint } : {}),
+                },
+                body: JSON.stringify({
+                    imageBase64: base64,
+                    mimeType,
+                    aspectRatio: selectedPreset.ratio,
+                    targetLabel: `${selectedPreset.label} (${selectedPreset.width}x${selectedPreset.height})`,
+                }),
+            });
+
+            const data = await res.json();
+            if (res.status === 429 || data?.code === 'FREE_TRIAL_LIMIT_REACHED') {
+                setRemainingFree(0);
+                setGateReason(
+                    data?.error ||
+                        'You have used your 2 free AI Smart Resizes. Sign in or create a Crevo account to continue!'
+                );
+                return;
+            }
+            if (!res.ok) {
+                throw new Error(data?.error || 'AI Smart Resize failed');
+            }
+
+            setAiResultUrl(data.imageDataUrl);
+            if (typeof data.remaining === 'number') setRemainingFree(data.remaining);
+            toast.success(`AI Smart Resized to ${selectedPreset.label} (${selectedPreset.ratio})!`);
+        } catch (err: any) {
+            toast.error(err?.message || 'Could not resize image. Please try again.');
+        } finally {
+            setIsResizing(false);
+        }
+    };
+
+    const handleDownloadResult = () => {
+        if (!aiResultUrl) return;
         const link = document.createElement('a');
-        link.href = previewDataUrl;
-        link.download = `${sourceName}-${selectedPreset.width}x${selectedPreset.height}.png`;
+        link.href = aiResultUrl;
+        link.download = `crevo-ai-${sourceName}-${selectedPreset.ratio.replace(':', 'x')}.png`;
         link.click();
-        toast.success(`Downloaded ${selectedPreset.width}×${selectedPreset.height} PNG!`);
     };
 
     return (
@@ -175,8 +240,8 @@ export const ImageResizerToolPage: FC = () => {
                             display: 'inline-block',
                             padding: '6px 14px',
                             borderRadius: '999px',
-                            background: '#f3e8ff',
-                            color: '#571c86',
+                            background: remainingFree > 0 ? '#f3e8ff' : '#fee2e2',
+                            color: remainingFree > 0 ? '#571c86' : '#b91c1c',
                             fontWeight: 700,
                             fontSize: '12px',
                             letterSpacing: '0.04em',
@@ -184,17 +249,19 @@ export const ImageResizerToolPage: FC = () => {
                             marginBottom: '12px',
                         }}
                     >
-                        Free Creator Tool — Instant Browser Resize
+                        {remainingFree > 0
+                            ? `${remainingFree} of ${freeLimit} Free AI Smart Resizes Left — No Login Needed`
+                            : 'Free Trial Complete — Sign In for Crevo Studio'}
                     </span>
                     <h1 style={{ fontSize: 'clamp(2rem, 4vw, 2.8rem)', fontWeight: 800, color: '#111827', margin: '0 0 12px', lineHeight: 1.15 }}>
-                        Free Image Resizer for YouTube, TikTok &amp; Instagram
+                        AI Smart Image Resizer for YouTube, TikTok &amp; Instagram
                     </h1>
-                    <p style={{ fontSize: '1.05rem', color: '#4b5563', maxWidth: '680px', margin: '0 auto' }}>
-                        Resize any image to exact creator dimensions in seconds — 1280×720 YouTube thumbnails, 1080×1920 Shorts &amp; Reels, Instagram 1:1 &amp; 4:5, and more.
+                    <p style={{ fontSize: '1.05rem', color: '#4b5563', maxWidth: '700px', margin: '0 auto' }}>
+                        Resize any thumbnail or photo to 16:9, 9:16, 1:1, or 4:5 — Crevo AI automatically recomposes and extends the background so nothing gets awkwardly cropped.
                     </p>
                 </div>
 
-                {/* Live Resizer Card */}
+                {/* Live AI Smart Resizer Card */}
                 <div
                     style={{
                         background: '#ffffff',
@@ -205,7 +272,7 @@ export const ImageResizerToolPage: FC = () => {
                         marginBottom: '3rem',
                     }}
                 >
-                    {!sourceUrl ? (
+                    {!sourcePreviewUrl ? (
                         <div
                             onClick={() => fileInputRef.current?.click()}
                             onDragOver={(e) => e.preventDefault()}
@@ -222,20 +289,40 @@ export const ImageResizerToolPage: FC = () => {
                                 cursor: 'pointer',
                             }}
                         >
-                            <div style={{ fontSize: '36px', marginBottom: '10px' }}>🖼️</div>
+                            <div style={{ fontSize: '38px', marginBottom: '10px' }}>✨</div>
                             <p style={{ fontSize: '16px', fontWeight: 700, color: '#111827', margin: '0 0 6px' }}>
                                 Click to upload or drag &amp; drop an image
                             </p>
                             <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>
-                                PNG, JPG, or WebP — resized instantly right in your browser
+                                PNG, JPG, or WebP — try {freeLimit} real AI Smart Resizes free before signing up
                             </p>
                         </div>
                     ) : (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))', gap: '24px', alignItems: 'start' }}>
-                            {/* Left: Preset Picker */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px', alignItems: 'start' }}>
+                            {/* Left: Controls */}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: '#faf8ff', borderRadius: '12px', border: '1px solid #e9e0f7' }}>
+                                    <img
+                                        src={sourcePreviewUrl}
+                                        alt="Uploaded source"
+                                        style={{ width: '64px', height: '64px', objectFit: 'cover', borderRadius: '8px', background: '#111' }}
+                                    />
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {sourceFile?.name}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => fileInputRef.current?.click()}
+                                            style={{ marginTop: '4px', background: 'none', border: 'none', padding: 0, color: '#571c86', fontWeight: 600, fontSize: '12px', cursor: 'pointer' }}
+                                        >
+                                            Change Image
+                                        </button>
+                                    </div>
+                                </div>
+
                                 <div>
-                                    <h2 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 10px', color: '#111827' }}>1. Choose Platform Size</h2>
+                                    <h2 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 10px', color: '#111827' }}>Choose Target Platform Size</h2>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                                         {PRESETS.map((p) => {
                                             const active = p.id === selectedPreset.id;
@@ -263,121 +350,106 @@ export const ImageResizerToolPage: FC = () => {
                                     </div>
                                 </div>
 
-                                <div>
-                                    <h2 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 8px', color: '#111827' }}>2. Fit Mode</h2>
-                                    <div style={{ display: 'flex', gap: '8px' }}>
-                                        <button
-                                            type="button"
-                                            onClick={() => setFitMode('cover')}
-                                            style={{
-                                                flex: 1,
-                                                padding: '9px 12px',
-                                                borderRadius: '10px',
-                                                border: fitMode === 'cover' ? '2px solid #571c86' : '1px solid #e5e7eb',
-                                                background: fitMode === 'cover' ? '#f5eeff' : '#ffffff',
-                                                fontWeight: 600,
-                                                fontSize: '13px',
-                                                cursor: 'pointer',
-                                            }}
-                                        >
-                                            Fill &amp; Center Crop
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setFitMode('contain')}
-                                            style={{
-                                                flex: 1,
-                                                padding: '9px 12px',
-                                                borderRadius: '10px',
-                                                border: fitMode === 'contain' ? '2px solid #571c86' : '1px solid #e5e7eb',
-                                                background: fitMode === 'contain' ? '#f5eeff' : '#ffffff',
-                                                fontWeight: 600,
-                                                fontSize: '13px',
-                                                cursor: 'pointer',
-                                            }}
-                                        >
-                                            Fit Whole Image
-                                        </button>
-                                    </div>
-                                </div>
-
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                     <button
                                         type="button"
-                                        onClick={handleDownload}
+                                        disabled={isResizing}
+                                        onClick={handleAiSmartResize}
                                         style={{
-                                            padding: '13px 18px',
+                                            padding: '14px 18px',
                                             borderRadius: '12px',
                                             border: 'none',
-                                            background: 'linear-gradient(135deg, #571c86, #7e22ce)',
+                                            background: remainingFree > 0 ? 'linear-gradient(135deg, #571c86, #7e22ce)' : '#374151',
                                             color: '#ffffff',
                                             fontWeight: 700,
                                             fontSize: '15px',
-                                            cursor: 'pointer',
+                                            cursor: isResizing ? 'wait' : 'pointer',
                                         }}
                                     >
-                                        Download {selectedPreset.width}×{selectedPreset.height} PNG
+                                        {isResizing
+                                            ? `AI Smart Resizing to ${selectedPreset.ratio}...`
+                                            : remainingFree > 0
+                                              ? `AI Smart Resize to ${selectedPreset.ratio} (${remainingFree} Free Left)`
+                                              : 'Free Limit Reached — Sign In to Continue'}
                                     </button>
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            user
-                                                ? (window.location.href = '/dashboard/resize')
-                                                : setGateReason('Sign up free to use AI Smart Resize — intelligently expands your background to any ratio without cropping!')
-                                        }
-                                        style={{
-                                            padding: '11px 18px',
-                                            borderRadius: '12px',
-                                            border: '1px solid #d8ccf0',
-                                            background: '#faf8ff',
-                                            color: '#571c86',
-                                            fontWeight: 700,
-                                            fontSize: '14px',
-                                            cursor: 'pointer',
-                                        }}
-                                    >
-                                        AI Smart Expand (No Cropping) ✨
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => fileInputRef.current?.click()}
-                                        style={{
-                                            padding: '9px 14px',
-                                            borderRadius: '10px',
-                                            border: '1px solid #e5e7eb',
-                                            background: '#ffffff',
-                                            color: '#4b5563',
-                                            fontWeight: 600,
-                                            fontSize: '13px',
-                                            cursor: 'pointer',
-                                        }}
-                                    >
-                                        Upload Different Image
-                                    </button>
+                                    {user && (
+                                        <Link
+                                            to="/dashboard/resize"
+                                            style={{
+                                                textAlign: 'center',
+                                                padding: '11px 16px',
+                                                borderRadius: '12px',
+                                                border: '1px solid #d8ccf0',
+                                                background: '#faf8ff',
+                                                color: '#571c86',
+                                                fontWeight: 700,
+                                                fontSize: '13px',
+                                                textDecoration: 'none',
+                                            }}
+                                        >
+                                            Open Full Smart Resize in Crevo Studio →
+                                        </Link>
+                                    )}
                                 </div>
                             </div>
 
-                            {/* Right: Live Preview */}
+                            {/* Right: Result Preview */}
                             <div
                                 style={{
                                     background: '#0f0f17',
                                     borderRadius: '14px',
                                     padding: '16px',
+                                    minHeight: '300px',
                                     display: 'flex',
                                     flexDirection: 'column',
                                     alignItems: 'center',
-                                    gap: '10px',
+                                    justifyContent: 'center',
+                                    gap: '12px',
                                 }}
                             >
-                                <span style={{ color: '#e5e7eb', fontSize: '12px', fontWeight: 600 }}>
-                                    Live Preview — {selectedPreset.label} ({selectedPreset.width}×{selectedPreset.height})
-                                </span>
-                                {previewDataUrl && (
-                                    <img
-                                        src={previewDataUrl}
-                                        alt="Resized preview"
-                                        style={{ maxWidth: '100%', maxHeight: '380px', borderRadius: '8px', display: 'block' }}
-                                    />
+                                {isResizing ? (
+                                    <div style={{ textAlign: 'center', color: '#e9d5ff' }}>
+                                        <div className="spinner" style={{ width: '36px', height: '36px', margin: '0 auto 12px', borderColor: 'rgba(255,255,255,0.2)', borderTopColor: '#a855f7' }} />
+                                        <div style={{ fontWeight: 700, fontSize: '15px' }}>AI is recomposing your image...</div>
+                                        <div style={{ fontSize: '12px', opacity: 0.8, marginTop: '4px' }}>
+                                            Extending background naturally to {selectedPreset.label} ({selectedPreset.ratio})
+                                        </div>
+                                    </div>
+                                ) : aiResultUrl ? (
+                                    <>
+                                        <span style={{ color: '#e5e7eb', fontSize: '12px', fontWeight: 600 }}>
+                                            AI Smart Resized — {selectedPreset.label} ({selectedPreset.ratio})
+                                        </span>
+                                        <img
+                                            src={aiResultUrl}
+                                            alt="AI Smart Resized result"
+                                            style={{ maxWidth: '100%', maxHeight: '380px', borderRadius: '8px', display: 'block' }}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={handleDownloadResult}
+                                            style={{
+                                                padding: '10px 20px',
+                                                borderRadius: '10px',
+                                                border: 'none',
+                                                background: '#ffffff',
+                                                color: '#4c1d95',
+                                                fontWeight: 700,
+                                                fontSize: '14px',
+                                                cursor: 'pointer',
+                                            }}
+                                        >
+                                            Download HD PNG
+                                        </button>
+                                    </>
+                                ) : (
+                                    <div style={{ textAlign: 'center', color: '#9ca3af', padding: '16px' }}>
+                                        <div style={{ fontSize: '28px', marginBottom: '8px' }}>🪄</div>
+                                        <div style={{ fontSize: '14px', fontWeight: 600, color: '#e5e7eb' }}>Ready for AI Smart Resize</div>
+                                        <div style={{ fontSize: '12px', marginTop: '4px' }}>
+                                            Pick a platform size on the left and click <strong>AI Smart Resize</strong> to see your full-frame result.
+                                        </div>
+                                    </div>
                                 )}
                             </div>
                         </div>
@@ -448,8 +520,8 @@ export const ImageResizerToolPage: FC = () => {
                             boxShadow: '0 20px 60px rgba(0, 0, 0, 0.25)',
                         }}
                     >
-                        <div style={{ fontSize: '32px', marginBottom: '10px' }}>✨</div>
-                        <h3 style={{ fontSize: '22px', fontWeight: 800, margin: '0 0 10px', color: '#111827' }}>Unlock Unlimited Crevo AI</h3>
+                        <div style={{ fontSize: '32px', marginBottom: '10px' }}>🔒</div>
+                        <h3 style={{ fontSize: '22px', fontWeight: 800, margin: '0 0 10px', color: '#111827' }}>Free Trial Complete</h3>
                         <p style={{ fontSize: '14px', color: '#4b5563', margin: '0 0 22px', lineHeight: 1.5 }}>{gateReason}</p>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                             <Link
@@ -463,7 +535,7 @@ export const ImageResizerToolPage: FC = () => {
                                     textDecoration: 'none',
                                 }}
                             >
-                                Create Free Account →
+                                Create Crevo Account →
                             </Link>
                             <Link
                                 to="/login"
