@@ -50,6 +50,51 @@ export async function clearCachedVideoInput(): Promise<void> {
     cachedInputFile = null;
 }
 
+function uploadVideoWithProgress(
+    videoFile: File | Blob,
+    token: string,
+    onUploadProgress?: (percent: number) => void
+): Promise<{ uploadId: string; size: number }> {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `${API_BASE}/api/video/upload`, true);
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+
+        xhr.upload.onprogress = (event) => {
+            if (event.lengthComputable && event.total > 0) {
+                const pct = Math.min(100, Math.round((event.loaded / event.total) * 100));
+                onUploadProgress?.(pct);
+            }
+        };
+
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                    const parsed = JSON.parse(xhr.responseText);
+                    onUploadProgress?.(100);
+                    resolve(parsed);
+                } catch {
+                    reject(new Error('Invalid upload response from server'));
+                }
+            } else {
+                let errMsg = `Video upload failed (${xhr.status})`;
+                try {
+                    const parsed = JSON.parse(xhr.responseText);
+                    if (parsed?.error) errMsg = parsed.error;
+                } catch {
+                    // ignore
+                }
+                reject(new Error(errMsg));
+            }
+        };
+
+        xhr.onerror = () => reject(new Error('Network error while uploading video'));
+        xhr.ontimeout = () => reject(new Error('Video upload timed out'));
+        xhr.send(videoFile);
+    });
+}
+
 async function processVideoClipOnServer(
     videoFile: File | Blob,
     startTime: number,
@@ -60,6 +105,7 @@ async function processVideoClipOnServer(
         includeAudio?: boolean;
         includeTransitions?: boolean;
         includeCaptions?: boolean;
+        onUploadProgress?: (percent: number) => void;
     }
 ): Promise<{ blob: Blob; metadata: ClipMetadata } | null> {
     if (!serverFFmpegAvailable) return null;
@@ -67,19 +113,7 @@ async function processVideoClipOnServer(
     if (!token) return null;
 
     if (serverUploadedFile !== videoFile || !serverUploadId) {
-        const uploadRes = await fetch(`${API_BASE}/api/video/upload`, {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/octet-stream',
-            },
-            body: videoFile,
-        });
-        if (!uploadRes.ok) {
-            const errData = await uploadRes.json().catch(() => ({}));
-            throw new Error(errData?.error || `Video upload failed (${uploadRes.status})`);
-        }
-        const uploaded = await uploadRes.json();
+        const uploaded = await uploadVideoWithProgress(videoFile, token, options.onUploadProgress);
         serverUploadId = uploaded.uploadId;
         serverUploadedFile = videoFile;
     }
@@ -182,6 +216,7 @@ export async function processVideoClip(
         includeAudio?: boolean;
         includeTransitions?: boolean;
         includeCaptions?: boolean;
+        onUploadProgress?: (percent: number) => void;
     } = {}
 ): Promise<{ blob: Blob; metadata: ClipMetadata }> {
     // 1. Prefer fast native server-side FFmpeg (works on HTTP & HTTPS, handles large videos cleanly)

@@ -48,18 +48,19 @@ export async function repurposeVideo(
     options: Partial<ClipGenerationOptions> = {},
     originalTitle?: string,
     transcript?: string | null,
-    onProgress?: (current: number, total: number) => void
+    onProgress?: (current: number, total: number, statusText?: string) => void
 ): Promise<RepurposeResult> {
     const jobStartTime = Date.now();
     const finalOptions = { ...DEFAULT_OPTIONS, ...options };
     
     try {
         // Step 1: Get video metadata
+        onProgress?.(5, 100, 'Reading video metadata...');
         toast.info('Analyzing video...');
         const metadata = await getVideoMetadata(videoFile);
         
         // Step 2: Extract 8-14 evenly spaced frames for fast single-pass AI analysis
-        onProgress?.(1, 6);
+        onProgress?.(12, 100, 'Extracting preview frames...');
         const targetFrames = Math.min(14, Math.max(6, Math.ceil(metadata.duration / 10)));
         const frames = await extractFramesFromVideo(
             videoUrl,
@@ -67,7 +68,7 @@ export async function repurposeVideo(
             metadata.duration,
             targetFrames
         );
-        onProgress?.(2, 6);
+        onProgress?.(20, 100, 'AI detecting top viral moments...');
         
         // Step 3: Fetch transcript if not provided and URL is YouTube
         let videoTranscript = transcript;
@@ -102,7 +103,7 @@ export async function repurposeVideo(
         };
         
         // Step 5: Run ML analysis to find viral moments
-        onProgress?.(3, 6);
+        onProgress?.(22, 100, 'AI detecting top viral moments...');
         toast.info('Identifying viral moments...');
         const mlAnalysis = await analyzeVideoForViralMoments(
             ai,
@@ -112,7 +113,7 @@ export async function repurposeVideo(
             frames,
             repurposedVideo.id
         );
-        onProgress?.(4, 6);
+        onProgress?.(30, 100, 'Uploading video (0%)...');
         
         // Step 6: Filter viral moments by threshold and generate clips
         toast.info('Generating clips...');
@@ -144,6 +145,9 @@ export async function repurposeVideo(
         const totalClips = filteredMoments.length * uniqueAspectPlatforms.length;
         let processedClips = 0;
 
+        const clipVerb = finalOptions.include_captions ? 'Cutting & captioning' : 'Cutting';
+        let clipIndex = 0;
+
         for (const moment of filteredMoments) {
             if (finalOptions.overlap_prevention) {
                 const start = Number(moment.start_time) || 0;
@@ -156,19 +160,34 @@ export async function repurposeVideo(
             }
 
             for (const platform of uniqueAspectPlatforms) {
+                clipIndex++;
+                const currentClipNum = clipIndex;
+                const clipStartPct = 62 + Math.round(((currentClipNum - 1) / Math.max(1, totalClips)) * 32);
+                const clipEndPct = 62 + Math.round((currentClipNum / Math.max(1, totalClips)) * 32);
+
+                if (currentClipNum > 1) {
+                    onProgress?.(clipStartPct, 100, `${clipVerb} clip ${currentClipNum} of ${totalClips}...`);
+                }
+
                 try {
                     const clip = await generateClipFromMoment(
                         videoFile,
                         moment,
                         platform,
                         finalOptions,
-                        repurposedVideo.id
+                        repurposedVideo.id,
+                        (uploadPct) => {
+                            const mapped = 30 + Math.round((uploadPct / 100) * 32); // 30% -> 62%
+                            if (uploadPct < 100) {
+                                onProgress?.(mapped, 100, `Uploading video (${uploadPct}%)...`);
+                            } else {
+                                onProgress?.(62, 100, `${clipVerb} clip ${currentClipNum} of ${totalClips}...`);
+                            }
+                        }
                     );
                     clips.push(clip);
                     processedClips++;
-                    if (totalClips > 0) {
-                        onProgress?.(4 + Math.round((processedClips / totalClips) * 1), 6);
-                    }
+                    onProgress?.(clipEndPct, 100, `Finished clip ${processedClips} of ${totalClips}`);
                 } catch (error: any) {
                     console.error(`Error generating clip for platform ${platform}:`, error);
                     toast.warning(`Failed to generate clip for ${platform}: ${error?.message || 'processing error'}`);
@@ -178,14 +197,14 @@ export async function repurposeVideo(
         
         // Step 8: Update ML analysis with repurposed video ID
         mlAnalysis.repurposed_video_id = repurposedVideo.id;
-        onProgress?.(5, 6);
+        onProgress?.(95, 100, 'Saving clips...');
         
         // Step 9: Save to database
         toast.info('Saving results...');
         await saveRepurposedVideo(repurposedVideo);
         await saveMLAnalysis(mlAnalysis);
         await saveViralClips(clips);
-        onProgress?.(6, 6);
+        onProgress?.(100, 100, 'Done!');
         
         // Step 10: Update status to completed
         repurposedVideo.status = 'completed';
@@ -232,7 +251,8 @@ async function generateClipFromMoment(
     moment: any,
     platform: string,
     options: ClipGenerationOptions,
-    repurposedVideoId: string
+    repurposedVideoId: string,
+    onUploadProgress?: (percent: number) => void
 ): Promise<ViralClip> {
     // Determine platform-specific settings
     const platformSettings = getPlatformSettings(platform);
@@ -266,6 +286,7 @@ async function generateClipFromMoment(
             includeAudio: true,
             includeTransitions: options.include_transitions,
             includeCaptions: options.include_captions,
+            onUploadProgress,
         }
     );
     

@@ -26,6 +26,7 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
     const [videoPreviewUrl, setVideoPreviewUrl] = useState<string>('');
     const [isProcessing, setIsProcessing] = useState(false);
     const [progress, setProgress] = useState(0);
+    const [progressStatus, setProgressStatus] = useState('Starting...');
     const [results, setResults] = useState<RepurposeResult | null>(null);
     
     const [options, setOptions] = useState<ClipGenerationOptions>({
@@ -126,12 +127,16 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
             }
 
             // Update progress
-            setProgress(5);
+            setProgress(2);
+            setProgressStatus('Starting...');
 
             // Create progress callback
-            const progressCallback = (current: number, total: number) => {
-                const percent = Math.round((current / total) * 95) + 5; // 5-100%
+            const progressCallback = (current: number, total: number, statusText?: string) => {
+                const percent = total > 0 ? Math.min(100, Math.max(0, Math.round((current / total) * 100))) : 0;
                 setProgress(percent);
+                if (statusText) {
+                    setProgressStatus(statusText);
+                }
             };
 
             // Run repurpose
@@ -345,7 +350,7 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
             </div>
 
             {/* Process Button */}
-            <div className="repurpose-actions">
+            <div className="repurpose-actions" style={{ flexDirection: 'column', gap: '12px' }}>
                 <button 
                     onClick={handleRepurpose}
                     disabled={isProcessing || (!videoFile && !videoUrl)}
@@ -354,12 +359,35 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
                     {isProcessing ? (
                         <>
                             <div className="spinner" style={{ width: '20px', height: '20px', marginRight: '8px' }}></div>
-                            Processing... {progress}%
+                            {progressStatus} ({progress}%)
                         </>
                     ) : (
                         'Generate Viral Clips'
                     )}
                 </button>
+                {isProcessing && (
+                    <div style={{ width: '100%', maxWidth: '480px', margin: '0 auto' }}>
+                        <div
+                            style={{
+                                width: '100%',
+                                height: '8px',
+                                background: 'var(--surface-3, #e9e4f5)',
+                                borderRadius: '999px',
+                                overflow: 'hidden',
+                            }}
+                        >
+                            <div
+                                style={{
+                                    width: `${progress}%`,
+                                    height: '100%',
+                                    background: 'linear-gradient(90deg, var(--primary, #571c86), #9333ea)',
+                                    transition: 'width 0.25s ease-out',
+                                    borderRadius: '999px',
+                                }}
+                            />
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Results Section */}
