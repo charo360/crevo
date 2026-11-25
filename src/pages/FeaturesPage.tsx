@@ -253,6 +253,7 @@ export const FeaturesPage: FC = () => {
                         <article
                             key={feat.id}
                             id={feat.id}
+                            className="seo-feature-card"
                             ref={(el) => {
                                 sectionRefs.current[feat.id] = el;
                             }}

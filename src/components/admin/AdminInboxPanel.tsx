@@ -257,8 +257,8 @@ export const AdminInboxPanel: FC = () => {
                 </div>
             </div>
 
-            {/* Split Pane: List + Reader */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 360px) 1fr', minHeight: '480px' }}>
+            {/* Split Pane: List + Reader (stacks vertically on mobile) */}
+            <div className="admin-inbox-split" style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 360px) 1fr', minHeight: '480px' }}>
                 {/* Left List */}
                 <div style={{ borderRight: '1px solid #e5e7eb', maxHeight: '600px', overflowY: 'auto' }}>
                     {loadingList && messages.length === 0 ? (

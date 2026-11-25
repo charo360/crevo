@@ -36,6 +36,7 @@ export const Navbar: FC = () => {
     const handlePlatformsToggle = (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
+        setToolsDropdownOpen(false);
         setPlatformsDropdownOpen(!platformsDropdownOpen);
     };
 
@@ -122,6 +123,7 @@ export const Navbar: FC = () => {
                             onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
+                                setPlatformsDropdownOpen(false);
                                 setToolsDropdownOpen(!toolsDropdownOpen);
                             }}
                             aria-expanded={toolsDropdownOpen}

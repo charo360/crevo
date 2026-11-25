@@ -4369,3 +4369,30 @@
         gap: 1rem;
     }
 }
+
+/* Global Mobile Seamless Polish (iPhone / Android 360px–768px) */
+html,
+body {
+    overflow-x: clip;
+}
+
+@media (max-width: 768px) {
+    .admin-inbox-split {
+        grid-template-columns: 1fr !important;
+        min-height: auto !important;
+    }
+
+    .seo-feature-card {
+        padding: 18px 16px !important;
+    }
+
+    /* Prevent iOS Safari auto-zoom when focusing inputs */
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="url"],
+    textarea,
+    select {
+        font-size: 16px !important;
+    }
+}
