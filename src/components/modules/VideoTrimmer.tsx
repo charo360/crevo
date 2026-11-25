@@ -111,12 +111,31 @@ export const VideoTrimmer: FC<VideoTrimmerProps> = ({ videoUrl, onVideoLoad, tri
 
     return (
         <div className="trimmer-container">
-            <div className="trimmer-video-wrapper">
+            <div
+                className="trimmer-video-wrapper"
+                style={{
+                    width: '100%',
+                    aspectRatio: '16 / 9',
+                    maxHeight: '200px',
+                    backgroundColor: '#0f0d14',
+                    borderRadius: '10px',
+                    overflow: 'hidden',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                }}
+            >
                  <video
                     ref={videoRef}
                     src={videoUrl}
                     onLoadedMetadata={handleLoadedMetadata}
                     className="trimmer-video"
+                    style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'contain',
+                        display: 'block',
+                    }}
                     muted
                     playsInline
                 />
