@@ -33,8 +33,8 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
         min_duration: 15,
         max_duration: 45,
         target_clip_count: 3,
-        platforms: ['youtube_shorts', 'tiktok', 'instagram_reels'],
-        include_captions: true,
+        platforms: ['youtube_shorts'],
+        include_captions: false,
         include_transitions: true,
         virality_threshold: 65,
         overlap_prevention: true,
@@ -376,7 +376,7 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
                     <label>Platforms</label>
                     <div className="platform-checkboxes">
                         {['youtube_shorts', 'tiktok', 'instagram_reels', 'twitter'].map(platform => (
-                            <label key={platform} className="platform-checkbox">
+                            <label key={platform} className="platform-checkbox" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
                                 <input 
                                     type="checkbox"
                                     checked={options.platforms.includes(platform as any)}
