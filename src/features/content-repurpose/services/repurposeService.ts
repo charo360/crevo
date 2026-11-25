@@ -50,6 +50,7 @@ export async function repurposeVideo(
     transcript?: string | null,
     onProgress?: (current: number, total: number) => void
 ): Promise<RepurposeResult> {
+    const jobStartTime = Date.now();
     const finalOptions = { ...DEFAULT_OPTIONS, ...options };
     
     try {
@@ -202,7 +203,7 @@ export async function repurposeVideo(
         const statistics = {
             total_clips_generated: clips.length,
             average_virality_score: averageVirality,
-            processing_time_seconds: mlAnalysis.processing_time_ms / 1000,
+            processing_time_seconds: (Date.now() - jobStartTime) / 1000,
             total_output_size: totalOutputSize,
         };
         
