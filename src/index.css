@@ -152,10 +152,10 @@ body {
 .header-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
   flex: 1;
   min-width: 0;
-  overflow: visible;
+  overflow: hidden;
   position: relative;
 }
 
@@ -302,48 +302,36 @@ body {
 
 .platform-nav {
   display: flex;
-  gap: 8px;
+  gap: 4px;
   align-items: center;
-  min-width: 100%;
+  min-width: 0;
+  max-width: 100%;
   flex-wrap: nowrap;
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
+  scrollbar-width: none;
   flex: 1;
 }
 
 .platform-nav::-webkit-scrollbar {
-  height: 4px;
-}
-
-.platform-nav::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.platform-nav::-webkit-scrollbar-thumb {
-  background: var(--border-color);
-  border-radius: 2px;
-}
-
-.platform-nav::-webkit-scrollbar-thumb:hover {
-  background: var(--text-secondary);
+  display: none;
 }
 
 .platform-nav-btn {
   background-color: transparent;
   border: 1px solid transparent;
   color: var(--text-secondary);
-  padding: 10px 16px;
+  padding: 9px 12px;
   border-radius: var(--border-radius);
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 7px;
   transition: all 0.2s ease-in-out;
   font-weight: 500;
   white-space: nowrap;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   flex-shrink: 0;
   min-width: fit-content;
 }

@@ -176,7 +176,7 @@ export const Header: FC<HeaderProps> = ({ platform, onPlatformChange, onSidebarT
                     </div>
 
                     {/* Desktop Platform Nav */}
-                    <nav className="platform-nav" style={{ overflow: 'visible' }}>
+                    <nav className="platform-nav">
                         {primaryPlatforms.map(key => {
                             const config = PLATFORM_CONFIGS[key];
                             return (
