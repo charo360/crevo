@@ -406,6 +406,36 @@ export const Header: FC<HeaderProps> = ({ platform, onPlatformChange, onSidebarT
 
                                 {/* Menu Items */}
                                 <div style={{ padding: '8px 0' }}>
+                                    {user.email?.toLowerCase() === 'sarcharo@gmail.com' && (
+                                        <Link
+                                            to="/admin"
+                                            className="user-menu-item-link"
+                                            onClick={() => setUserMenuOpen(false)}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '12px',
+                                                width: '100%',
+                                                padding: '12px 16px',
+                                                background: 'transparent',
+                                                border: 'none',
+                                                color: 'var(--primary)',
+                                                fontSize: '14px',
+                                                fontWeight: 600,
+                                                cursor: 'pointer',
+                                                textDecoration: 'none',
+                                                transition: 'all 0.15s',
+                                            }}
+                                        >
+                                            <svg style={{ width: '20px', height: '20px', flexShrink: 0 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <rect x="3" y="3" width="7" height="7"></rect>
+                                                <rect x="14" y="3" width="7" height="7"></rect>
+                                                <rect x="14" y="14" width="7" height="7"></rect>
+                                                <rect x="3" y="14" width="7" height="7"></rect>
+                                            </svg>
+                                            <span>Admin Dashboard</span>
+                                        </Link>
+                                    )}
                                     <Link
                                         to="/dashboard/credits"
                                         className="user-menu-item-link"

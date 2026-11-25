@@ -107,7 +107,7 @@ export const RouteSEO: FC = () => {
 
     useEffect(() => {
         const pathname = location.pathname.replace(/\/+$/, '') || '/';
-        const isPrivate = pathname.startsWith('/dashboard') || pathname.startsWith('/profile');
+        const isPrivate = pathname.startsWith('/dashboard') || pathname.startsWith('/profile') || pathname.startsWith('/admin');
 
         const config: SEOConfig = isPrivate
             ? {

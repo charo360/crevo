@@ -1455,6 +1455,178 @@ STRICT RULES:
     }
 });
 
+// ==================== ADMIN ROUTES (OWNER-ONLY) ====================
+
+const ADMIN_EMAIL_SET = new Set(
+    (process.env.ADMIN_EMAILS || 'sarcharo@gmail.com')
+        .split(',')
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean)
+);
+
+function requireAdmin(req, res, next) {
+    return requireAuth(req, res, () => {
+        const email = String(req.user?.email || '').trim().toLowerCase();
+        if (!email || !ADMIN_EMAIL_SET.has(email)) {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+        return next();
+    });
+}
+
+app.get('/api/admin/overview', requireAdmin, async (_req, res) => {
+    try {
+        const [
+            users,
+            allCredits,
+            payments,
+            repurposedCount,
+            viralClipsCount,
+            freeTrials,
+            subscribers,
+        ] = await Promise.all([
+            User.find({}, { passwordHash: 0 }).sort({ created_at: -1 }).lean(),
+            UserCredits.find({}).lean(),
+            Payment.find({}).sort({ created_at: -1 }).limit(100).lean(),
+            RepurposedVideo.countDocuments({}),
+            ViralClip.countDocuments({}),
+            FreeTrialUsage.find({}).sort({ created_at: -1 }).limit(100).lean(),
+            NewsletterSubscriber.find({}).sort({ created_at: -1 }).limit(100).lean(),
+        ]);
+
+        const creditsByUser = new Map();
+        let totalCreditsBalance = 0;
+        let totalCreditsSpent = 0;
+        for (const c of allCredits) {
+            creditsByUser.set(String(c.user_id), c);
+            totalCreditsBalance += Number(c.balance || 0);
+            totalCreditsSpent += Number(c.total_spent || 0);
+        }
+
+        const paidByUser = new Map();
+        const userEmailById = new Map();
+        for (const u of users) {
+            userEmailById.set(String(u._id), u.email);
+        }
+
+        let totalRevenueCents = 0;
+        const paidUserIds = new Set();
+        for (const p of payments) {
+            const isPaid = p.status === 'succeeded' || p.status === 'completed' || p.status === 'paid';
+            if (isPaid) {
+                const cents = Number(p.amount_cents || 0);
+                totalRevenueCents += cents;
+                const uid = String(p.user_id);
+                paidUserIds.add(uid);
+                paidByUser.set(uid, (paidByUser.get(uid) || 0) + cents);
+            }
+        }
+
+        const formattedUsers = users.map((u) => {
+            const uid = String(u._id);
+            const cred = creditsByUser.get(uid);
+            const paidCents = paidByUser.get(uid) || 0;
+            return {
+                id: uid,
+                email: u.email,
+                signup_ip: u.signupIp || '-',
+                created_at: u.created_at,
+                balance: Number(cred?.balance || 0),
+                total_earned: Number(cred?.total_earned || 0),
+                total_spent: Number(cred?.total_spent || 0),
+                total_paid_cents: paidCents,
+                is_paid: paidCents > 0,
+            };
+        });
+
+        const formattedPayments = payments.map((p) => ({
+            id: String(p._id),
+            user_id: String(p.user_id),
+            email: userEmailById.get(String(p.user_id)) || p.user_id,
+            amount_cents: Number(p.amount_cents || 0),
+            currency: p.currency || 'usd',
+            credits_purchased: Number(p.credits_purchased || 0),
+            status: p.status || 'pending',
+            pack_name: p.metadata?.pack_name || '',
+            created_at: p.created_at,
+        }));
+
+        const totalFreeTrials = await FreeTrialUsage.countDocuments({});
+
+        return res.json({
+            summary: {
+                total_users: users.length,
+                paid_users: paidUserIds.size,
+                free_users: Math.max(0, users.length - paidUserIds.size),
+                total_revenue_cents: totalRevenueCents,
+                total_credits_balance: totalCreditsBalance,
+                total_credits_spent: totalCreditsSpent,
+                total_repurposed_videos: repurposedCount,
+                total_viral_clips: viralClipsCount,
+                total_free_trials: totalFreeTrials,
+                total_subscribers: subscribers.length,
+            },
+            users: formattedUsers,
+            payments: formattedPayments,
+            free_trials: freeTrials.map((t) => ({
+                id: String(t._id),
+                tool: t.tool,
+                ip: t.ip,
+                fingerprint: t.fingerprint || '-',
+                created_at: t.created_at,
+            })),
+            subscribers: subscribers.map((s) => ({
+                id: String(s._id),
+                email: s.email,
+                created_at: s.created_at,
+            })),
+        });
+    } catch (err) {
+        console.error('Admin overview error:', err);
+        return res.status(500).json({ error: 'Failed to load admin overview' });
+    }
+});
+
+app.post('/api/admin/users/:userId/credits', requireAdmin, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const amount = Number(req.body?.amount);
+        const note = String(req.body?.note || 'Admin bonus credits').trim().slice(0, 140);
+
+        if (!Number.isFinite(amount) || amount === 0 || Math.abs(amount) > 100000) {
+            return res.status(400).json({ error: 'Please provide a valid non-zero credit amount.' });
+        }
+
+        const updated = await UserCredits.findOneAndUpdate(
+            { user_id: userId },
+            {
+                $inc: {
+                    balance: amount,
+                    ...(amount > 0 ? { total_earned: amount } : {}),
+                },
+                $set: { updated_at: new Date() },
+            },
+            { upsert: true, returnDocument: 'after' }
+        );
+
+        await CreditTransaction.create({
+            user_id: userId,
+            amount,
+            transaction_type: amount > 0 ? 'bonus' : 'adjustment',
+            description: note,
+        });
+
+        return res.json({
+            ok: true,
+            balance: updated.balance,
+            total_earned: updated.total_earned,
+        });
+    } catch (err) {
+        console.error('Admin credit update error:', err);
+        return res.status(500).json({ error: 'Failed to update user credits' });
+    }
+});
+
 // ==================== PRODUCTION STATIC FRONTEND ====================
 
 const distDir = path.join(rootDir, 'dist');
