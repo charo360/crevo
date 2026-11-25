@@ -204,40 +204,54 @@ export const VideoModule: FC<VideoModuleProps> = (props) => {
           onDrop={handleDrop}
           style={{
             display: 'flex',
-            flexDirection: 'column',
+            flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: 'center',
+            gap: '12px',
             border: isDragging
-              ? '2px dashed var(--primary, #571c86)'
-              : '2px dashed var(--border-color, #e4dcf2)',
-            borderRadius: '12px',
+              ? '1.5px dashed var(--primary, #571c86)'
+              : '1.5px dashed var(--border-color, #d8ccf0)',
+            borderRadius: '10px',
             background: isDragging ? 'var(--surface-2, #f3ecfa)' : 'var(--background, #f8f5ed)',
-            padding: '28px 16px',
-            textAlign: 'center',
+            padding: '11px 14px',
+            textAlign: 'left',
             cursor: 'pointer',
             transition: 'all 0.15s ease',
           }}
         >
-          <svg
-            width="42"
-            height="42"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="var(--primary, #571c86)"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ opacity: 0.8, marginBottom: '8px' }}
+          <div
+            style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: '8px',
+              background: '#f3e8ff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
           >
-            <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
-            <circle cx="12" cy="13" r="3" />
-          </svg>
-          <p style={{ margin: '0 0 4px', fontSize: '13.5px', fontWeight: 600, color: 'var(--text-primary, #111111)' }}>
-            {isDragging ? 'Drop your video here' : 'Drag & drop a video or click to browse'}
-          </p>
-          <p style={{ margin: 0, fontSize: '11.5px', color: 'var(--text-secondary, #5e5a67)' }}>
-            MP4, MOV, WebM up to 10GB — stays local & extracts key frames from your selected clip range
-          </p>
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="var(--primary, #571c86)"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+              <circle cx="12" cy="13" r="3" />
+            </svg>
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--text-primary, #111111)', lineHeight: 1.3 }}>
+              {isDragging ? 'Drop your video here' : 'Drop video or click to browse'}
+            </p>
+            <p style={{ margin: '2px 0 0', fontSize: '11px', color: 'var(--text-secondary, #5e5a67)', lineHeight: 1.3 }}>
+              MP4, MOV, WebM up to 10GB · local frames
+            </p>
+          </div>
           <input
             type="file"
             ref={fileInputRef}

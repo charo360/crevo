@@ -100,42 +100,55 @@ export const ImageModule: FC<ImageModuleProps> = ({ images, onImagesChange, onGe
                 }}
                 style={{
                     display: 'flex',
-                    flexDirection: 'column',
+                    flexDirection: 'row',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '4px',
-                    padding: '16px 12px',
+                    gap: '12px',
+                    padding: '11px 14px',
                     borderRadius: '10px',
                     border: isDragging
-                        ? '2px dashed var(--primary, #571c86)'
-                        : '2px dashed var(--border-color, #e4dcf2)',
+                        ? '1.5px dashed var(--primary, #571c86)'
+                        : '1.5px dashed var(--border-color, #d8ccf0)',
                     background: isDragging ? 'var(--surface-2, #f3ecfa)' : 'var(--background, #f8f5ed)',
-                    textAlign: 'center',
+                    textAlign: 'left',
                     cursor: 'pointer',
                     transition: 'all 0.15s ease',
                 }}
             >
-                <svg
-                    width="28"
-                    height="28"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="var(--primary, #571c86)"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    style={{ opacity: 0.8 }}
+                <div
+                    style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '8px',
+                        background: '#f3e8ff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                    }}
                 >
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                    <polyline points="21 15 16 10 5 21"></polyline>
-                </svg>
-                <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--text-primary, #111111)' }}>
-                    {isDragging ? 'Drop images here' : 'Drop images or click to browse'}
-                </p>
-                <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-secondary, #5e5a67)' }}>
-                    JPG, PNG, WEBP up to 10MB
-                </p>
+                    <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--primary, #571c86)"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                    >
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                        <polyline points="21 15 16 10 5 21"></polyline>
+                    </svg>
+                </div>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                    <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--text-primary, #111111)', lineHeight: 1.3 }}>
+                        {isDragging ? 'Drop images here' : 'Drop images or click to browse'}
+                    </p>
+                    <p style={{ margin: '2px 0 0', fontSize: '11px', color: 'var(--text-secondary, #5e5a67)', lineHeight: 1.3 }}>
+                        JPG, PNG, WEBP up to 10MB
+                    </p>
+                </div>
             </div>
             <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" style={{ display: 'none' }} multiple />
             {images.length > 0 && (
@@ -148,7 +161,22 @@ export const ImageModule: FC<ImageModuleProps> = ({ images, onImagesChange, onGe
                     ))}
                 </div>
             )}
-            <div className="section-divider">OR GENERATE WITH AI</div>
+            <div
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    margin: '12px 0 8px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    letterSpacing: '0.06em',
+                    color: 'var(--text-secondary, #5e5a67)',
+                }}
+            >
+                <span style={{ flex: 1, height: '1px', background: 'var(--border-color, #e4dcf2)' }} />
+                <span>OR GENERATE WITH AI</span>
+                <span style={{ flex: 1, height: '1px', background: 'var(--border-color, #e4dcf2)' }} />
+            </div>
             <div className="form-group">
                 <label htmlFor="generate-image-prompt">Describe the image you want</label>
                 <textarea id="generate-image-prompt" value={genPrompt} onChange={e => setGenPrompt(e.target.value)} placeholder="e.g., A robot holding a red skateboard" />
