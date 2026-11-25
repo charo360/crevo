@@ -144,19 +144,19 @@ export const GoogleSignInButton: FC<GoogleSignInButtonProps> = ({ mode = 'signin
     if (!clientId) return null;
 
     return (
-        <div style={{ marginBottom: '18px' }}>
+        <div style={{ marginBottom: '12px' }}>
             <div
                 ref={buttonContainerRef}
                 style={{
                     display: 'flex',
                     justifyContent: 'center',
-                    minHeight: '44px',
+                    minHeight: '42px',
                     opacity: busy ? 0.65 : 1,
                     pointerEvents: busy ? 'none' : 'auto',
                 }}
             />
             {busy && (
-                <p style={{ textAlign: 'center', fontSize: '12px', color: '#6b7280', marginTop: '6px' }}>
+                <p style={{ textAlign: 'center', fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
                     Signing in with Google...
                 </p>
             )}
@@ -164,8 +164,8 @@ export const GoogleSignInButton: FC<GoogleSignInButtonProps> = ({ mode = 'signin
                 style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '12px',
-                    marginTop: '18px',
+                    gap: '10px',
+                    marginTop: '12px',
                     color: '#9ca3af',
                     fontSize: '12px',
                     fontWeight: 500,

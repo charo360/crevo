@@ -68,7 +68,7 @@ export const SignupPage: FC = () => {
                 <div className="auth-header">
                     <Link to="/" className="auth-logo">Crevo</Link>
                     <h1>Create your account</h1>
-                    <p>Start creating amazing designs with AI</p>
+                    <p>Start with 10 free credits — no credit card required</p>
                 </div>
 
                 <GoogleSignInButton mode="signup" />
