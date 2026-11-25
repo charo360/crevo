@@ -14,7 +14,7 @@ import {
     CreditBalance, 
     CreditUsage 
 } from '../../services/payments/creditService';
-import { redirectToCheckout } from '../../services/payments/stripeService';
+import { redirectToCheckout, openBillingPortal } from '../../services/payments/stripeService';
 import { toast } from 'react-toastify';
 
 // Icon Components (Simple SVG icons)
@@ -95,6 +95,7 @@ export const CreditManagement: FC = () => {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [activeTab, setActiveTab] = useState('overview');
+    const [openingPortal, setOpeningPortal] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const loadCreditData = useCallback(async (isInitial = false, forceRefresh: boolean = true) => {
@@ -247,6 +248,16 @@ export const CreditManagement: FC = () => {
         }
     };
 
+    const handleManageSubscription = async () => {
+        setOpeningPortal(true);
+        try {
+            await openBillingPortal();
+        } catch (error: any) {
+            toast.info(error.message || 'No active subscription found yet.');
+            setOpeningPortal(false);
+        }
+    };
+
     const formatDate = (dateString: string) => {
         return new Date(dateString).toLocaleDateString('en-US', {
             year: 'numeric',
@@ -309,13 +320,24 @@ export const CreditManagement: FC = () => {
                     <h1 className="text-3xl sm:text-4xl font-bold text-gray-900">Credit Management</h1>
                     <p className="text-sm sm:text-base text-gray-600">Track your credits, usage, and purchase history</p>
                 </div>
-                <Link
-                    to="/pricing"
-                    className="inline-flex items-center gap-2 px-6 py-3 bg-[#571c86] text-white rounded-lg font-semibold hover:bg-[#6a2d9b] transition-colors shadow-lg hover:shadow-xl w-full sm:w-auto justify-center"
-                >
-                    <PlusIcon />
-                    Buy More Credits
-                </Link>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+                    <button
+                        type="button"
+                        onClick={handleManageSubscription}
+                        disabled={openingPortal}
+                        className="inline-flex items-center gap-2 px-5 py-3 bg-white text-[#571c86] border border-[#571c86]/30 rounded-lg font-semibold hover:bg-purple-50 transition-colors shadow-sm justify-center disabled:opacity-60"
+                    >
+                        <CreditCardIcon />
+                        {openingPortal ? 'Opening Billing...' : 'Manage Subscription'}
+                    </button>
+                    <Link
+                        to="/pricing"
+                        className="inline-flex items-center gap-2 px-6 py-3 bg-[#571c86] text-white rounded-lg font-semibold hover:bg-[#6a2d9b] transition-colors shadow-lg hover:shadow-xl justify-center"
+                    >
+                        <PlusIcon />
+                        Buy More Credits
+                    </Link>
+                </div>
             </div>
 
             {/* Credit Overview Cards */}

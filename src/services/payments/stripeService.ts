@@ -48,6 +48,22 @@ export async function redirectToCheckout(priceId: string): Promise<void> {
     }
 }
 
+export async function openBillingPortal(): Promise<void> {
+    if (!getAuthToken()) {
+        throw new Error('Please sign in to manage your subscription');
+    }
+
+    const data = await apiRequest<{ url?: string }>('/api/stripe/create-portal-session', {
+        method: 'POST',
+    });
+
+    if (data.url) {
+        window.location.href = data.url;
+    } else {
+        throw new Error('Could not open Stripe billing portal.');
+    }
+}
+
 export async function getCreditPackByPriceId(priceId: string) {
     try {
         return await apiRequest(`/api/credit-packs/${encodeURIComponent(priceId)}`);

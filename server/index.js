@@ -764,6 +764,37 @@ app.post('/api/stripe/create-checkout-session', requireAuth, async (req, res) =>
     }
 });
 
+app.post('/api/stripe/create-portal-session', requireAuth, async (req, res) => {
+    try {
+        if (!stripe) {
+            return res.status(500).json({ error: 'Stripe is not configured on the server.' });
+        }
+
+        const origin = req.headers.origin || process.env.FRONTEND_URL || 'https://crevo.app';
+        const customers = await stripe.customers.list({
+            email: req.user.email,
+            limit: 1,
+        });
+
+        const customer = customers.data?.[0];
+        if (!customer) {
+            return res.status(404).json({
+                error: 'No Stripe subscription or billing profile found for your account yet. Subscribe to a plan first to manage billing.',
+            });
+        }
+
+        const portalSession = await stripe.billingPortal.sessions.create({
+            customer: customer.id,
+            return_url: `${origin}/dashboard/credits`,
+        });
+
+        return res.json({ url: portalSession.url });
+    } catch (err) {
+        console.error('Create billing portal session error:', err);
+        return res.status(500).json({ error: err.message || 'Failed to open billing portal' });
+    }
+});
+
 // ==================== CONTENT REPURPOSE ROUTES ====================
 
 app.put('/api/repurpose/videos/:id', requireAuth, async (req, res) => {
