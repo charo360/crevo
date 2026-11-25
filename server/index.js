@@ -413,6 +413,101 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
+app.get('/api/auth/google/config', (_req, res) => {
+    const clientId = (process.env.GOOGLE_CLIENT_ID || '').trim();
+    return res.json({
+        enabled: Boolean(clientId),
+        clientId: clientId || null,
+    });
+});
+
+app.post('/api/auth/google', async (req, res) => {
+    try {
+        const googleClientId = (process.env.GOOGLE_CLIENT_ID || '').trim();
+        if (!googleClientId) {
+            return res.status(503).json({ error: 'Google Sign-In is not configured on the server.' });
+        }
+
+        const credential = String(req.body?.credential || '').trim();
+        if (!credential) {
+            return res.status(400).json({ error: 'Missing Google credential token.' });
+        }
+
+        // Verify Google ID token with Google's tokeninfo endpoint over HTTPS
+        const verifyRes = await fetch(
+            `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`
+        );
+        if (!verifyRes.ok) {
+            return res.status(401).json({ error: 'Invalid or expired Google sign-in token. Please try again.' });
+        }
+
+        const payload = await verifyRes.json();
+        const isAudValid = payload?.aud === googleClientId;
+        const isEmailVerified = payload?.email_verified === true || payload?.email_verified === 'true';
+        const rawEmail = String(payload?.email || '').trim().toLowerCase();
+
+        if (!isAudValid || !isEmailVerified || !rawEmail || !rawEmail.includes('@')) {
+            return res.status(401).json({ error: 'Google account verification failed.' });
+        }
+
+        const canonicalEmail = normalizeCanonicalEmail(rawEmail);
+        let user = await User.findOne({
+            $or: [{ email: rawEmail }, { canonicalEmail }],
+        });
+
+        let isNewUser = false;
+        if (!user) {
+            if (isDisposableEmail(rawEmail)) {
+                return res.status(400).json({ error: 'Disposable email addresses are not allowed.' });
+            }
+
+            const signupIp = getClientIp(req);
+            if (signupIp && signupIp !== 'unknown') {
+                const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+                const recentIpSignups = await User.countDocuments({
+                    signupIp,
+                    created_at: { $gte: thirtyDaysAgo },
+                });
+                if (recentIpSignups >= 2) {
+                    return res.status(429).json({
+                        error: 'Account creation limit reached for this network. Please sign in to your existing account.',
+                    });
+                }
+            }
+
+            const randomSecret = crypto.randomBytes(32).toString('hex');
+            const passwordHash = await bcrypt.hash(randomSecret, 10);
+            user = await User.create({
+                email: rawEmail,
+                canonicalEmail,
+                signupIp,
+                passwordHash,
+            });
+
+            await UserCredits.create({
+                user_id: user._id.toString(),
+                balance: 0,
+                total_earned: 0,
+                total_spent: 0,
+            });
+
+            isNewUser = true;
+            sendWelcomeEmail(rawEmail).catch(() => {});
+            sendAdminNewSignupAlert(rawEmail, signupIp).catch(() => {});
+        }
+
+        const token = signToken(user);
+        return res.json({
+            user: formatUser(user),
+            token,
+            isNewUser,
+        });
+    } catch (err) {
+        console.error('Google auth error:', err);
+        return res.status(500).json({ error: 'Failed to sign in with Google. Please try again.' });
+    }
+});
+
 app.post('/api/auth/forgot-password', async (req, res) => {
     try {
         const email = String(req.body?.email || '').trim().toLowerCase();

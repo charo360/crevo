@@ -21,6 +21,7 @@ interface AuthContextType {
     refreshCredits: () => Promise<void>;
     signIn: (email: string, password: string) => Promise<{ error: any }>;
     signUp: (email: string, password: string) => Promise<{ error: any; session?: AuthSession | null }>;
+    signInWithGoogle: (credential: string) => Promise<{ error: any; isNewUser?: boolean }>;
     updateProfile: (updates: { email?: string; password?: string }) => Promise<{ error: any }>;
     signOut: () => Promise<void>;
 }
@@ -142,6 +143,30 @@ export const AuthProvider: FC<{ children: React.ReactNode }> = ({ children }) =>
         }
     };
 
+    const signInWithGoogle = useCallback(async (credential: string) => {
+        try {
+            const data = await apiRequest<{ user: AuthUser; token: string; isNewUser?: boolean }>('/api/auth/google', {
+                method: 'POST',
+                body: JSON.stringify({ credential }),
+            });
+
+            setAuthToken(data.token);
+            const newSession: AuthSession = { access_token: data.token, user: data.user };
+            setUser(data.user);
+            setSession(newSession);
+
+            return { error: null, isNewUser: Boolean(data.isNewUser) };
+        } catch (err: any) {
+            console.error('Google sign in error:', err);
+            return {
+                error: {
+                    message: err.message || 'Failed to sign in with Google. Please try again.',
+                    name: err.status ? 'AuthError' : 'NetworkError',
+                },
+            };
+        }
+    }, []);
+
     const updateProfile = async (updates: { email?: string; password?: string }) => {
         try {
             const data = await apiRequest<{ user: AuthUser; token: string }>('/api/auth/profile', {
@@ -183,6 +208,7 @@ export const AuthProvider: FC<{ children: React.ReactNode }> = ({ children }) =>
                 refreshCredits,
                 signIn,
                 signUp,
+                signInWithGoogle,
                 updateProfile,
                 signOut,
             }}

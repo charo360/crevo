@@ -2,6 +2,7 @@ import React, { FC, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useAuth } from '../contexts/AuthContext';
+import { GoogleSignInButton } from '../components/auth/GoogleSignInButton';
 
 export const LoginPage: FC = () => {
     const [email, setEmail] = useState('');
@@ -57,6 +58,8 @@ export const LoginPage: FC = () => {
                     <h1>Welcome back</h1>
                     <p>Sign in to continue to your design studio</p>
                 </div>
+
+                <GoogleSignInButton mode="signin" />
                 
                 <form onSubmit={handleSubmit} className="auth-form">
                     <div className="form-group">

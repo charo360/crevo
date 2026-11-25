@@ -2,6 +2,7 @@ import React, { FC, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useAuth } from '../contexts/AuthContext';
+import { GoogleSignInButton } from '../components/auth/GoogleSignInButton';
 
 export const SignupPage: FC = () => {
     const [email, setEmail] = useState('');
@@ -69,6 +70,8 @@ export const SignupPage: FC = () => {
                     <h1>Create your account</h1>
                     <p>Start creating amazing designs with AI</p>
                 </div>
+
+                <GoogleSignInButton mode="signup" />
                 
                 <form onSubmit={handleSubmit} className="auth-form">
                     <div className="form-group">
