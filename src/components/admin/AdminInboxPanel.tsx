@@ -49,6 +49,8 @@ export const AdminInboxPanel: FC = () => {
     const [composeSubject, setComposeSubject] = useState('');
     const [composeBody, setComposeBody] = useState('');
     const [composeReplyTo, setComposeReplyTo] = useState('');
+    const [replyQuote, setReplyQuote] = useState<{ from: string; date: string; text: string } | null>(null);
+    const [includeQuote, setIncludeQuote] = useState(false);
     const [sending, setSending] = useState(false);
 
     const loadMessages = useCallback(async (targetFolder: 'inbox' | 'sent' = folder) => {
@@ -104,8 +106,14 @@ export const AdminInboxPanel: FC = () => {
     const openReply = (msg: MailDetail) => {
         setComposeTo(msg.fromEmail || '');
         setComposeSubject(msg.subject.toLowerCase().startsWith('re:') ? msg.subject : `Re: ${msg.subject}`);
-        setComposeBody(`\n\n--- On ${formatMailDate(msg.receivedAt)}, ${msg.from} wrote ---\n${msg.textBody || ''}`);
+        setComposeBody('');
         setComposeReplyTo(msg.messageId || '');
+        setReplyQuote({
+            from: msg.from || msg.fromEmail || '',
+            date: formatMailDate(msg.receivedAt),
+            text: (msg.textBody || '').trim(),
+        });
+        setIncludeQuote(false);
         setComposeOpen(true);
     };
 
@@ -113,12 +121,17 @@ export const AdminInboxPanel: FC = () => {
         e.preventDefault();
         setSending(true);
         try {
+            const finalBody =
+                replyQuote && includeQuote && replyQuote.text
+                    ? `${composeBody.trim()}\n\n--- On ${replyQuote.date}, ${replyQuote.from} wrote ---\n${replyQuote.text}`
+                    : composeBody.trim();
+
             await apiRequest('/api/admin/mail/send', {
                 method: 'POST',
                 body: JSON.stringify({
                     to: composeTo,
                     subject: composeSubject,
-                    body: composeBody,
+                    body: finalBody,
                     inReplyTo: composeReplyTo || undefined,
                 }),
             });
@@ -128,6 +141,8 @@ export const AdminInboxPanel: FC = () => {
             setComposeSubject('');
             setComposeBody('');
             setComposeReplyTo('');
+            setReplyQuote(null);
+            setIncludeQuote(false);
             if (folder === 'sent') loadMessages('sent');
         } catch (err: any) {
             toast.error(err?.message || 'Failed to send email');
@@ -222,6 +237,8 @@ export const AdminInboxPanel: FC = () => {
                             setComposeSubject('');
                             setComposeBody('');
                             setComposeReplyTo('');
+                            setReplyQuote(null);
+                            setIncludeQuote(false);
                             setComposeOpen(true);
                         }}
                         style={{
@@ -441,12 +458,56 @@ export const AdminInboxPanel: FC = () => {
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>Message</label>
                         <textarea
                             required
+                            autoFocus={Boolean(replyQuote)}
                             rows={7}
                             value={composeBody}
                             onChange={(e) => setComposeBody(e.target.value)}
-                            placeholder="Write your message..."
-                            style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #d1d5db', marginBottom: '16px', fontSize: '14px', fontFamily: 'Inter, sans-serif' }}
+                            placeholder={replyQuote ? 'Write your reply...' : 'Write your message...'}
+                            style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #d1d5db', marginBottom: replyQuote ? '10px' : '16px', fontSize: '14px', fontFamily: 'Inter, sans-serif' }}
                         />
+                        {replyQuote && replyQuote.text && (
+                            <div style={{ marginBottom: '16px' }}>
+                                <label
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        fontSize: '12px',
+                                        color: '#4b5563',
+                                        cursor: 'pointer',
+                                        userSelect: 'none',
+                                    }}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={includeQuote}
+                                        onChange={(e) => setIncludeQuote(e.target.checked)}
+                                    />
+                                    Include previous message below my reply
+                                </label>
+                                {includeQuote && (
+                                    <div
+                                        style={{
+                                            marginTop: '8px',
+                                            padding: '10px 12px',
+                                            borderRadius: '8px',
+                                            borderLeft: '3px solid #d8ccf0',
+                                            background: '#f9fafb',
+                                            fontSize: '12px',
+                                            color: '#6b7280',
+                                            maxHeight: '110px',
+                                            overflowY: 'auto',
+                                            whiteSpace: 'pre-wrap',
+                                        }}
+                                    >
+                                        <div style={{ fontWeight: 600, marginBottom: '4px', color: '#4b5563' }}>
+                                            On {replyQuote.date}, {replyQuote.from} wrote:
+                                        </div>
+                                        {replyQuote.text}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                             <button
                                 type="button"
