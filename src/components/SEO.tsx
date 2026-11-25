@@ -72,10 +72,28 @@ const ROUTE_SEO: Record<string, SEOConfig> = {
         path: '/tools/youtube-transcript',
     },
     '/tools/image-resizer': {
-        title: 'Free Image Resizer for YouTube, TikTok & Instagram | Crevo AI',
+        title: 'Free AI Image Resizer Without Cropping (YouTube, TikTok, Instagram) | Crevo AI',
         description:
-            'Resize images online free for YouTube thumbnails (1280x720), Shorts & TikTok (1080x1920), Instagram 1:1 & 4:5, X/Twitter, and Podcast covers.',
+            'Smart AI image resizer that extends backgrounds naturally to 16:9, 9:16, 1:1, and 4:5 without cropping faces or text. Try 2 free AI Smart Resizes online.',
         path: '/tools/image-resizer',
+    },
+    '/tools/youtube-thumbnail-resizer': {
+        title: 'YouTube Thumbnail Resizer 1280x720 (AI Resize Without Cropping) | Crevo AI',
+        description:
+            'Convert any vertical or square photo into a crisp 1280x720 (16:9) YouTube thumbnail using AI background extension — no black bars or awkward cropping.',
+        path: '/tools/youtube-thumbnail-resizer',
+    },
+    '/tools/tiktok-image-resizer': {
+        title: 'TikTok & YouTube Shorts 9:16 Image Resizer (AI Smart Expand) | Crevo AI',
+        description:
+            'Turn wide horizontal thumbnails and photos into vertical 1080x1920 (9:16) TikTok, Shorts & Reels covers automatically with Crevo AI Smart Resize.',
+        path: '/tools/tiktok-image-resizer',
+    },
+    '/tools/instagram-image-resizer': {
+        title: 'Instagram 4:5 & 1:1 Image Resizer Without Cropping | Crevo AI',
+        description:
+            'Resize any image to Instagram Portrait (1080x1350, 4:5) or Square (1080x1080, 1:1) using AI background fill so nothing gets cut off.',
+        path: '/tools/instagram-image-resizer',
     },
     '/login': {
         title: 'Sign In — Crevo Studio',

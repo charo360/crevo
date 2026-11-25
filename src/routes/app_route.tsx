@@ -101,6 +101,36 @@ export const AppRoutes: FC = () => {
           <Route path={AppRoutePaths.home} element={<LandingPage />} />
           <Route path="/tools/youtube-transcript" element={<YouTubeTranscriptToolPage />} />
           <Route path="/tools/image-resizer" element={<ImageResizerToolPage />} />
+          <Route
+            path="/tools/youtube-thumbnail-resizer"
+            element={
+              <ImageResizerToolPage
+                defaultPresetId="yt_thumb"
+                heading="AI YouTube Thumbnail Resizer (1280×720 Without Cropping)"
+                subheading="Convert any vertical or square photo into a sharp 16:9 YouTube thumbnail — Crevo AI extends the background naturally with zero black bars."
+              />
+            }
+          />
+          <Route
+            path="/tools/tiktok-image-resizer"
+            element={
+              <ImageResizerToolPage
+                defaultPresetId="vertical"
+                heading="AI TikTok & YouTube Shorts 9:16 Image Resizer"
+                subheading="Turn wide horizontal thumbnails and photos into full-screen 1080×1920 vertical covers for TikTok, YouTube Shorts, and Instagram Reels."
+              />
+            }
+          />
+          <Route
+            path="/tools/instagram-image-resizer"
+            element={
+              <ImageResizerToolPage
+                defaultPresetId="ig_portrait"
+                heading="AI Instagram 4:5 & 1:1 Image Resizer Without Cropping"
+                subheading="Resize any photo to Instagram Portrait (1080×1350) or Square (1080×1080) — Crevo AI fills the edges seamlessly so subjects stay centered."
+              />
+            }
+          />
           <Route path={AppRoutePaths.login} element={<LoginPage />} />
           <Route path={AppRoutePaths.signup} element={<SignupPage />} />
           <Route path={AppRoutePaths.features} element={<FeaturesPage />} />

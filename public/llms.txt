@@ -4,7 +4,10 @@
 
 ## Free Online Tools (No Login Required to Try)
 - [Free YouTube Transcript & HD Thumbnail Downloader](https://crevo.app/tools/youtube-transcript): Paste any YouTube video or Shorts URL to extract timestamped transcripts (`[MM:SS]`), copy or download `.TXT`, and download 1280x720 HD thumbnails for free.
-- [Free Social Media Image Resizer](https://crevo.app/tools/image-resizer): Instant browser-based image resizer with exact 2026 presets for YouTube thumbnails (1280x720), Shorts/TikTok/Reels (1080x1920), Instagram Square (1080x1080), Instagram Portrait (1080x1350), X/Twitter Cards (1200x628), and Podcast Cover Art (1400x1400).
+- [Free Social Media Image Resizer](https://crevo.app/tools/image-resizer): AI Smart Image Resizer that extends backgrounds naturally without cropping for YouTube (1280x720), Shorts/TikTok/Reels (1080x1920), Instagram (1080x1080 & 1080x1350), X/Twitter (1200x628), and Podcast Cover Art (1400x1400).
+- [YouTube Thumbnail Resizer 1280x720](https://crevo.app/tools/youtube-thumbnail-resizer): Convert vertical or square photos into 16:9 YouTube thumbnails without black bars or cropping.
+- [TikTok & YouTube Shorts 9:16 Image Resizer](https://crevo.app/tools/tiktok-image-resizer): Turn horizontal thumbnails and images into vertical 1080x1920 covers automatically.
+- [Instagram 4:5 & 1:1 Image Resizer](https://crevo.app/tools/instagram-image-resizer): Resize images to Instagram Portrait (1080x1350) or Square (1080x1080) without cutting off subjects.
 
 ## Core AI Studio Capabilities
 - [AI YouTube Thumbnail Generator & CTR Improver](https://crevo.app/platforms/youtube): Analyze existing YouTube thumbnails, score CTR potential, generate viral hook titles, and create upgraded or fresh-concept 16:9 thumbnails.

@@ -73,7 +73,17 @@ function fileToCompressedBase64(file: File): Promise<{ base64: string; mimeType:
     });
 }
 
-export const ImageResizerToolPage: FC = () => {
+interface ImageResizerToolPageProps {
+    defaultPresetId?: string;
+    heading?: string;
+    subheading?: string;
+}
+
+export const ImageResizerToolPage: FC<ImageResizerToolPageProps> = ({
+    defaultPresetId = 'yt_thumb',
+    heading = 'AI Smart Image Resizer for YouTube, TikTok & Instagram',
+    subheading = 'Resize any thumbnail or photo to 16:9, 9:16, 1:1, or 4:5 — Crevo AI automatically recomposes and extends the background so nothing gets awkwardly cropped.',
+}) => {
     const { user } = useAuth();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [fingerprint] = useState<string>(() => computeBrowserFingerprint());
@@ -81,7 +91,14 @@ export const ImageResizerToolPage: FC = () => {
     const [sourceFile, setSourceFile] = useState<File | null>(null);
     const [sourcePreviewUrl, setSourcePreviewUrl] = useState<string>('');
     const [sourceName, setSourceName] = useState<string>('image');
-    const [selectedPreset, setSelectedPreset] = useState<SizePreset>(PRESETS[0]);
+    const [selectedPreset, setSelectedPreset] = useState<SizePreset>(
+        () => PRESETS.find((p) => p.id === defaultPresetId) || PRESETS[0]
+    );
+
+    useEffect(() => {
+        const match = PRESETS.find((p) => p.id === defaultPresetId);
+        if (match) setSelectedPreset(match);
+    }, [defaultPresetId]);
 
     const [isResizing, setIsResizing] = useState(false);
     const [aiResultUrl, setAiResultUrl] = useState<string>('');
@@ -254,10 +271,10 @@ export const ImageResizerToolPage: FC = () => {
                             : 'Free Trial Complete — Sign In for Crevo Studio'}
                     </span>
                     <h1 style={{ fontSize: 'clamp(2rem, 4vw, 2.8rem)', fontWeight: 800, color: '#111827', margin: '0 0 12px', lineHeight: 1.15 }}>
-                        AI Smart Image Resizer for YouTube, TikTok &amp; Instagram
+                        {heading}
                     </h1>
                     <p style={{ fontSize: '1.05rem', color: '#4b5563', maxWidth: '700px', margin: '0 auto' }}>
-                        Resize any thumbnail or photo to 16:9, 9:16, 1:1, or 4:5 — Crevo AI automatically recomposes and extends the background so nothing gets awkwardly cropped.
+                        {subheading}
                     </p>
                 </div>
 
@@ -489,6 +506,13 @@ export const ImageResizerToolPage: FC = () => {
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+                    <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #f3f4f6', display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 700, color: '#4b5563' }}>More Free Creator Tools:</span>
+                        <Link to="/tools/youtube-thumbnail-resizer" style={{ fontSize: '13px', color: '#571c86', fontWeight: 600 }}>YouTube Thumbnail Resizer (1280×720)</Link>
+                        <Link to="/tools/tiktok-image-resizer" style={{ fontSize: '13px', color: '#571c86', fontWeight: 600 }}>TikTok &amp; Shorts 9:16 Resizer</Link>
+                        <Link to="/tools/instagram-image-resizer" style={{ fontSize: '13px', color: '#571c86', fontWeight: 600 }}>Instagram 4:5 &amp; 1:1 Resizer</Link>
+                        <Link to="/tools/youtube-transcript" style={{ fontSize: '13px', color: '#571c86', fontWeight: 600 }}>Free YouTube Transcript &amp; Thumb Downloader</Link>
                     </div>
                 </section>
             </main>

@@ -1627,13 +1627,125 @@ app.post('/api/admin/users/:userId/credits', requireAdmin, async (req, res) => {
     }
 });
 
-// ==================== PRODUCTION STATIC FRONTEND ====================
+// ==================== PRODUCTION STATIC FRONTEND + SERVER-SIDE SEO META ====================
+
+const SSR_SEO_ROUTES = {
+    '/': {
+        title: 'Crevo AI — YouTube Thumbnail Generator & Viral Short Clip Studio',
+        description:
+            'Create high-CTR YouTube thumbnails, improve existing thumbnails with AI scoring, repurpose long videos (up to 5GB) into viral Shorts, TikToks & Reels with auto-captions, and download transcripts free.',
+    },
+    '/tools/youtube-transcript': {
+        title: 'Free YouTube Transcript & HD Thumbnail Downloader | Crevo AI',
+        description:
+            'Extract timestamped YouTube video & Shorts transcripts and download full HD 1280x720 thumbnails free online — no login required to try.',
+    },
+    '/tools/image-resizer': {
+        title: 'Free AI Image Resizer Without Cropping (YouTube, TikTok, Instagram) | Crevo AI',
+        description:
+            'Smart AI image resizer that extends backgrounds naturally to 16:9, 9:16, 1:1, and 4:5 without cropping faces or text. Try 2 free AI Smart Resizes online.',
+    },
+    '/tools/youtube-thumbnail-resizer': {
+        title: 'YouTube Thumbnail Resizer 1280x720 (AI Resize Without Cropping) | Crevo AI',
+        description:
+            'Convert any vertical or square photo into a crisp 1280x720 (16:9) YouTube thumbnail using AI background extension — no black bars or awkward cropping.',
+    },
+    '/tools/tiktok-image-resizer': {
+        title: 'TikTok & YouTube Shorts 9:16 Image Resizer (AI Smart Expand) | Crevo AI',
+        description:
+            'Turn wide horizontal thumbnails and photos into vertical 1080x1920 (9:16) TikTok, Shorts & Reels covers automatically with Crevo AI Smart Resize.',
+    },
+    '/tools/instagram-image-resizer': {
+        title: 'Instagram 4:5 & 1:1 Image Resizer Without Cropping | Crevo AI',
+        description:
+            'Resize any image to Instagram Portrait (1080x1350, 4:5) or Square (1080x1080, 1:1) using AI background fill so nothing gets cut off.',
+    },
+    '/features': {
+        title: 'Features — AI Thumbnail Improver, 5GB Video-to-Shorts & Captions | Crevo AI',
+        description:
+            'Explore Crevo AI creator tools: Improve YouTube Thumbnail with CTR scoring, Viral Hook Copywriter, 5GB Video-to-Shorts Repurposing with AI captions, and Smart Resize.',
+    },
+    '/pricing': {
+        title: 'Pricing — Flexible Credit Packs for YouTube & Short-Form Creators | Crevo AI',
+        description:
+            'Transparent Crevo AI pricing. Try free tools with no signup and pay only for the AI thumbnails and viral short clips you create.',
+    },
+    '/platforms/youtube': {
+        title: 'AI YouTube Thumbnail Generator & CTR Improver | Crevo AI',
+        description:
+            'Analyze your YouTube thumbnail CTR, get AI hook title ideas, and generate scroll-stopping 16:9 thumbnails that get more clicks.',
+    },
+    '/platforms/repurpose': {
+        title: 'AI Video to YouTube Shorts, TikTok & Reels Maker (Up to 5GB) | Crevo AI',
+        description:
+            'Upload podcasts or long YouTube videos up to 5GB and let Crevo AI detect viral moments, crop to 9:16 HD, add transitions, and burn in bold social captions.',
+    },
+    '/platforms/tiktok': {
+        title: 'AI TikTok & Reels Cover Designer + Vertical Clip Studio | Crevo AI',
+        description:
+            'Create bold 9:16 TikTok & Reels covers and auto-cut viral vertical clips with burned-in AI subtitles in seconds.',
+    },
+    '/platforms/podcast': {
+        title: 'AI Podcast Cover Art Generator & Viral Clip Repurposer | Crevo AI',
+        description:
+            'Design 1:1 podcast cover art for Spotify & Apple Podcasts and turn full podcast episodes into viral vertical clips automatically.',
+    },
+    '/platforms/twitter': {
+        title: 'AI X / Twitter Card Designer & Widescreen Clip Maker | Crevo AI',
+        description:
+            'Create high-engagement 1.91:1 X/Twitter link cards and 16:9 viral video clips in seconds with Crevo AI.',
+    },
+    '/business': {
+        title: 'Crevo AI for YouTube Agencies & Media Teams',
+        description:
+            'Scale high-CTR thumbnail production and automated short-form video repurposing across multiple channels with Crevo AI.',
+    },
+};
+
+function escapeHtmlAttr(str) {
+    return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
 
 const distDir = path.join(rootDir, 'dist');
+const indexHtmlPath = path.join(distDir, 'index.html');
+let cachedIndexHtml = fs.existsSync(indexHtmlPath) ? fs.readFileSync(indexHtmlPath, 'utf8') : null;
+
 if (fs.existsSync(distDir)) {
-    app.use(express.static(distDir));
-    app.get(/^(?!\/api\/).*/, (_req, res) => {
-        res.sendFile(path.join(distDir, 'index.html'));
+    app.use(express.static(distDir, { index: false }));
+    app.get(/^(?!\/api\/).*/, (req, res) => {
+        if (!cachedIndexHtml && fs.existsSync(indexHtmlPath)) {
+            cachedIndexHtml = fs.readFileSync(indexHtmlPath, 'utf8');
+        }
+        if (!cachedIndexHtml) {
+            return res.status(404).send('Not found');
+        }
+
+        const cleanPath = (req.path || '/').replace(/\/+$/, '') || '/';
+        const meta = SSR_SEO_ROUTES[cleanPath];
+        if (!meta) {
+            return res.type('html').send(cachedIndexHtml);
+        }
+
+        const safeTitle = escapeHtmlAttr(meta.title);
+        const safeDesc = escapeHtmlAttr(meta.description);
+        const canonicalUrl = `https://crevo.app${cleanPath === '/' ? '/' : cleanPath}`;
+
+        const html = cachedIndexHtml
+            .replace(/<title>[\s\S]*?<\/title>/i, `<title>${safeTitle}</title>`)
+            .replace(/<meta\s+name="description"[\s\S]*?\/>/i, `<meta name="description" content="${safeDesc}" />`)
+            .replace(/<link\s+rel="canonical"[\s\S]*?\/>/i, `<link rel="canonical" href="${canonicalUrl}" />`)
+            .replace(/<meta\s+property="og:url"[\s\S]*?\/>/i, `<meta property="og:url" content="${canonicalUrl}" />`)
+            .replace(/<meta\s+property="og:title"[\s\S]*?\/>/i, `<meta property="og:title" content="${safeTitle}" />`)
+            .replace(/<meta\s+property="og:description"[\s\S]*?\/>/i, `<meta property="og:description" content="${safeDesc}" />`)
+            .replace(/<meta\s+name="twitter:title"[\s\S]*?\/>/i, `<meta name="twitter:title" content="${safeTitle}" />`)
+            .replace(/<meta\s+name="twitter:description"[\s\S]*?\/>/i, `<meta name="twitter:description" content="${safeDesc}" />`);
+
+        res.setHeader('Cache-Control', 'no-cache');
+        return res.type('html').send(html);
     });
 }
 
