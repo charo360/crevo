@@ -7,7 +7,7 @@ export const extractFacesFromImage = async (
     ai: GoogleGenAI, 
     sourceImage: ImageAsset
 ): Promise<ImageAsset[]> => {
-    const prompt = "Detect all human faces in the provided image. For each face found, create a new image that is a clean cutout of just the head and shoulders, with the background completely removed and transparent. Output each cutout as a separate PNG image.";
+    const prompt = "Detect all distinct human subjects in the provided image. For each person found, create a clean, studio-sharp head-and-shoulders cutout with the background completely removed and transparent. CRITICAL: Preserve each person's exact real facial features, skin tone, hair, glasses, and identity 100% faithfully—never alter or replace their face. Only clean up edges and subtle studio clarity. Output each cutout as a separate PNG image.";
 
     const response = await callWithFallback(
         // Primary: Try Gemini 3 Pro first
@@ -81,12 +81,13 @@ export const extractBestFacesFromVideoFrames = async (
                 parts.push({ inlineData: { data: frame.base64, mimeType: frame.mimeType } });
             });
             parts.push({
-                text: `You are selecting the BEST thumbnail reference photos from ${frames.length} frames of a video (indexed 0 to ${frames.length - 1}).
-Choose up to 3 frame indices in priority order:
-- Index #1 MUST be the sharpest, clearest, well-lit, eyes-open, most expressive human face / main subject (avoid motion blur, blinking, half-closed mouth, or backs of heads).
-- Indices #2 and #3 (optional, only if visually distinct) should show a different person, different strong expression, or a compelling real scene/object from another part of the video so the final thumbnail looks realistic and authentic to the video.
+                text: `You are a veteran YouTube Thumbnail Designer selecting the BEST real reference shots from ${frames.length} frames of a video (indexed 0 to ${frames.length - 1}).
+Choose up to 4 frame indices in priority order:
+1. Index #1 MUST be the sharpest, clearest, well-lit, eyes-open, most expressive shot of the MAIN speaker/subject at the right emotional moment (strictly avoid motion blur, blinking, awkward mid-word mouths, or backs of heads).
+2. If MULTIPLE DIFFERENT PEOPLE appear across the video (e.g. guest, co-host, interviewee, friend), you MUST prioritize picking the sharpest, best-lit frame of EACH distinct person so the final thumbnail can feature everyone accurately.
+3. For any remaining slots (up to 4 total), pick the single most compelling real story moment / reaction / hero object from another part of the video so the final thumbnail looks 100% authentic and realistic.
 
-Return ONLY valid JSON: { "bestFrameIndices": [0, 2, 4] }`,
+Return ONLY valid JSON: { "bestFrameIndices": [0, 3, 5, 7] }`,
             });
 
             const pickResponse = await callWithFallback(
@@ -117,7 +118,7 @@ Return ONLY valid JSON: { "bestFrameIndices": [0, 2, 4] }`,
                     )
                 ) as number[];
                 if (valid.length > 0) {
-                    bestIndices = valid.slice(0, 3);
+                    bestIndices = valid.slice(0, 4);
                 }
             }
         } catch (pickErr) {
@@ -129,9 +130,9 @@ Return ONLY valid JSON: { "bestFrameIndices": [0, 2, 4] }`,
     const primaryFrame = frames[bestIndices[0]] || frames[0];
     const cutouts = await extractFacesFromImage(ai, primaryFrame);
 
-    // Include up to 2 distinct secondary real frames from across the video for realistic thumbnail context
+    // Include up to 3 distinct secondary real frames (other people / peak moments) from across the video
     const selectedMoments: ImageAsset[] = bestIndices
-        .slice(1, 3)
+        .slice(1, 4)
         .map((idx, pos) => ({
             ...frames[idx],
             id: `video_moment_${Date.now()}_${pos}`,

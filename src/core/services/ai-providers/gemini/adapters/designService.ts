@@ -618,7 +618,15 @@ ${weaknessesList}
                     variationDirective = GENERATE_VARIATION_DIRECTIONS[i % GENERATE_VARIATION_DIRECTIONS.length];
                 }
 
-                const variationPrompt = `${finalPrompt}\n\n${variationDirective}`;
+                const designerLikenessDirective =
+                    images.length > 0
+                        ? `\n\n[REAL THUMBNAIL DESIGNER — LIKENESS & EXPRESSION DIRECTION (INTERNAL GUIDANCE ONLY)]
+- **100% Physical Likeness Lock:** Keep every person shown in the attached photos/cutouts 100% recognizable — preserve their exact facial structure, eye shape, nose, skin tone, hairline/hairstyle, facial hair, glasses, age, and build. NEVER replace them with a generic AI face or smooth away natural photographic skin texture.
+- **High-CTR Expression & Polish:** Act like a top YouTube thumbnail designer: while keeping their exact real identity 100% intact, subtly direct their facial expression, eye contact, and posture so they look engaging, emotionally alive, and aligned with the thumbnail's hook (e.g. confident eye contact, genuine excitement, curiosity, or dramatic reaction) with crisp catchlights in the eyes and clean studio rim lighting.
+- **Multi-Person & Story Authenticity:** If multiple distinct people or real video moments are attached, compose them naturally into one cohesive, realistic thumbnail scene with clear foreground/background hierarchy and authentic lighting—never looking like pasted stickers or plastic AI art.`
+                        : '';
+
+                const variationPrompt = `${finalPrompt}${designerLikenessDirective}\n\n${variationDirective}`;
 
                 const imageConfig = {
                     responseModalities: [Modality.IMAGE],

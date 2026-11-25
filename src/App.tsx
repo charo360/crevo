@@ -307,8 +307,8 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
 
         setIsExtractingFaces(true);
         try {
-            // Scan 6 evenly spaced frames across the selected clip range instead of only frame 0
-            const frames = await extractFramesFromVideo(videoAsset.url, trimTimes.start, trimTimes.end, 6);
+            // Scan 8 evenly spaced frames across the selected clip range to capture different people & peak moments
+            const frames = await extractFramesFromVideo(videoAsset.url, trimTimes.start, trimTimes.end, 8);
             if (!frames || frames.length === 0) {
                 throw new Error("Could not extract frames from the video.");
             }
