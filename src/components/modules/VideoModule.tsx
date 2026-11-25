@@ -30,8 +30,9 @@ export const VideoModule: FC<VideoModuleProps> = (props) => {
 
   const loadVideoFile = (file: File) => {
     try {
-      if (file.size > 150 * 1024 * 1024) {
-        toast.error('Video file size must be less than 150MB');
+      // Video is processed locally in the browser to extract frames (never uploaded in full)
+      if (file.size > 10 * 1024 * 1024 * 1024) {
+        toast.error('Video file size must be less than 10GB');
         return;
       }
       if (!file.type.startsWith('video/')) {
@@ -235,7 +236,7 @@ export const VideoModule: FC<VideoModuleProps> = (props) => {
             {isDragging ? 'Drop your video here' : 'Drag & drop a video or click to browse'}
           </p>
           <p style={{ margin: 0, fontSize: '11.5px', color: 'var(--text-secondary, #5e5a67)' }}>
-            MP4, MOV, WebM up to 150MB — we extract key frames automatically
+            MP4, MOV, WebM up to 10GB — stays local & extracts key frames from your selected clip range
           </p>
           <input
             type="file"
