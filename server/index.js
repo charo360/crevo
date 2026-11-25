@@ -337,13 +337,29 @@ app.post('/api/auth/signup', async (req, res) => {
         }
 
         const signupIp = getClientIp(req);
+        const deviceFingerprint = getClientFingerprint(req);
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+        // Block creating multiple free accounts on the SAME device just by changing email
+        if (deviceFingerprint) {
+            const existingDeviceAccount = await User.countDocuments({
+                deviceFingerprint,
+                created_at: { $gte: thirtyDaysAgo },
+            });
+            if (existingDeviceAccount >= 1) {
+                return res.status(429).json({
+                    error: 'A free account was already created on this device. Please sign in to your existing account.',
+                });
+            }
+        }
+
+        // Allow coworkers/family on the same Wi-Fi IP using DIFFERENT devices (office safety cap: 10 per 30 days)
         if (signupIp && signupIp !== 'unknown') {
-            const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
             const recentIpSignups = await User.countDocuments({
                 signupIp,
                 created_at: { $gte: thirtyDaysAgo },
             });
-            if (recentIpSignups >= 2) {
+            if (recentIpSignups >= 10) {
                 return res.status(429).json({
                     error: 'Account creation limit reached for this network. Please sign in to your existing account.',
                 });
@@ -355,6 +371,7 @@ app.post('/api/auth/signup', async (req, res) => {
             email: normalizedEmail,
             canonicalEmail,
             signupIp,
+            deviceFingerprint,
             passwordHash,
         });
 
@@ -469,13 +486,27 @@ app.post('/api/auth/google', async (req, res) => {
             }
 
             const signupIp = getClientIp(req);
+            const deviceFingerprint = getClientFingerprint(req);
+            const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+            if (deviceFingerprint) {
+                const existingDeviceAccount = await User.countDocuments({
+                    deviceFingerprint,
+                    created_at: { $gte: thirtyDaysAgo },
+                });
+                if (existingDeviceAccount >= 1) {
+                    return res.status(429).json({
+                        error: 'A free account was already created on this device. Please sign in with your existing account.',
+                    });
+                }
+            }
+
             if (signupIp && signupIp !== 'unknown') {
-                const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
                 const recentIpSignups = await User.countDocuments({
                     signupIp,
                     created_at: { $gte: thirtyDaysAgo },
                 });
-                if (recentIpSignups >= 2) {
+                if (recentIpSignups >= 10) {
                     return res.status(429).json({
                         error: 'Account creation limit reached for this network. Please sign in to your existing account.',
                     });
@@ -488,6 +519,7 @@ app.post('/api/auth/google', async (req, res) => {
                 email: rawEmail,
                 canonicalEmail,
                 signupIp,
+                deviceFingerprint,
                 passwordHash,
             });
 
@@ -1789,16 +1821,32 @@ app.delete('/api/video/upload/:uploadId', requireAuth, (req, res) => {
     return res.json({ ok: true });
 });
 
-// ==================== PUBLIC FREE TRIAL AI RESIZE (IP + FINGERPRINT GUARDED) ====================
+// ==================== PUBLIC FREE TRIAL AI RESIZE (PER-DEVICE + OFFICE IP CEILING) ====================
 
-const PUBLIC_FREE_AI_RESIZE_LIMIT = 2;
+const PUBLIC_FREE_AI_RESIZE_LIMIT = 2;          // 2 free tries per unique physical device
+const PUBLIC_FREE_AI_RESIZE_IP_DAILY_CAP = 12;  // Safety cap per Wi-Fi IP per 24h (allows ~6 coworkers on same office Wi-Fi)
 
 async function countFreeTrialUses(tool, ip, fingerprint) {
-    const orClauses = [{ ip }];
     if (fingerprint) {
-        orClauses.push({ fingerprint });
+        const deviceUses = await FreeTrialUsage.countDocuments({ tool, fingerprint });
+        if (deviceUses >= PUBLIC_FREE_AI_RESIZE_LIMIT) {
+            return deviceUses;
+        }
+        // Check office-wide 24h IP safety ceiling so bots can't abuse fake fingerprints
+        if (ip && ip !== 'unknown') {
+            const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            const ipDailyUses = await FreeTrialUsage.countDocuments({
+                tool,
+                ip,
+                created_at: { $gte: oneDayAgo },
+            });
+            if (ipDailyUses >= PUBLIC_FREE_AI_RESIZE_IP_DAILY_CAP) {
+                return PUBLIC_FREE_AI_RESIZE_LIMIT;
+            }
+        }
+        return deviceUses;
     }
-    return FreeTrialUsage.countDocuments({ tool, $or: orClauses });
+    return FreeTrialUsage.countDocuments({ tool, ip });
 }
 
 app.get('/api/public/trial-status', async (req, res) => {

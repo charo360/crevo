@@ -1,3 +1,5 @@
+import { getDeviceFingerprint } from './deviceFingerprint';
+
 export const AUTH_TOKEN_KEY = 'revo3.auth.token';
 
 const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
@@ -33,6 +35,11 @@ export async function apiRequest<T = any>(
 
     if (token && !headers.has('Authorization')) {
         headers.set('Authorization', `Bearer ${token}`);
+    }
+
+    const deviceFp = getDeviceFingerprint();
+    if (deviceFp && !headers.has('X-Client-FP')) {
+        headers.set('X-Client-FP', deviceFp);
     }
 
     const response = await fetch(`${API_BASE}${path}`, {

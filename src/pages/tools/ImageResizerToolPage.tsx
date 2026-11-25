@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import { Navbar } from '../../components/landing/Navbar';
 import { Footer } from '../../components/landing/Footer';
 import { useAuth } from '../../contexts/AuthContext';
+import { getDeviceFingerprint } from '../../lib/deviceFingerprint';
 
 interface SizePreset {
     id: string;
@@ -22,27 +23,6 @@ const PRESETS: SizePreset[] = [
     { id: 'twitter', label: 'X / Twitter Card', platform: 'X / Twitter', width: 1200, height: 628, ratio: '1.91:1' },
     { id: 'podcast', label: 'Podcast Cover Art', platform: 'Spotify / Apple', width: 1400, height: 1400, ratio: '1:1' },
 ];
-
-function computeBrowserFingerprint(): string {
-    try {
-        const raw = [
-            navigator.userAgent,
-            navigator.language,
-            Intl.DateTimeFormat().resolvedOptions().timeZone || '',
-            `${window.screen.width}x${window.screen.height}x${window.screen.colorDepth}`,
-            String(navigator.hardwareConcurrency || ''),
-            String(navigator.maxTouchPoints || ''),
-        ].join('|');
-        let hash = 2166136261;
-        for (let i = 0; i < raw.length; i++) {
-            hash ^= raw.charCodeAt(i);
-            hash = Math.imul(hash, 16777619);
-        }
-        return `fp_${(hash >>> 0).toString(36)}`;
-    } catch {
-        return '';
-    }
-}
 
 function fileToCompressedBase64(file: File): Promise<{ base64: string; mimeType: string }> {
     return new Promise((resolve, reject) => {
@@ -86,7 +66,7 @@ export const ImageResizerToolPage: FC<ImageResizerToolPageProps> = ({
 }) => {
     const { user } = useAuth();
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const [fingerprint] = useState<string>(() => computeBrowserFingerprint());
+    const [fingerprint] = useState<string>(() => getDeviceFingerprint());
 
     const [sourceFile, setSourceFile] = useState<File | null>(null);
     const [sourcePreviewUrl, setSourcePreviewUrl] = useState<string>('');

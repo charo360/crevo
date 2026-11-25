@@ -20,6 +20,11 @@ const userSchema = new mongoose.Schema(
             type: String,
             index: true,
         },
+        deviceFingerprint: {
+            type: String,
+            index: true,
+            default: '',
+        },
         passwordHash: {
             type: String,
             required: true,
