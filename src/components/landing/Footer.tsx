@@ -32,38 +32,29 @@ export const Footer: FC = () => {
                         </ul>
                     </div>
                     <div className="footer-section">
-                        <h5 className="footer-heading">Resources</h5>
+                        <h5 className="footer-heading">Free Tools</h5>
                         <ul className="footer-links">
-                            <li><Link to="/blog">Blog</Link></li>
-                            <li><Link to="/tutorials">Tutorials</Link></li>
-                            <li><Link to="/examples">Examples</Link></li>
-                            <li><a href="#faq">FAQ</a></li>
+                            <li><Link to="/tools/youtube-transcript">YouTube Transcript &amp; Thumb</Link></li>
+                            <li><Link to="/tools/image-resizer">AI Smart Image Resizer</Link></li>
+                            <li><Link to="/tools/youtube-thumbnail-resizer">YouTube 1280×720 Resizer</Link></li>
+                            <li><Link to="/tools/tiktok-image-resizer">TikTok &amp; Shorts 9:16 Resizer</Link></li>
+                            <li><Link to="/tools/instagram-image-resizer">Instagram 4:5 Resizer</Link></li>
                         </ul>
                     </div>
                     <div className="footer-section">
-                        <h5 className="footer-heading">Company</h5>
+                        <h5 className="footer-heading">Company &amp; Legal</h5>
                         <ul className="footer-links">
-                            <li><Link to="/about">About</Link></li>
-                            <li><Link to="/contact">Contact</Link></li>
-                            <li><Link to="/careers">Careers</Link></li>
-                        </ul>
-                    </div>
-                    <div className="footer-section">
-                        <h5 className="footer-heading">Legal</h5>
-                        <ul className="footer-links">
+                            <li><Link to="/contact">Contact Us</Link></li>
+                            <li><a href="/#faq">FAQ</a></li>
                             <li><Link to="/privacy">Privacy Policy</Link></li>
                             <li><Link to="/terms">Terms of Service</Link></li>
-                            <li><Link to="/cookies">Cookie Policy</Link></li>
-                            <li><Link to="/licenses">Licenses</Link></li>
                         </ul>
                     </div>
                 </div>
                 <div className="footer-bottom">
-                    <p>&copy; 2026 Crevo. All rights reserved.</p>
+                    <p>&copy; 2026 Crevo AI. All rights reserved.</p>
                     <div className="footer-social">
-                        <a href="#" aria-label="Twitter">Twitter</a>
-                        <a href="#" aria-label="LinkedIn">LinkedIn</a>
-                        <a href="#" aria-label="Instagram">Instagram</a>
+                        <a href="mailto:sam@crevo.app" aria-label="Email Crevo AI">sam@crevo.app</a>
                     </div>
                 </div>
             </div>

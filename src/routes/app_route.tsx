@@ -36,6 +36,15 @@ const PricingPage = lazy(() =>
 const BusinessPage = lazy(() => 
   import('../pages/BusinessPage').then(m => ({ default: m.BusinessPage }))
 );
+const PrivacyPolicyPage = lazy(() =>
+  import('../pages/PrivacyPolicyPage').then(m => ({ default: m.PrivacyPolicyPage }))
+);
+const TermsPage = lazy(() =>
+  import('../pages/TermsPage').then(m => ({ default: m.TermsPage }))
+);
+const ContactPage = lazy(() =>
+  import('../pages/ContactPage').then(m => ({ default: m.ContactPage }))
+);
 
 // Platform Pages
 const YouTubePage = lazy(() => 
@@ -108,6 +117,9 @@ export const AppRoutes: FC = () => {
         <Routes>
           {/* Public Routes */}
           <Route path={AppRoutePaths.home} element={<LandingPage />} />
+          <Route path="/privacy" element={<PrivacyPolicyPage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/contact" element={<ContactPage />} />
           <Route path="/tools/youtube-transcript" element={<YouTubeTranscriptToolPage />} />
           <Route path="/tools/image-resizer" element={<ImageResizerToolPage />} />
           <Route

@@ -3,19 +3,14 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Navbar } from '../components/landing/Navbar';
 import { Hero } from '../components/landing/Hero';
+import { FreeToolsStrip } from '../components/landing/FreeToolsStrip';
+import { BeforeAfterShowcase } from '../components/landing/BeforeAfterShowcase';
 import { ProductShowcase } from '../components/landing/ProductShowcase';
-import { ValueProps } from '../components/landing/ValueProps';
 import { PlatformShowcase } from '../components/landing/PlatformShowcase';
 import { HowItWorks } from '../components/landing/HowItWorks';
-import { Gallery } from '../components/landing/Gallery';
 import { Features } from '../components/landing/Features';
-import { UseCases } from '../components/landing/UseCases';
-import { TrustBadges } from '../components/landing/TrustBadges';
 import { Testimonials } from '../components/landing/Testimonials';
-import { Integrations } from '../components/landing/Integrations';
-import { BusinessSection } from '../components/landing/BusinessSection';
 import { Pricing } from '../components/landing/Pricing';
-import { Resources } from '../components/landing/Resources';
 import { FAQ } from '../components/landing/FAQ';
 import { Newsletter } from '../components/landing/Newsletter';
 import { FinalCTA } from '../components/landing/FinalCTA';
@@ -34,19 +29,14 @@ export const LandingPage: FC = () => {
         <div className="landing-page">
             <Navbar />
             <Hero />
+            <FreeToolsStrip />
+            <BeforeAfterShowcase />
             <ProductShowcase />
-            <ValueProps />
             <PlatformShowcase />
             <HowItWorks />
-            <Gallery />
             <Features />
-            <UseCases />
-            <TrustBadges />
             <Testimonials />
-            <Integrations />
-            <BusinessSection />
             <Pricing />
-            <Resources />
             <FAQ />
             <Newsletter />
             <FinalCTA />

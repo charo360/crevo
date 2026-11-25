@@ -1279,6 +1279,52 @@ app.get('/api/youtube/thumbnail', async (req, res) => {
     }
 });
 
+app.post('/api/public/contact', async (req, res) => {
+    try {
+        const name = String(req.body?.name || '').trim().slice(0, 120);
+        const email = String(req.body?.email || '').trim().toLowerCase().slice(0, 180);
+        const subject = String(req.body?.subject || '').trim().slice(0, 200);
+        const message = String(req.body?.message || '').trim().slice(0, 4000);
+
+        if (!name || !email || !email.includes('@') || !subject || !message) {
+            return res.status(400).json({ error: 'Please fill in all fields with a valid email address.' });
+        }
+
+        const resendApiKey = process.env.RESEND_API_KEY;
+        const fromAddress = process.env.EMAIL_FROM || 'Crevo AI <hello@crevo.app>';
+        const targetInbox = process.env.MAILBUX_USER || 'sam@crevo.app';
+
+        if (!resendApiKey) {
+            return res.status(503).json({ error: 'Contact email service is temporarily unavailable.' });
+        }
+
+        const r = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${resendApiKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                from: fromAddress,
+                to: [targetInbox],
+                reply_to: email,
+                subject: `[Contact Form] ${subject}`,
+                text: `From: ${name} <${email}>\n\n${message}`,
+            }),
+        });
+
+        if (!r.ok) {
+            const errTxt = await r.text();
+            throw new Error(`Resend failed: ${errTxt}`);
+        }
+
+        return res.json({ ok: true });
+    } catch (err) {
+        console.error('Public contact form error:', err?.message || err);
+        return res.status(500).json({ error: 'Failed to send message. Please email sam@crevo.app directly.' });
+    }
+});
+
 // ==================== PROXY ROUTE (YouTube thumbnails & transcripts) ====================
 
 const ALLOWED_PROXY_HOSTS = new Set([
@@ -2402,6 +2448,18 @@ const SSR_SEO_ROUTES = {
         title: 'Crevo AI for YouTube Agencies & Media Teams',
         description:
             'Scale high-CTR thumbnail production and automated short-form video repurposing across multiple channels with Crevo AI.',
+    },
+    '/privacy': {
+        title: 'Privacy Policy | Crevo AI',
+        description: 'Learn how Crevo AI protects your account, local video processing, and 7-day temporary cloud work library.',
+    },
+    '/terms': {
+        title: 'Terms of Service | Crevo AI',
+        description: 'Crevo AI terms of service covering credits, Stripe subscriptions, commercial ownership, and acceptable use.',
+    },
+    '/contact': {
+        title: 'Contact Crevo AI Support & Sales',
+        description: 'Contact the Crevo AI team for creator support, billing help, or agency inquiries.',
     },
 };
 
