@@ -194,10 +194,10 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
                         <div
                             style={{
                                 display: 'flex',
-                                flexWrap: 'wrap',
+                                flexDirection: 'column',
                                 alignItems: 'center',
-                                gap: '16px',
-                                padding: '14px',
+                                gap: '12px',
+                                padding: '16px',
                                 background: 'var(--surface-2, #f7f4fc)',
                                 border: '1px solid var(--border-color, #e4dcf2)',
                                 borderRadius: '14px',
@@ -210,7 +210,8 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
                                 style={{
                                     width: 'auto',
                                     maxWidth: '100%',
-                                    maxHeight: '300px',
+                                    maxHeight: '360px',
+                                    margin: '0 auto',
                                     display: 'block',
                                     borderRadius: '10px',
                                     backgroundColor: '#000',
@@ -220,76 +221,65 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
                             <div
                                 style={{
                                     display: 'flex',
-                                    flexDirection: 'column',
+                                    flexWrap: 'wrap',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
                                     gap: '10px',
-                                    minWidth: '200px',
-                                    flex: 1,
                                 }}
                             >
-                                <div>
-                                    <div
-                                        style={{
-                                            fontSize: '15px',
-                                            fontWeight: 600,
-                                            color: 'var(--text-primary, #111)',
-                                            wordBreak: 'break-word',
-                                        }}
-                                    >
-                                        {videoFile?.name || 'Uploaded video'}
-                                    </div>
+                                <span
+                                    style={{
+                                        fontSize: '13px',
+                                        fontWeight: 600,
+                                        color: 'var(--text-primary, #111)',
+                                    }}
+                                >
+                                    {videoFile?.name || 'Uploaded video'}
                                     {videoFile && (
-                                        <div
-                                            style={{
-                                                fontSize: '13px',
-                                                color: 'var(--text-secondary, #6b7280)',
-                                                marginTop: '2px',
-                                            }}
-                                        >
-                                            {videoFile.size >= 1024 * 1024 * 1024
+                                        <span style={{ fontWeight: 400, color: 'var(--text-secondary, #6b7280)', marginLeft: '6px' }}>
+                                            ({videoFile.size >= 1024 * 1024 * 1024
                                                 ? `${(videoFile.size / (1024 * 1024 * 1024)).toFixed(2)} GB`
-                                                : `${(videoFile.size / (1024 * 1024)).toFixed(1)} MB`} • Ready to clip
-                                        </div>
+                                                : `${(videoFile.size / (1024 * 1024)).toFixed(1)} MB`})
+                                        </span>
                                     )}
-                                </div>
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                                    <button
-                                        type="button"
-                                        onClick={() => fileInputRef.current?.click()}
-                                        style={{
-                                            padding: '0.5rem 1rem',
-                                            background: 'var(--surface-1, #ffffff)',
-                                            color: 'var(--primary, #571c86)',
-                                            border: '1px solid var(--border-color, #d8ccf0)',
-                                            borderRadius: '8px',
-                                            cursor: 'pointer',
-                                            fontWeight: 600,
-                                            fontSize: '13px',
-                                        }}
-                                    >
-                                        Change Video
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setVideoFile(null);
-                                            setVideoUrl('');
-                                            setVideoPreviewUrl('');
-                                        }}
-                                        className="remove-video-btn"
-                                        style={{
-                                            padding: '0.5rem 1rem',
-                                            background: '#ef4444',
-                                            color: 'white',
-                                            border: 'none',
-                                            borderRadius: '8px',
-                                            cursor: 'pointer',
-                                            fontWeight: 600,
-                                            fontSize: '13px',
-                                        }}
-                                    >
-                                        Remove Video
-                                    </button>
-                                </div>
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    style={{
+                                        padding: '0.45rem 0.9rem',
+                                        background: 'var(--surface-1, #ffffff)',
+                                        color: 'var(--primary, #571c86)',
+                                        border: '1px solid var(--border-color, #d8ccf0)',
+                                        borderRadius: '8px',
+                                        cursor: 'pointer',
+                                        fontWeight: 600,
+                                        fontSize: '13px',
+                                    }}
+                                >
+                                    Change Video
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setVideoFile(null);
+                                        setVideoUrl('');
+                                        setVideoPreviewUrl('');
+                                    }}
+                                    className="remove-video-btn"
+                                    style={{
+                                        padding: '0.45rem 0.9rem',
+                                        background: '#ef4444',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        cursor: 'pointer',
+                                        fontWeight: 600,
+                                        fontSize: '13px',
+                                    }}
+                                >
+                                    Remove Video
+                                </button>
                             </div>
                         </div>
                     ) : (
