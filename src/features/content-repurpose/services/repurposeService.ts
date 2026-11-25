@@ -168,7 +168,7 @@ export async function repurposeVideo(
                     }
                 } catch (error: any) {
                     console.error(`Error generating clip for platform ${platform}:`, error);
-                    toast.warning(`Failed to generate clip for ${platform}`);
+                    toast.warning(`Failed to generate clip for ${platform}: ${error?.message || 'processing error'}`);
                 }
             }
         }

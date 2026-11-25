@@ -38,19 +38,32 @@ async function getFFmpeg(): Promise<FFmpeg> {
         return ffmpegInstance;
     }
 
-    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
-    const ffmpeg = new FFmpeg();
-    
-    // Load FFmpeg core
-    await ffmpeg.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-    });
+    const candidates = [
+        'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm',
+        'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm',
+        'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd',
+    ];
 
-    ffmpegInstance = ffmpeg;
-    isFFmpegLoaded = true;
-    
-    return ffmpeg;
+    let lastError: unknown = null;
+    for (const baseURL of candidates) {
+        try {
+            const ffmpeg = new FFmpeg();
+            await ffmpeg.load({
+                coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+                wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+            });
+            ffmpegInstance = ffmpeg;
+            isFFmpegLoaded = true;
+            return ffmpeg;
+        } catch (err) {
+            console.warn(`FFmpeg load failed from ${baseURL}, trying fallback...`, err);
+            lastError = err;
+        }
+    }
+
+    throw lastError instanceof Error
+        ? lastError
+        : new Error('Failed to load FFmpeg video processor in browser');
 }
 
 /**
