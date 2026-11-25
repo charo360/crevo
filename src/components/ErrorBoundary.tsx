@@ -34,7 +34,34 @@ export class ErrorBoundary extends Component<Props, State> {
         };
     }
 
+    static isChunkLoadError(error: Error | null): boolean {
+        if (!error) return false;
+        const msg = `${error.name || ''} ${error.message || ''}`.toLowerCase();
+        return (
+            msg.includes('failed to fetch dynamically imported module') ||
+            msg.includes('importing a module script failed') ||
+            msg.includes('chunkloaderror') ||
+            msg.includes('loading chunk') ||
+            msg.includes('loading css chunk')
+        );
+    }
+
     componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
+        // Seamlessly recover from stale JS chunks right after a new deploy
+        if (ErrorBoundary.isChunkLoadError(error) && typeof window !== 'undefined') {
+            try {
+                const lastReload = Number(sessionStorage.getItem('crevo_chunk_reload_at') || '0');
+                if (Date.now() - lastReload > 15000) {
+                    sessionStorage.setItem('crevo_chunk_reload_at', String(Date.now()));
+                    window.location.reload();
+                    return;
+                }
+            } catch {
+                window.location.reload();
+                return;
+            }
+        }
+
         // Track error
         errorTracker.trackError(error, {
             componentStack: errorInfo.componentStack,
@@ -53,6 +80,10 @@ export class ErrorBoundary extends Component<Props, State> {
     }
 
     handleReset = (): void => {
+        if (ErrorBoundary.isChunkLoadError(this.state.error) && typeof window !== 'undefined') {
+            window.location.reload();
+            return;
+        }
         this.setState({
             hasError: false,
             error: null,

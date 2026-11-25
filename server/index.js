@@ -2236,6 +2236,15 @@ const indexHtmlPath = path.join(distDir, 'index.html');
 let cachedIndexHtml = fs.existsSync(indexHtmlPath) ? fs.readFileSync(indexHtmlPath, 'utf8') : null;
 
 if (fs.existsSync(distDir)) {
+    app.use('/assets', express.static(path.join(distDir, 'assets'), {
+        maxAge: '1y',
+        immutable: true,
+        fallthrough: true,
+    }));
+    // Never return index.html for missing hashed JS/CSS chunks (prevents MIME-type crashes after deploys)
+    app.get(/^\/assets\/.*/, (_req, res) => {
+        return res.status(404).type('text/plain').send('Asset not found');
+    });
     app.use(express.static(distDir, { index: false }));
     app.get(/^(?!\/api\/).*/, (req, res) => {
         if (!cachedIndexHtml && fs.existsSync(indexHtmlPath)) {
@@ -2244,6 +2253,8 @@ if (fs.existsSync(distDir)) {
         if (!cachedIndexHtml) {
             return res.status(404).send('Not found');
         }
+
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
 
         const cleanPath = (req.path || '/').replace(/\/+$/, '') || '/';
         const meta = SSR_SEO_ROUTES[cleanPath];

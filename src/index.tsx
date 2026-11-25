@@ -20,6 +20,20 @@ declare global {
 
 // Initialize error tracking and performance monitoring
 if (typeof window !== 'undefined') {
+    // Auto-recover seamlessly if a stale lazy-loaded JS chunk is requested right after a deploy
+    window.addEventListener('vite:preloadError', (event) => {
+        event.preventDefault();
+        try {
+            const lastReload = Number(sessionStorage.getItem('crevo_chunk_reload_at') || '0');
+            if (Date.now() - lastReload > 15000) {
+                sessionStorage.setItem('crevo_chunk_reload_at', String(Date.now()));
+                window.location.reload();
+            }
+        } catch {
+            window.location.reload();
+        }
+    });
+
     // Global error handler
     window.addEventListener('error', (event) => {
         const error = event.error || new Error(event.message);
