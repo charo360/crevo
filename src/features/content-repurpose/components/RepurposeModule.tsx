@@ -45,9 +45,9 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
         const file = event.target.files?.[0];
         if (file) {
             try {
-                // Check file size (max 500MB for videos)
-                if (file.size > 500 * 1024 * 1024) {
-                    toast.error('Video file size must be less than 500MB');
+                // Check file size (max 5GB for videos)
+                if (file.size > 5 * 1024 * 1024 * 1024) {
+                    toast.error('Video file size must be less than 5GB');
                     return;
                 }
                 
@@ -230,7 +230,7 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
                                     <line x1="12" y1="3" x2="12" y2="15"></line>
                                 </svg>
                                 <p>Click to upload or drag &amp; drop a video</p>
-                                <p className="upload-hint">MP4, MOV, WebM up to 200MB — AI finds top viral moments &amp; clips them in seconds</p>
+                                <p className="upload-hint">MP4, MOV, WebM up to 5GB — AI finds top viral moments &amp; clips them in seconds</p>
                             </>
                         )}
                     </div>

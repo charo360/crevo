@@ -877,7 +877,7 @@ app.post('/api/newsletter/subscribe', async (req, res) => {
 
 const execFileAsync = promisify(execFile);
 const VIDEO_TMP_DIR = path.join(os.tmpdir(), 'revo3-videos');
-const MAX_VIDEO_UPLOAD_BYTES = 600 * 1024 * 1024; // 600 MB
+const MAX_VIDEO_UPLOAD_BYTES = 5 * 1024 * 1024 * 1024; // 5 GB
 const VIDEO_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 function ensureVideoTmpDir() {
@@ -1082,7 +1082,7 @@ app.post('/api/video/upload', requireAuth, (req, res) => {
             writeStream.destroy();
             cleanup();
             if (!res.headersSent) {
-                res.status(413).json({ error: 'Video file exceeds 600 MB limit' });
+                res.status(413).json({ error: 'Video file exceeds 5 GB limit' });
             }
             req.destroy();
         }
@@ -1301,9 +1301,11 @@ async function start() {
         process.exit(1);
     }
 
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
         console.log(`🚀 API server running on http://localhost:${PORT}`);
     });
+    // Allow long-running multi-GB video uploads without Node's default 5-minute request timeout
+    server.requestTimeout = 0;
 }
 
 start();
