@@ -52,7 +52,7 @@ export const UseCases: FC = () => {
             <div className="use-cases-container">
                 <h2 className="section-title">Create & Enhance Thumbnails for Every Creator</h2>
                 <p className="section-subtitle">
-                    Whether you're creating thumbnails from scratch or enhancing existing ones, Revo3.ai helps every creator boost clicks and engagement.
+                    Whether you're creating thumbnails from scratch or enhancing existing ones, Crevo helps every creator boost clicks and engagement.
                 </p>
                 <div className="use-cases-grid">
                     {useCases.map((useCase, index) => (

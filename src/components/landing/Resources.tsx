@@ -12,7 +12,7 @@ export const Resources: FC = () => {
         },
         {
             type: 'Tutorial',
-            title: 'Getting Started with Revo3.ai',
+            title: 'Getting Started with Crevo',
             description: 'Step-by-step guide to creating your first AI-powered design.',
             icon: '🎓',
             link: '/tutorials/getting-started'
@@ -20,7 +20,7 @@ export const Resources: FC = () => {
         {
             type: 'Case Study',
             title: 'How We Increased CTR by 40%',
-            description: 'Real results from creators using Revo3.ai for their thumbnails.',
+            description: 'Real results from creators using Crevo for their thumbnails.',
             icon: '📊',
             link: '/case-studies/ctr-increase'
         },
@@ -34,7 +34,7 @@ export const Resources: FC = () => {
         {
             type: 'Video',
             title: 'Platform Overview Video',
-            description: 'Watch a walkthrough of all Revo3.ai features and capabilities.',
+            description: 'Watch a walkthrough of all Crevo features and capabilities.',
             icon: '🎥',
             link: '/videos/platform-overview'
         },

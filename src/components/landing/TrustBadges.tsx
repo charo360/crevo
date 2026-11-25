@@ -37,7 +37,7 @@ export const TrustBadges: FC = () => {
     return (
         <section className="trust-badges-section">
             <div className="trust-badges-container">
-                <h2 className="section-title">Why Creators Trust Revo3.ai</h2>
+                <h2 className="section-title">Why Creators Trust Crevo</h2>
                 <div className="trust-badges-grid">
                     {badges.map((badge, index) => (
                         <div key={index} className="trust-badge-card">

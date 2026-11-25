@@ -30,7 +30,7 @@ export const BusinessSection: FC = () => {
             <div className="business-container">
                 <div className="business-content">
                     <div className="business-header">
-                        <h2 className="section-title">The full power of Revo3.ai built for business</h2>
+                        <h2 className="section-title">The full power of Crevo built for business</h2>
                         <p className="section-subtitle">
                             Get the most advanced AI design tools and everything your team needs to create anything at scale — fast, secure, and built to transform your process. From idea to execution, nothing is off limits.
                         </p>

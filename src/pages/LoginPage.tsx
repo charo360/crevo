@@ -53,7 +53,7 @@ export const LoginPage: FC = () => {
         <div className="auth-page">
             <div className="auth-container">
                 <div className="auth-header">
-                    <Link to="/" className="auth-logo">Revo3.ai</Link>
+                    <Link to="/" className="auth-logo">Crevo</Link>
                     <h1>Welcome back</h1>
                     <p>Sign in to continue to your design studio</p>
                 </div>

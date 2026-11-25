@@ -48,7 +48,7 @@ export const Pricing: FC = () => {
             price: '$0',
             period: '',
             credits: 10,
-            description: 'Perfect for trying out Revo3.ai',
+            description: 'Perfect for trying out Crevo',
             features: [
                 '10 credits',
                 'All platform types',

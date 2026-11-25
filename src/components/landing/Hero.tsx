@@ -6,13 +6,11 @@ export const Hero: FC = () => {
         <section className="hero-section">
             <div className="hero-container">
                 <h1 className="hero-title">
-                    Create & Enhance Thumbnails<br />
-                    <span className="gradient-text">That Drive Clicks & Engagement</span>
+                    AI YouTube Thumbnails &amp; Viral Clips<br />
+                    <span className="gradient-text">Built to Multiply Your Clicks &amp; Views</span>
                 </h1>
                 <p className="hero-description">
-                    AI-powered thumbnail generator that creates stunning, clickable thumbnails or enhances your existing ones. 
-                    Generate YouTube thumbnails, podcast covers, TikTok covers, and more in seconds. 
-                    The choice of creators who want thumbnails that actually perform.
+                    Create high-CTR YouTube thumbnails, upgrade existing ones with AI scoring, and turn long videos into viral Shorts, TikToks &amp; Reels with burned-in captions — all in one fast studio.
                 </p>
                 <div className="hero-cta">
                     <Link to="/signup" className="cta-button primary">

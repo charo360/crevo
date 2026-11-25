@@ -93,7 +93,7 @@ export const PricingPage: FC = () => {
         },
         {
             question: 'Can I use designs commercially?',
-            answer: 'Absolutely! All designs generated with Revo3.ai can be used commercially. No additional licenses needed.'
+            answer: 'Absolutely! All designs generated with Crevo can be used commercially. No additional licenses needed.'
         }
     ];
 

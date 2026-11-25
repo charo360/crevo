@@ -10,13 +10,13 @@ interface Testimonial {
 export const Testimonials: FC = () => {
     const testimonials: Testimonial[] = [
         {
-            quote: "With Revo3.ai, my team ships scroll-stopping thumbnails in minutes. It understands our brand voice and keeps our visuals consistent everywhere.",
+            quote: "With Crevo, my team ships scroll-stopping thumbnails in minutes. It understands our brand voice and keeps our visuals consistent everywhere.",
             author: "Amina Roberts",
             role: "Creative Director, Culture Co",
             image: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=520&q=80"
         },
         {
-            quote: "The AI suggestions feel like a companion editor. Revo3.ai turned my YouTube workflow into a repeatable system and boosted my weekly output.",
+            quote: "The AI suggestions feel like a companion editor. Crevo turned my YouTube workflow into a repeatable system and boosted my weekly output.",
             author: "Jason Cole",
             role: "YouTube Educator",
             image: "https://images.unsplash.com/photo-1525182008055-f88b95ff7980?auto=format&fit=crop&w=520&q=80"
@@ -28,7 +28,7 @@ export const Testimonials: FC = () => {
             image: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=520&q=80"
         },
         {
-            quote: "Short-form content is everything for us. Revo3.ai automates the tedious parts so I can obsess over story instead of software.",
+            quote: "Short-form content is everything for us. Crevo automates the tedious parts so I can obsess over story instead of software.",
             author: "Malik Thompson",
             role: "Documentary Filmmaker",
             image: "https://images.unsplash.com/photo-1529665253569-6d01c0eaf7b6?auto=format&fit=crop&w=520&q=80"
@@ -68,7 +68,7 @@ export const Testimonials: FC = () => {
             <div className="testimonials-container">
                 <h2 className="section-title">Trusted by Creators Worldwide</h2>
                 <p className="section-subtitle">
-                    Join thousands of creators who use Revo3.ai to create viral content that converts.
+                    Join thousands of creators who use Crevo to create viral content that converts.
                 </p>
                 <div className="testimonial-slider">
                     <div

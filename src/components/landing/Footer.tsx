@@ -7,7 +7,7 @@ export const Footer: FC = () => {
             <div className="footer-container">
                 <div className="footer-content">
                     <div className="footer-section">
-                        <h4 className="footer-title">Revo3.ai</h4>
+                        <h4 className="footer-title">Crevo</h4>
                         <p className="footer-description">
                             AI-powered design studio for creating viral content that converts. Everything you need to create without limits.
                         </p>
@@ -59,7 +59,7 @@ export const Footer: FC = () => {
                     </div>
                 </div>
                 <div className="footer-bottom">
-                    <p>&copy; 2024 Revo3.ai. All rights reserved.</p>
+                    <p>&copy; 2026 Crevo. All rights reserved.</p>
                     <div className="footer-social">
                         <a href="#" aria-label="Twitter">Twitter</a>
                         <a href="#" aria-label="LinkedIn">LinkedIn</a>

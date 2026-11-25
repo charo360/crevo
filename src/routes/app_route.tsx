@@ -7,6 +7,7 @@ import React, { FC, Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../components/ProtectedRoute';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { RouteSEO } from '../components/SEO';
 import { AppRoutePaths } from './paths';
 
 // ==================== Lazy Loading Components ====================
@@ -84,6 +85,7 @@ const LoadingFallback: FC = () => (
 export const AppRoutes: FC = () => {
   return (
     <ErrorBoundary>
+      <RouteSEO />
       <Suspense fallback={<LoadingFallback />}>
         <Routes>
           {/* Public Routes */}

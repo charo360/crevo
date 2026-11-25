@@ -10,12 +10,12 @@ export const FAQ: FC = () => {
 
     const faqs: FAQItem[] = [
         {
-            question: "What platforms does Revo3.ai support?",
-            answer: "Revo3.ai supports YouTube (thumbnail improvement and generation), Podcast covers, TikTok/Social media verticals, Twitter cards, and content repurposing across multiple platforms. Each design is optimized for its specific platform format."
+            question: "What platforms does Crevo support?",
+            answer: "Crevo supports YouTube (thumbnail improvement and generation), Podcast covers, TikTok/Social media verticals, Twitter cards, and content repurposing across multiple platforms. Each design is optimized for its specific platform format."
         },
         {
-            question: "Do I need design skills to use Revo3.ai?",
-            answer: "Not at all! Revo3.ai is built for creators of all skill levels. Simply describe what you want, or use our AI assistant to help guide you. The AI handles all the design work, from composition to color selection."
+            question: "Do I need design skills to use Crevo?",
+            answer: "Not at all! Crevo is built for creators of all skill levels. Simply describe what you want, or use our AI assistant to help guide you. The AI handles all the design work, from composition to color selection."
         },
         {
             question: "Can I edit the generated designs?",
@@ -27,7 +27,7 @@ export const FAQ: FC = () => {
         },
         {
             question: "Can I use generated designs commercially?",
-            answer: "Yes! All designs generated with Revo3.ai are yours to use for commercial purposes. There are no watermarks, and you have full rights to the designs you create."
+            answer: "Yes! All designs generated with Crevo are yours to use for commercial purposes. There are no watermarks, and you have full rights to the designs you create."
         },
         {
             question: "What file formats are supported?",
@@ -52,7 +52,7 @@ export const FAQ: FC = () => {
             <div className="faq-container">
                 <h2 className="section-title">Frequently Asked Questions</h2>
                 <p className="section-subtitle">
-                    Everything you need to know about Revo3.ai
+                    Everything you need to know about Crevo
                 </p>
                 <div className="faq-list">
                     {faqs.map((faq, index) => (

@@ -37,7 +37,7 @@ export const BusinessPage: FC = () => {
         },
         {
             title: 'White-Label Options',
-            description: 'Brand Revo3.ai with your company colors and logo for seamless integration.',
+            description: 'Brand Crevo with your company colors and logo for seamless integration.',
             icon: '🎨'
         },
         {
@@ -158,7 +158,7 @@ export const BusinessPage: FC = () => {
                 <section className="business-cta">
                     <div className="business-cta-container">
                         <h2>Ready to Transform Your Design Workflow?</h2>
-                        <p>Get a custom quote and see how Revo3.ai can scale with your business</p>
+                        <p>Get a custom quote and see how Crevo can scale with your business</p>
                         <div className="business-cta-buttons">
                             <Link to="/contact?type=business" className="cta-button primary large">
                                 Schedule a Demo

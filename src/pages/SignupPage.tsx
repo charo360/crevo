@@ -65,7 +65,7 @@ export const SignupPage: FC = () => {
         <div className="auth-page">
             <div className="auth-container">
                 <div className="auth-header">
-                    <Link to="/" className="auth-logo">Revo3.ai</Link>
+                    <Link to="/" className="auth-logo">Crevo</Link>
                     <h1>Create your account</h1>
                     <p>Start creating amazing designs with AI</p>
                 </div>

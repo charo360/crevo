@@ -3,26 +3,76 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI Design Studio</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lato:wght@400;700&family=Montserrat:wght@400;700&family=Playfair+Display:wght@400;700&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="src/index.css" />
-  <script type="importmap">
-{
-  "imports": {
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.25.0"
-  }
-}
-</script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <link rel="stylesheet" href="/src/index.css">
-</head>
+    <title>Crevo — AI YouTube Thumbnail Generator &amp; Viral Short Clip Studio</title>
+    <meta
+      name="description"
+      content="Create high-CTR YouTube thumbnails, improve existing thumbnails with AI, repurpose long videos into viral Shorts, TikToks &amp; Reels with auto-captions, and download transcripts in seconds."
+    />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="theme-color" content="#571c86" />
+    <link rel="canonical" href="https://crevo.app/" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- Open Graph / Social Sharing -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Crevo" />
+    <meta property="og:url" content="https://crevo.app/" />
+    <meta property="og:title" content="Crevo — AI YouTube Thumbnail Generator &amp; Viral Short Clip Studio" />
+    <meta
+      property="og:description"
+      content="Turn long videos into viral Shorts, TikToks &amp; Reels with AI auto-captions, and design scroll-stopping YouTube thumbnails that boost CTR."
+    />
+    <meta property="og:image" content="https://crevo.app/og-image.svg" />
+
+    <!-- Twitter / X Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Crevo — AI YouTube Thumbnail Generator &amp; Viral Short Clip Studio" />
+    <meta
+      name="twitter:description"
+      content="Design high-CTR YouTube thumbnails and repurpose long videos into viral vertical clips with AI auto-captions in seconds."
+    />
+    <meta name="twitter:image" content="https://crevo.app/og-image.svg" />
+
+    <!-- Structured Data (JSON-LD) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "name": "Crevo",
+            "url": "https://crevo.app",
+            "logo": "https://crevo.app/favicon.svg"
+          },
+          {
+            "@type": "SoftwareApplication",
+            "name": "Crevo",
+            "applicationCategory": "MultimediaApplication",
+            "operatingSystem": "Web",
+            "url": "https://crevo.app",
+            "description": "AI-powered YouTube thumbnail generator, thumbnail improver, smart image resizer, transcript downloader, and viral short-form video repurposing studio.",
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "USD"
+            }
+          }
+        ]
+      }
+    </script>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/index.css" />
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="src/index.tsx"></script>
-</body>
+    <script type="module" src="/src/index.tsx"></script>
+  </body>
 </html>

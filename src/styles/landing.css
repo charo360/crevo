@@ -138,7 +138,7 @@
 
 /* Hero Section */
 .hero-section {
-    padding: 6rem 2rem;
+    padding: 3.75rem 2rem;
     text-align: center;
     max-width: 900px;
     margin: 0 auto;
@@ -243,7 +243,7 @@
 
 /* Features Section */
 .features-section {
-    padding: 6rem 2rem;
+    padding: 3.75rem 2rem;
     background: var(--surface-1);
 }
 
@@ -333,7 +333,7 @@
 
 /* Pricing Section */
 .pricing-section {
-    padding: 6rem 2rem;
+    padding: 3.75rem 2rem;
 }
 
 .pricing-container {
@@ -774,7 +774,7 @@
     }
 
     .product-showcase-section {
-        padding: 5rem 2rem;
+        padding: 3.25rem 2rem;
     }
 
     .product-showcase-container {
@@ -1407,7 +1407,7 @@
 
 /* Platform Showcase */
 .platform-showcase-section {
-    padding: 6rem 2rem;
+    padding: 3.75rem 2rem;
     background: var(--surface-1);
 }
 
@@ -1492,7 +1492,7 @@
 
 /* Product Showcase */
 .product-showcase-section {
-    padding: 6rem 2rem;
+    padding: 3.75rem 2rem;
 }
 
 .product-showcase-container {
@@ -1584,7 +1584,7 @@
 
 /* Value Props */
 .value-props-section {
-    padding: 6rem 2rem;
+    padding: 3.75rem 2rem;
     background: var(--surface-1);
 }
 
@@ -1624,7 +1624,7 @@
 
 /* How It Works */
 .how-it-works-section {
-    padding: 6rem 2rem;
+    padding: 3.75rem 2rem;
 }
 
 .how-it-works-container {
@@ -1702,7 +1702,7 @@
 
 /* Testimonials */
 .testimonials-section {
-    padding: 6rem 2rem;
+    padding: 3.75rem 2rem;
     background: var(--surface-1);
 }
 
@@ -1887,7 +1887,7 @@
 
 /* Business Section */
 .business-section {
-    padding: 6rem 2rem;
+    padding: 3.75rem 2rem;
     background: linear-gradient(135deg, var(--surface-1) 0%, var(--surface-2) 100%);
 }
 
@@ -1949,7 +1949,7 @@
 
 /* FAQ Section */
 .faq-section {
-    padding: 6rem 2rem;
+    padding: 3.75rem 2rem;
     background: var(--surface-1);
 }
 
@@ -2043,7 +2043,7 @@
 
 /* Final CTA Section */
 .final-cta-section {
-    padding: 6rem 2rem;
+    padding: 3.75rem 2rem;
     background: linear-gradient(140deg, #571c86 0%, #8e3cb9 50%, #e1a80d 100%);
     text-align: center;
 }
@@ -2152,7 +2152,7 @@
 
 /* Stats Section */
 .stats-section {
-    padding: 6rem 2rem;
+    padding: 3.75rem 2rem;
     background: var(--surface-1);
 }
 
@@ -2203,7 +2203,7 @@
 
 /* Use Cases Section */
 .use-cases-section {
-    padding: 6rem 2rem;
+    padding: 3.75rem 2rem;
     background: var(--surface-1);
 }
 
@@ -2272,7 +2272,7 @@
 
 /* Workflow Section */
 .workflow-section {
-    padding: 6rem 2rem;
+    padding: 3.75rem 2rem;
 }
 
 .workflow-container {
@@ -2372,7 +2372,7 @@
 
 /* Gallery Section */
 .gallery-section {
-    padding: 6rem 2rem;
+    padding: 3.75rem 2rem;
     background: var(--surface-1);
 }
 
@@ -2476,7 +2476,7 @@
 
 /* Integrations Section */
 .integrations-section {
-    padding: 6rem 2rem;
+    padding: 3.75rem 2rem;
     background: var(--surface-1);
 }
 
@@ -2539,7 +2539,7 @@
 
 /* Newsletter Section */
 .newsletter-section {
-    padding: 6rem 2rem;
+    padding: 3.75rem 2rem;
     background: var(--surface-1);
 }
 
@@ -2633,7 +2633,7 @@
 
 /* Trust Badges Section */
 .trust-badges-section {
-    padding: 6rem 2rem;
+    padding: 3.75rem 2rem;
 }
 
 .trust-badges-container {
@@ -2681,7 +2681,7 @@
 
 /* Resources Section */
 .resources-section {
-    padding: 6rem 2rem;
+    padding: 3.75rem 2rem;
     background: var(--surface-1);
 }
 
@@ -2798,7 +2798,7 @@
 }
 
 .features-hero {
-    padding: 6rem 2rem 4rem;
+    padding: 4rem 2rem 3rem;
     text-align: center;
     background: var(--surface-1);
 }
@@ -2816,7 +2816,7 @@
 
 /* Feature Sections (for hash navigation) */
 .feature-section {
-    padding: 5rem 2rem;
+    padding: 3.25rem 2rem;
     scroll-margin-top: 100px;
 }
 
@@ -2981,7 +2981,7 @@
 }
 
 .features-cta {
-    padding: 6rem 2rem;
+    padding: 3.75rem 2rem;
     background: var(--surface-1);
     text-align: center;
 }
@@ -3012,7 +3012,7 @@
 }
 
 .pricing-hero {
-    padding: 6rem 2rem 4rem;
+    padding: 4rem 2rem 3rem;
     text-align: center;
     background: var(--surface-1);
 }
@@ -3124,7 +3124,7 @@
 }
 
 .pricing-cta {
-    padding: 6rem 2rem;
+    padding: 3.75rem 2rem;
     text-align: center;
     background: var(--surface-1);
 }
@@ -3136,7 +3136,7 @@
 }
 
 .business-hero {
-    padding: 6rem 2rem;
+    padding: 3.75rem 2rem;
     text-align: center;
     background: linear-gradient(135deg, var(--primary) 0%, #00d4ff 100%);
 }
@@ -3155,7 +3155,7 @@
 }
 
 .business-benefits {
-    padding: 6rem 2rem;
+    padding: 3.75rem 2rem;
 }
 
 .business-benefits-container {
@@ -3208,7 +3208,7 @@
 }
 
 .business-usecases {
-    padding: 6rem 2rem;
+    padding: 3.75rem 2rem;
     background: var(--surface-1);
 }
 
@@ -3260,7 +3260,7 @@
 }
 
 .business-features {
-    padding: 6rem 2rem;
+    padding: 3.75rem 2rem;
 }
 
 .business-features-container {
@@ -3321,7 +3321,7 @@
 }
 
 .business-cta {
-    padding: 6rem 2rem;
+    padding: 3.75rem 2rem;
     text-align: center;
     background: var(--surface-1);
 }
@@ -3352,7 +3352,7 @@
 }
 
 .platform-hero {
-    padding: 6rem 2rem 4rem;
+    padding: 4rem 2rem 3rem;
     text-align: center;
     background: var(--surface-1);
 }
@@ -3661,7 +3661,7 @@
 }
 
 .platform-cta {
-    padding: 6rem 2rem;
+    padding: 3.75rem 2rem;
     text-align: center;
 }
 
