@@ -192,7 +192,11 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
                     {/* File Upload with real drag-and-drop */}
                     <div
                         className="upload-area"
-                        onClick={() => fileInputRef.current?.click()}
+                        onClick={() => {
+                            if (!videoPreviewUrl) {
+                                fileInputRef.current?.click();
+                            }
+                        }}
                         onDragOver={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -207,25 +211,127 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
                         }}
                     >
                         {videoPreviewUrl ? (
-                            <div style={{ width: '100%' }}>
-                                <video 
-                                    src={videoPreviewUrl} 
-                                    controls 
-                                    className="video-preview"
-                                    style={{ maxWidth: '100%', maxHeight: '360px', margin: '0 auto', display: 'block', borderRadius: '10px' }}
-                                />
-                                <button 
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setVideoFile(null);
-                                        setVideoUrl('');
-                                        setVideoPreviewUrl('');
+                            <div
+                                onClick={(e) => e.stopPropagation()}
+                                style={{
+                                    width: '100%',
+                                    maxWidth: '760px',
+                                    margin: '0 auto',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    gap: '14px',
+                                    cursor: 'default',
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        width: '100%',
+                                        background: '#0f0f17',
+                                        borderRadius: '14px',
+                                        padding: '12px',
+                                        boxShadow: '0 10px 28px rgba(17, 17, 27, 0.18)',
+                                        display: 'flex',
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
                                     }}
-                                    className="remove-video-btn"
-                                    style={{ marginTop: '1rem', padding: '0.5rem 1rem', background: '#ef4444', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}
                                 >
-                                    Remove Video
-                                </button>
+                                    <video
+                                        src={videoPreviewUrl}
+                                        controls
+                                        preload="metadata"
+                                        style={{
+                                            width: 'auto',
+                                            maxWidth: '100%',
+                                            maxHeight: '420px',
+                                            display: 'block',
+                                            borderRadius: '8px',
+                                            backgroundColor: '#000',
+                                        }}
+                                    />
+                                </div>
+                                <div
+                                    style={{
+                                        width: '100%',
+                                        display: 'flex',
+                                        flexWrap: 'wrap',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: '10px',
+                                        padding: '10px 14px',
+                                        background: 'var(--surface-1, #ffffff)',
+                                        border: '1px solid var(--border-color, #e4dcf2)',
+                                        borderRadius: '10px',
+                                    }}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+                                        <span
+                                            style={{
+                                                fontSize: '13px',
+                                                fontWeight: 600,
+                                                color: 'var(--text-primary, #111)',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                            }}
+                                            title={videoFile?.name || 'Uploaded video'}
+                                        >
+                                            {videoFile?.name || 'Uploaded video'}
+                                        </span>
+                                        {videoFile && (
+                                            <span
+                                                style={{
+                                                    fontSize: '12px',
+                                                    color: 'var(--text-secondary, #6b7280)',
+                                                    whiteSpace: 'nowrap',
+                                                }}
+                                            >
+                                                ({videoFile.size >= 1024 * 1024 * 1024
+                                                    ? `${(videoFile.size / (1024 * 1024 * 1024)).toFixed(2)} GB`
+                                                    : `${(videoFile.size / (1024 * 1024)).toFixed(1)} MB`})
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => fileInputRef.current?.click()}
+                                            style={{
+                                                padding: '0.45rem 0.9rem',
+                                                background: 'var(--surface-2, #f3eefc)',
+                                                color: 'var(--primary, #571c86)',
+                                                border: '1px solid var(--border-color, #d8ccf0)',
+                                                borderRadius: '8px',
+                                                cursor: 'pointer',
+                                                fontWeight: 600,
+                                                fontSize: '13px',
+                                            }}
+                                        >
+                                            Change Video
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setVideoFile(null);
+                                                setVideoUrl('');
+                                                setVideoPreviewUrl('');
+                                            }}
+                                            className="remove-video-btn"
+                                            style={{
+                                                padding: '0.45rem 0.9rem',
+                                                background: '#ef4444',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                cursor: 'pointer',
+                                                fontWeight: 600,
+                                                fontSize: '13px',
+                                            }}
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         ) : (
                             <>
