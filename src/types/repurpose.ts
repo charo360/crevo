@@ -33,7 +33,9 @@ export interface ViralClip {
     virality_score: number; // 0-100
     engagement_score: number; // 0-100
     title?: string;
+    hook_title?: string;
     description?: string;
+    hashtags?: string[];
     thumbnail_url?: string;
     transcript_snippet?: string;
     platform_format: 'youtube_shorts' | 'tiktok' | 'instagram_reels' | 'twitter' | 'generic';
@@ -155,12 +157,19 @@ export interface RepurposeJob {
     updated_at: string;
 }
 
+export type CropMode = 'center' | 'split_podcast' | 'left' | 'right';
+export type CaptionStyle = 'hormozi' | 'mrbeast' | 'neon' | 'minimal';
+export type CaptionPosition = 'bottom' | 'middle' | 'top';
+
 export interface ClipGenerationOptions {
     min_duration: number; // minimum clip duration in seconds (default: 15)
     max_duration: number; // maximum clip duration in seconds (default: 60)
     target_clip_count: number; // desired number of clips (default: 10)
     platforms: Array<'youtube_shorts' | 'tiktok' | 'instagram_reels' | 'twitter'>;
     include_captions: boolean;
+    caption_style?: CaptionStyle;
+    caption_position?: CaptionPosition;
+    crop_mode?: CropMode;
     include_transitions: boolean;
     virality_threshold: number; // minimum virality score (0-100, default: 70)
     overlap_prevention: boolean; // prevent clips from overlapping

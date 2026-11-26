@@ -105,6 +105,9 @@ async function processVideoClipOnServer(
         includeAudio?: boolean;
         includeTransitions?: boolean;
         includeCaptions?: boolean;
+        captionStyle?: 'hormozi' | 'mrbeast' | 'neon' | 'minimal';
+        captionPosition?: 'bottom' | 'middle' | 'top';
+        cropMode?: 'center' | 'split_podcast' | 'left' | 'right';
         onUploadProgress?: (percent: number) => void;
     }
 ): Promise<{ blob: Blob; metadata: ClipMetadata } | null> {
@@ -135,6 +138,9 @@ async function processVideoClipOnServer(
             includeAudio: options.includeAudio !== false,
             includeTransitions: options.includeTransitions === true,
             includeCaptions: options.includeCaptions === true,
+        captionStyle: options.captionStyle || 'hormozi',
+        captionPosition: options.captionPosition || 'bottom',
+        cropMode: options.cropMode || 'center',
         }),
     });
 
@@ -216,6 +222,9 @@ export async function processVideoClip(
         includeAudio?: boolean;
         includeTransitions?: boolean;
         includeCaptions?: boolean;
+        captionStyle?: 'hormozi' | 'mrbeast' | 'neon' | 'minimal';
+        captionPosition?: 'bottom' | 'middle' | 'top';
+        cropMode?: 'center' | 'split_podcast' | 'left' | 'right';
         onUploadProgress?: (percent: number) => void;
     } = {}
 ): Promise<{ blob: Blob; metadata: ClipMetadata }> {

@@ -8,9 +8,9 @@ import React, { FC, useState, useRef } from 'react';
 import { toast } from 'react-toastify';
 import { GoogleGenAI } from "@google/genai";
 import { createAiClient } from '../../../core/services/ai-providers/openrouterClient';
-import { repurposeVideo } from '../services/repurposeService';
+import { repurposeVideo, recutViralClip } from '../services/repurposeService';
 import { isSupportedVideoFile } from '../../../shared/utils/video-utils';
-import { RepurposeResult, ClipGenerationOptions } from '../../../types/repurpose';
+import { RepurposeResult, ClipGenerationOptions, CropMode, CaptionStyle, CaptionPosition, ViralClip } from '../../../types/repurpose';
 import { useAuth } from '../../../contexts/AuthContext';
 
 interface RepurposeModuleProps {
@@ -29,6 +29,8 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
     const [progress, setProgress] = useState(0);
     const [progressStatus, setProgressStatus] = useState('Starting...');
     const [results, setResults] = useState<RepurposeResult | null>(null);
+    const [recuttingClipId, setRecuttingClipId] = useState<string | null>(null);
+    const [clipTrims, setClipTrims] = useState<Record<string, { start: number; end: number }>>({});
     
     const [options, setOptions] = useState<ClipGenerationOptions>({
         min_duration: 15,
@@ -36,10 +38,54 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
         target_clip_count: 3,
         platforms: ['youtube_shorts'],
         include_captions: false,
+        caption_style: 'hormozi',
+        caption_position: 'bottom',
+        crop_mode: 'center',
         include_transitions: true,
         virality_threshold: 65,
         overlap_prevention: true,
     });
+
+    const handleCopySocialPack = async (clip: ViralClip) => {
+        const title = clip.hook_title || clip.title || 'Viral Short';
+        const tags = (clip.hashtags && clip.hashtags.length > 0 ? clip.hashtags : ['#shorts', '#viral']).join(' ');
+        const text = `${title}\n\n${clip.description ? `${clip.description}\n\n` : ''}${tags}`;
+        try {
+            await navigator.clipboard.writeText(text);
+            toast.success('Copied title, caption & hashtags!');
+        } catch {
+            toast.info(text);
+        }
+    };
+
+    const handleRecutClip = async (clip: ViralClip) => {
+        if (!videoFile) {
+            toast.info('Upload a local video file to re-cut clips.');
+            return;
+        }
+        const trim = clipTrims[clip.id] || { start: clip.start_time, end: clip.end_time };
+        if (trim.end - trim.start < 2) {
+            toast.error('Clip must be at least 2 seconds long.');
+            return;
+        }
+        setRecuttingClipId(clip.id);
+        try {
+            const updated = await recutViralClip(videoFile, clip, trim.start, trim.end, options);
+            setResults((prev) =>
+                prev
+                    ? {
+                          ...prev,
+                          clips: prev.clips.map((c) => (c.id === clip.id ? updated : c)),
+                      }
+                    : prev
+            );
+            toast.success(`Clip re-cut (${updated.duration.toFixed(1)}s) and ready!`);
+        } catch (err: any) {
+            toast.error(err?.message || 'Could not re-cut clip.');
+        } finally {
+            setRecuttingClipId(null);
+        }
+    };
 
     const ai = useRef<GoogleGenAI>(createAiClient());
 
@@ -395,14 +441,52 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
                     </div>
                 </div>
 
-                <div className="feature-toggles">
+                {/* Smart Framing / Layout Selector */}
+                <div style={{ marginTop: '14px' }}>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: '#1f2937' }}>
+                        Smart Video Framing
+                    </label>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                        {(
+                            [
+                                { id: 'center', label: '🎯 Auto Center' },
+                                { id: 'split_podcast', label: '🎙️ 2-Speaker Podcast Split-Screen' },
+                                { id: 'left', label: '⬅️ Focus Left' },
+                                { id: 'right', label: '➡️ Focus Right' },
+                            ] as Array<{ id: CropMode; label: string }>
+                        ).map((mode) => {
+                            const active = (options.crop_mode || 'center') === mode.id;
+                            return (
+                                <button
+                                    key={mode.id}
+                                    type="button"
+                                    onClick={() => setOptions({ ...options, crop_mode: mode.id })}
+                                    style={{
+                                        padding: '7px 12px',
+                                        borderRadius: '9px',
+                                        border: active ? '1.5px solid #571c86' : '1px solid #d8ccf0',
+                                        background: active ? '#571c86' : '#ffffff',
+                                        color: active ? '#ffffff' : '#374151',
+                                        fontWeight: 600,
+                                        fontSize: '12.5px',
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    {mode.label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                <div className="feature-toggles" style={{ marginTop: '14px' }}>
                     <label className="feature-toggle">
                         <input 
                             type="checkbox"
                             checked={options.include_captions}
                             onChange={(e) => setOptions({ ...options, include_captions: e.target.checked })}
                         />
-                        <span>Include Captions</span>
+                        <span>Include Captions (Word Highlight)</span>
                     </label>
                     <label className="feature-toggle">
                         <input 
@@ -421,6 +505,86 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
                         <span>Prevent Overlapping Clips</span>
                     </label>
                 </div>
+
+                {/* Caption Style & Position Presets (shown when Include Captions is checked) */}
+                {options.include_captions && (
+                    <div
+                        style={{
+                            marginTop: '12px',
+                            padding: '12px 14px',
+                            borderRadius: '12px',
+                            background: '#faf7ff',
+                            border: '1px solid #d8ccf0',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '10px',
+                        }}
+                    >
+                        <div>
+                            <div style={{ fontSize: '12px', fontWeight: 700, color: '#571c86', marginBottom: '6px' }}>
+                                Caption Style Preset
+                            </div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                                {(
+                                    [
+                                        { id: 'hormozi', label: '🔥 Hormozi Yellow Pop' },
+                                        { id: 'mrbeast', label: '⚡ MrBeast Bold' },
+                                        { id: 'neon', label: '💜 Crevo Neon' },
+                                        { id: 'minimal', label: '✨ Clean Minimal' },
+                                    ] as Array<{ id: CaptionStyle; label: string }>
+                                ).map((st) => {
+                                    const active = (options.caption_style || 'hormozi') === st.id;
+                                    return (
+                                        <button
+                                            key={st.id}
+                                            type="button"
+                                            onClick={() => setOptions({ ...options, caption_style: st.id })}
+                                            style={{
+                                                padding: '6px 11px',
+                                                borderRadius: '8px',
+                                                border: active ? '1.5px solid #571c86' : '1px solid #d8ccf0',
+                                                background: active ? '#571c86' : '#ffffff',
+                                                color: active ? '#ffffff' : '#374151',
+                                                fontWeight: 600,
+                                                fontSize: '12px',
+                                                cursor: 'pointer',
+                                            }}
+                                        >
+                                            {st.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '12px', fontWeight: 700, color: '#571c86' }}>Position:</span>
+                            {(['bottom', 'middle', 'top'] as CaptionPosition[]).map((pos) => {
+                                const active = (options.caption_position || 'bottom') === pos;
+                                return (
+                                    <button
+                                        key={pos}
+                                        type="button"
+                                        onClick={() => setOptions({ ...options, caption_position: pos })}
+                                        style={{
+                                            padding: '4px 10px',
+                                            borderRadius: '7px',
+                                            border: active ? '1.5px solid #571c86' : '1px solid #d8ccf0',
+                                            background: active ? '#571c86' : '#ffffff',
+                                            color: active ? '#ffffff' : '#374151',
+                                            fontWeight: 600,
+                                            fontSize: '11.5px',
+                                            textTransform: 'capitalize',
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        {pos}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Process Button */}
@@ -517,6 +681,126 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
                                                   .join(' • ')
                                             : clip.platform_format.replace('_', ' ').toUpperCase()}
                                     </p>
+
+                                    {/* Ready-to-Post Title & Hashtags Copy Pack */}
+                                    <div
+                                        style={{
+                                            margin: '8px 0 10px',
+                                            padding: '8px 10px',
+                                            borderRadius: '8px',
+                                            background: '#faf7ff',
+                                            border: '1px solid #ede5fa',
+                                            fontSize: '12px',
+                                        }}
+                                    >
+                                        <div style={{ fontWeight: 700, color: '#1f2937', marginBottom: '3px', lineHeight: 1.35 }}>
+                                            {clip.hook_title || clip.title}
+                                        </div>
+                                        <div style={{ color: '#571c86', fontWeight: 600, fontSize: '11px', marginBottom: '6px' }}>
+                                            {(clip.hashtags && clip.hashtags.length > 0 ? clip.hashtags : ['#shorts', '#viral']).join(' ')}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleCopySocialPack(clip)}
+                                            style={{
+                                                padding: '4px 9px',
+                                                borderRadius: '6px',
+                                                border: '1px solid #d8ccf0',
+                                                background: '#ffffff',
+                                                color: '#571c86',
+                                                fontWeight: 700,
+                                                fontSize: '11px',
+                                                cursor: 'pointer',
+                                            }}
+                                        >
+                                            📋 Copy Title &amp; Hashtags
+                                        </button>
+                                    </div>
+
+                                    {/* Quick Start / End Trim & Free Re-cut */}
+                                    {videoFile && (
+                                        <div
+                                            style={{
+                                                marginBottom: '10px',
+                                                padding: '8px 10px',
+                                                borderRadius: '8px',
+                                                background: '#f9fafb',
+                                                border: '1px solid #e5e7eb',
+                                                fontSize: '11.5px',
+                                            }}
+                                        >
+                                            {(() => {
+                                                const trim = clipTrims[clip.id] || { start: clip.start_time, end: clip.end_time };
+                                                const busy = recuttingClipId === clip.id;
+                                                return (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                            <span style={{ fontWeight: 600, color: '#374151' }}>
+                                                                Start: {trim.start.toFixed(1)}s
+                                                            </span>
+                                                            <div style={{ display: 'flex', gap: '4px' }}>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setClipTrims((p) => ({ ...p, [clip.id]: { ...trim, start: Math.max(0, trim.start - 2) } }))}
+                                                                    style={{ padding: '2px 7px', borderRadius: '5px', border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', fontWeight: 700 }}
+                                                                >
+                                                                    -2s
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setClipTrims((p) => ({ ...p, [clip.id]: { ...trim, start: Math.min(trim.end - 2, trim.start + 2) } }))}
+                                                                    style={{ padding: '2px 7px', borderRadius: '5px', border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', fontWeight: 700 }}
+                                                                >
+                                                                    +2s
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                            <span style={{ fontWeight: 600, color: '#374151' }}>
+                                                                End: {trim.end.toFixed(1)}s
+                                                            </span>
+                                                            <div style={{ display: 'flex', gap: '4px' }}>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setClipTrims((p) => ({ ...p, [clip.id]: { ...trim, end: Math.max(trim.start + 2, trim.end - 2) } }))}
+                                                                    style={{ padding: '2px 7px', borderRadius: '5px', border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', fontWeight: 700 }}
+                                                                >
+                                                                    -2s
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setClipTrims((p) => ({ ...p, [clip.id]: { ...trim, end: trim.end + 2 } }))}
+                                                                    style={{ padding: '2px 7px', borderRadius: '5px', border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', fontWeight: 700 }}
+                                                                >
+                                                                    +2s
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            disabled={busy}
+                                                            onClick={() => handleRecutClip(clip)}
+                                                            style={{
+                                                                marginTop: '2px',
+                                                                padding: '5px 10px',
+                                                                borderRadius: '6px',
+                                                                border: 'none',
+                                                                background: '#571c86',
+                                                                color: '#ffffff',
+                                                                fontWeight: 700,
+                                                                fontSize: '11.5px',
+                                                                cursor: busy ? 'wait' : 'pointer',
+                                                                opacity: busy ? 0.7 : 1,
+                                                            }}
+                                                        >
+                                                            {busy ? 'Re-cutting...' : '✂️ Apply Trim & Re-cut (Free)'}
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })()}
+                                        </div>
+                                    )}
+
                                     <div className="clip-actions">
                                         <a 
                                             href={clip.clip_url} 

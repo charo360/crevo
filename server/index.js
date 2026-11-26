@@ -1492,7 +1492,15 @@ function escapeAssText(text) {
         .trim();
 }
 
-async function generateClipCaptionsAss(inputPath, start, duration, width, height) {
+async function generateClipCaptionsAss(
+    inputPath,
+    start,
+    duration,
+    width,
+    height,
+    captionStyle = 'hormozi',
+    captionPosition = 'bottom'
+) {
     const openrouterKey = process.env.OPENROUTER_API_KEY;
     if (!openrouterKey) return null;
 
@@ -1573,8 +1581,56 @@ Rules:
 
         if (validCues.length === 0) return null;
 
-        const fontSize = width < height ? 46 : 38;
-        const marginV = width < height ? 210 : 70;
+        const isVertical = width < height;
+        const styleKey = String(captionStyle || 'hormozi').toLowerCase();
+        const posKey = String(captionPosition || 'bottom').toLowerCase();
+
+        // ASS Alignment: 2=bottom-center, 5=middle-center, 8=top-center
+        const alignment = posKey === 'top' ? 8 : posKey === 'middle' ? 5 : 2;
+        const marginV =
+            posKey === 'middle'
+                ? 0
+                : posKey === 'top'
+                    ? (isVertical ? 150 : 55)
+                    : (isVertical ? 220 : 70);
+
+        // ASS colors are &HAABBGGRR (Blue-Green-Red!)
+        let fontSize = isVertical ? 48 : 38;
+        let primary = '&H0000EAFF';   // Hormozi bright yellow active word
+        let secondary = '&H00FFFFFF'; // White before highlight
+        let outlineColor = '&H00000000';
+        let backColor = '&H80000000';
+        let borderStyle = 1;
+        let outline = 5;
+        let shadow = 3;
+        let uppercase = true;
+
+        if (styleKey === 'mrbeast') {
+            fontSize = isVertical ? 52 : 40;
+            primary = '&H00FFFFFF';
+            secondary = '&H000045FF'; // Vivid red-orange pop
+            outlineColor = '&H00000000';
+            outline = 6;
+            shadow = 3;
+        } else if (styleKey === 'neon') {
+            fontSize = isVertical ? 48 : 38;
+            primary = '&H00FF9BFF'; // Electric neon purple/pink
+            secondary = '&H00FFFFFF';
+            outlineColor = '&H007A1C57';
+            outline = 5;
+            shadow = 4;
+        } else if (styleKey === 'minimal') {
+            fontSize = isVertical ? 40 : 34;
+            primary = '&H00FFFFFF';
+            secondary = '&H00D8D8D8';
+            outlineColor = '&H99000000';
+            backColor = '&H99000000';
+            borderStyle = 3; // Opaque pill box background
+            outline = 10;
+            shadow = 0;
+            uppercase = false;
+        }
+
         const header = `[Script Info]
 ScriptType: v4.00+
 PlayResX: ${width}
@@ -1583,14 +1639,28 @@ WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Viral,DejaVu Sans,${fontSize},&H00FFFFFF,&H0000FFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,2,2,40,40,${marginV},1
+Style: Viral,DejaVu Sans,${fontSize},${primary},${secondary},${outlineColor},${backColor},-1,0,0,0,100,100,0,0,${borderStyle},${outline},${shadow},${alignment},40,40,${marginV},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 `;
-        const lines = validCues.map(
-            (c) => `Dialogue: 0,${formatAssTime(c.start)},${formatAssTime(c.end)},Viral,,0,0,0,,${c.text.toUpperCase()}`
-        );
+        // Build word-by-word karaoke highlight (\kf) so each word pops as it is spoken
+        const lines = validCues.map((c) => {
+            const rawText = uppercase ? c.text.toUpperCase() : c.text;
+            const words = rawText.split(/\s+/).filter(Boolean);
+            const totalCs = Math.max(15, Math.round((c.end - c.start) * 100));
+            const totalChars = words.reduce((acc, w) => acc + Math.max(2, w.length), 0) || 1;
+            const karaokeText =
+                styleKey === 'minimal' || words.length <= 1
+                    ? rawText
+                    : words
+                          .map((w) => {
+                              const wCs = Math.max(8, Math.round((Math.max(2, w.length) / totalChars) * totalCs));
+                              return `{\\kf${wCs}}${w}`;
+                          })
+                          .join(' ');
+            return `Dialogue: 0,${formatAssTime(c.start)},${formatAssTime(c.end)},Viral,,0,0,0,,${karaokeText}`;
+        });
         fs.writeFileSync(assPath, header + lines.join('\n') + '\n', 'utf8');
         return assPath;
     } catch (err) {
@@ -1814,6 +1884,9 @@ app.post('/api/video/clip', requireAuth, async (req, res) => {
         includeAudio = true,
         includeTransitions = false,
         includeCaptions = false,
+        captionStyle = 'hormozi',
+        captionPosition = 'bottom',
+        cropMode = 'center',
     } = req.body || {};
 
     if (!isValidUploadId(uploadId)) {
@@ -1863,27 +1936,59 @@ app.post('/api/video/clip', requireAuth, async (req, res) => {
         const audioAvailable = includeAudio !== false ? await hasAudioStream(inputPath) : false;
 
         if (includeCaptions && audioAvailable) {
-            assPath = await generateClipCaptionsAss(inputPath, start, duration, outputWidth, outputHeight);
+            assPath = await generateClipCaptionsAss(
+                inputPath,
+                start,
+                duration,
+                outputWidth,
+                outputHeight,
+                captionStyle,
+                captionPosition
+            );
         }
 
-        const videoFilters = [
-            `scale=${outputWidth}:${outputHeight}:force_original_aspect_ratio=increase`,
-            `crop=${outputWidth}:${outputHeight}`,
-        ];
-
+        const postFilters = [];
         if (assPath && fs.existsSync(assPath)) {
             const escapedAss = assPath.replace(/\\/g, '/').replace(/:/g, '\\:');
-            videoFilters.push(`ass='${escapedAss}'`);
+            postFilters.push(`ass='${escapedAss}'`);
         }
 
         if (includeTransitions && duration >= 1.5) {
             // Keep instant hook at 0:00 (no black opening frame!) and apply smooth outro fade
             const fadeDur = 0.4;
             const fadeOutStart = Math.max(0, duration - fadeDur).toFixed(3);
-            videoFilters.push(`fade=t=out:st=${fadeOutStart}:d=${fadeDur}`);
+            postFilters.push(`fade=t=out:st=${fadeOutStart}:d=${fadeDur}`);
         }
 
-        const filterParts = [`[0:v]${videoFilters.join(',')}[v]`];
+        const postChain = postFilters.length > 0 ? `,${postFilters.join(',')}` : '';
+        const normalizedCrop = String(cropMode || 'center').toLowerCase();
+        const filterParts = [];
+
+        if (normalizedCrop === 'split_podcast' && outputHeight > outputWidth) {
+            // 2-Speaker Podcast Split-Screen: stack Left Speaker on top & Right Speaker on bottom
+            const halfH = Math.floor(outputHeight / 2);
+            filterParts.push(`[0:v]split=2[left_raw][right_raw]`);
+            filterParts.push(
+                `[left_raw]crop=iw/2:ih:0:0,scale=${outputWidth}:${halfH}:force_original_aspect_ratio=increase,crop=${outputWidth}:${halfH}[top_v]`
+            );
+            filterParts.push(
+                `[right_raw]crop=iw/2:ih:iw/2:0,scale=${outputWidth}:${halfH}:force_original_aspect_ratio=increase,crop=${outputWidth}:${halfH}[bot_v]`
+            );
+            filterParts.push(`[top_v][bot_v]vstack=inputs=2${postChain}[v]`);
+        } else {
+            let cropExpr = `crop=${outputWidth}:${outputHeight}`;
+            if (normalizedCrop === 'left') {
+                cropExpr = `crop=${outputWidth}:${outputHeight}:0:(ih-${outputHeight})/2`;
+            } else if (normalizedCrop === 'right') {
+                cropExpr = `crop=${outputWidth}:${outputHeight}:iw-${outputWidth}:(ih-${outputHeight})/2`;
+            }
+            const baseFilters = [
+                `scale=${outputWidth}:${outputHeight}:force_original_aspect_ratio=increase`,
+                cropExpr,
+                ...postFilters,
+            ];
+            filterParts.push(`[0:v]${baseFilters.join(',')}[v]`);
+        }
         let useAudioFilter = false;
         if (audioAvailable && includeTransitions && duration >= 1.5) {
             const aFadeDur = 0.35;

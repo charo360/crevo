@@ -247,8 +247,57 @@ export async function repurposeVideo(
         toast.error(`Failed to repurpose video: ${error.message}`);
         throw error;
     } finally {
-        await clearCachedVideoInput();
+        // Keep server upload cached briefly so the user can nudge Start/End and Re-cut any clip in ~2s
     }
+}
+
+/**
+ * Re-cut an existing clip with adjusted Start/End timestamps (fast ~2s server FFmpeg re-cut)
+ */
+export async function recutViralClip(
+    videoFile: File | Blob,
+    clip: ViralClip,
+    newStart: number,
+    newEnd: number,
+    options: ClipGenerationOptions
+): Promise<ViralClip> {
+    const startTime = Math.max(0, Number(newStart) || 0);
+    const endTime = Math.max(startTime + 2, Number(newEnd) || startTime + 15);
+    const clipDuration = endTime - startTime;
+    const platformSettings = getPlatformSettings(clip.platform_format);
+
+    const { blob, metadata } = await processVideoClip(videoFile, startTime, endTime, {
+        outputFormat: 'mp4',
+        aspectRatio: clip.aspect_ratio || platformSettings.aspectRatio,
+        resolution: platformSettings.resolution,
+        fps: 30,
+        includeAudio: true,
+        includeTransitions: options.include_transitions,
+        includeCaptions: options.include_captions,
+        captionStyle: options.caption_style || 'hormozi',
+        captionPosition: options.caption_position || 'bottom',
+        cropMode: options.crop_mode || 'center',
+    });
+
+    const thumbnailBlob = await generateThumbnail(videoFile, startTime + clipDuration / 2);
+    const thumbnailUrl = URL.createObjectURL(thumbnailBlob);
+    const clipUrl = URL.createObjectURL(blob);
+
+    saveVideoClipToLibrary(blob, {
+        title: `Re-cut Clip (${Math.round(startTime)}s-${Math.round(endTime)}s)`,
+        platform: clip.platform_format.replace('_', ' '),
+        aspectRatio: clip.aspect_ratio || platformSettings.aspectRatio,
+    });
+
+    return {
+        ...clip,
+        clip_url: clipUrl,
+        thumbnail_url: thumbnailUrl,
+        start_time: startTime,
+        end_time: endTime,
+        duration: clipDuration,
+        metadata,
+    };
 }
 
 /**
@@ -294,6 +343,9 @@ async function generateClipFromMoment(
             includeAudio: true,
             includeTransitions: options.include_transitions,
             includeCaptions: options.include_captions,
+            captionStyle: options.caption_style || 'hormozi',
+            captionPosition: options.caption_position || 'bottom',
+            cropMode: options.crop_mode || 'center',
             onUploadProgress,
         }
     );
@@ -314,6 +366,16 @@ async function generateClipFromMoment(
     
     // Get transcript snippet if available
     const transcriptSnippet = moment.reasoning || '';
+    const platformTagsMap: Record<string, string[]> = {
+        youtube_shorts: ['#shorts', '#youtubeshorts', '#viral', '#creator'],
+        tiktok: ['#fyp', '#tiktok', '#viral', '#trending'],
+        instagram_reels: ['#reels', '#instagramreels', '#explore', '#viral'],
+        twitter: ['#video', '#highlights', '#trending'],
+    };
+    const baseTags = platformTagsMap[platform] || ['#shorts', '#viral', '#clips'];
+    const hookTitle = transcriptSnippet
+        ? transcriptSnippet.split(/[.!?]/)[0].trim().slice(0, 72)
+        : `High-Retention Clip (${Math.round(startTime)}s–${Math.round(endTime)}s)`;
     
     const clip: ViralClip = {
         id: `clip_${Date.now()}_${platform}_${Math.random().toString(36).substr(2, 9)}`,
@@ -326,7 +388,9 @@ async function generateClipFromMoment(
         virality_score: moment.virality_score,
         engagement_score: Math.round(moment.confidence * 100),
         title: `Viral Clip - ${platform}`,
+        hook_title: hookTitle,
         description: transcriptSnippet,
+        hashtags: baseTags,
         thumbnail_url: thumbnailUrl,
         transcript_snippet: transcriptSnippet,
         platform_format: platform as any,
