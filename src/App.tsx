@@ -758,18 +758,22 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                 /* Content Repurpose Module - generates short viral videos */
                 <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
                     <RepurposeModule
-                        onCreateCoverThumbnail={({ imageDataUrl, title }) => {
-                            const match = imageDataUrl.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/);
-                            if (match) {
-                                const mimeType = match[1];
-                                const base64 = match[2];
-                                const asset: ImageAsset = {
-                                    id: `clip_cover_${Date.now()}`,
-                                    url: imageDataUrl,
-                                    base64,
-                                    mimeType,
-                                };
-                                setImages([asset]);
+                        onCreateCoverThumbnail={({ imageDataUrl, images: pickedImages, title }) => {
+                            const rawUrls = (pickedImages && pickedImages.length > 0 ? pickedImages : [imageDataUrl]).filter(Boolean);
+                            const assets: ImageAsset[] = [];
+                            rawUrls.forEach((dataUrl, idx) => {
+                                const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/);
+                                if (match) {
+                                    assets.push({
+                                        id: `clip_cover_${Date.now()}_${idx}`,
+                                        url: dataUrl,
+                                        base64: match[2],
+                                        mimeType: match[1],
+                                    });
+                                }
+                            });
+                            if (assets.length > 0) {
+                                setImages(assets);
                             }
                             const shortHeadline = (title || '')
                                 .replace(/[#*_`]/g, '')
@@ -787,7 +791,11 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                                 }));
                             }
                             handlePlatformChange('youtube');
-                            toast.success('Clip frame sent to Thumbnail Studio! Click Generate to design your cover.');
+                            toast.success(
+                                assets.length > 1
+                                    ? `Picked the ${assets.length} sharpest face shots from your clip! Click Generate to design your cover.`
+                                    : 'Sharpest clip frame sent to Thumbnail Studio! Click Generate to design your cover.'
+                            );
                         }}
                     />
                 </div>

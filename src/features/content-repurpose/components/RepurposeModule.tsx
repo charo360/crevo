@@ -10,8 +10,9 @@ import { GoogleGenAI } from "@google/genai";
 import { createAiClient } from '../../../core/services/ai-providers/openrouterClient';
 import { repurposeVideo, recutViralClip } from '../services/repurposeService';
 import { setServerUploadCache } from '../../../core/processors/video';
+import { pickBestThumbnailShotsFromFrames } from '../../../core/services/ai-providers/gemini/adapters/analysisService';
 import { getAuthToken } from '../../../lib/api';
-import { isSupportedVideoFile } from '../../../shared/utils/video-utils';
+import { isSupportedVideoFile, extractFramesFromVideo } from '../../../shared/utils/video-utils';
 import { RepurposeResult, ClipGenerationOptions, CropMode, CaptionStyle, CaptionPosition, ViralClip } from '../../../types/repurpose';
 import { useAuth } from '../../../contexts/AuthContext';
 
@@ -19,7 +20,7 @@ const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 
 interface RepurposeModuleProps {
     onResultsGenerated?: (results: RepurposeResult) => void;
-    onCreateCoverThumbnail?: (payload: { imageDataUrl: string; title: string; platform?: string }) => void;
+    onCreateCoverThumbnail?: (payload: { imageDataUrl: string; images?: string[]; title: string; platform?: string }) => void;
 }
 
 export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated, onCreateCoverThumbnail }) => {
@@ -47,6 +48,7 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated, 
     const [progressStatus, setProgressStatus] = useState('Starting...');
     const [results, setResults] = useState<RepurposeResult | null>(null);
     const [recuttingClipId, setRecuttingClipId] = useState<string | null>(null);
+    const [analyzingThumbClipId, setAnalyzingThumbClipId] = useState<string | null>(null);
     const [clipTrims, setClipTrims] = useState<Record<string, { start: number; end: number }>>({});
     
     const [options, setOptions] = useState<ClipGenerationOptions>({
@@ -184,53 +186,65 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated, 
 
     const handleSendClipToThumbnail = async (clip: ViralClip) => {
         if (!onCreateCoverThumbnail) return;
-        let imageDataUrl = clip.thumbnail_url && clip.thumbnail_url.startsWith('data:image/')
-            ? clip.thumbnail_url
-            : '';
+        setAnalyzingThumbClipId(clip.id);
+        try {
+            let pickedImages: string[] = [];
 
-        if (!imageDataUrl && clip.thumbnail_url && clip.thumbnail_url.startsWith('blob:')) {
-            try {
-                const resp = await fetch(clip.thumbnail_url);
-                const thumbBlob = await resp.blob();
-                imageDataUrl = await new Promise<string>((resolve) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(typeof reader.result === 'string' ? reader.result : '');
-                    reader.onerror = () => resolve('');
-                    reader.readAsDataURL(thumbBlob);
-                });
-            } catch {
-                // fallback below
+            // 1. Scan 6 evenly spaced frames across the clip (skipping fade-in/out) & let AI pick the sharpest face/reaction shots
+            if (clip.clip_url) {
+                try {
+                    const dur = Math.max(2, Number(clip.duration) || 15);
+                    const safeStart = dur > 3 ? 1.0 : 0.2;
+                    const safeEnd = Math.max(safeStart + 0.8, dur - (dur > 3 ? 1.0 : 0.2));
+                    const candidateFrames = await extractFramesFromVideo(clip.clip_url, safeStart, safeEnd, 6);
+                    if (candidateFrames.length > 0) {
+                        const bestFrames = await pickBestThumbnailShotsFromFrames(ai.current, candidateFrames, 3);
+                        pickedImages = bestFrames.map((f) => f.url).filter(Boolean);
+                    }
+                } catch (scanErr) {
+                    console.warn('Smart clip frame scan fallback:', scanErr);
+                }
             }
-        }
 
-        if (!imageDataUrl && clip.clip_url) {
-            try {
-                const videoEl = document.querySelector(`video[src="${clip.clip_url}"]`) as HTMLVideoElement | null;
-                // Only capture directly from the <video> if the user has scrubbed/played past the fade-in (1s+)
-                if (videoEl && videoEl.videoWidth > 0 && videoEl.videoHeight > 0 && videoEl.currentTime >= 1) {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = videoEl.videoWidth;
-                    canvas.height = videoEl.videoHeight;
-                    const ctx = canvas.getContext('2d');
-                    if (ctx) {
-                        ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-                        imageDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+            // 2. Fallback to clip thumbnail if scan didn't return frames
+            if (pickedImages.length === 0) {
+                let imageDataUrl = clip.thumbnail_url && clip.thumbnail_url.startsWith('data:image/')
+                    ? clip.thumbnail_url
+                    : '';
+
+                if (!imageDataUrl && clip.thumbnail_url && clip.thumbnail_url.startsWith('blob:')) {
+                    try {
+                        const resp = await fetch(clip.thumbnail_url);
+                        const thumbBlob = await resp.blob();
+                        imageDataUrl = await new Promise<string>((resolve) => {
+                            const reader = new FileReader();
+                            reader.onloadend = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+                            reader.onerror = () => resolve('');
+                            reader.readAsDataURL(thumbBlob);
+                        });
+                    } catch {
+                        // ignore
                     }
                 }
-            } catch {
-                // fallback below
+
+                if (!imageDataUrl && importedMeta?.frames?.length) {
+                    imageDataUrl = importedMeta.frames[Math.floor(importedMeta.frames.length / 2)] || importedMeta.frames[0];
+                }
+
+                if (imageDataUrl) {
+                    pickedImages = [imageDataUrl];
+                }
             }
-        }
 
-        if (!imageDataUrl && importedMeta?.frames?.length) {
-            imageDataUrl = importedMeta.frames[Math.floor(importedMeta.frames.length / 2)] || importedMeta.frames[0];
+            onCreateCoverThumbnail({
+                imageDataUrl: pickedImages[0] || '',
+                images: pickedImages,
+                title: clip.hook_title || clip.title || 'Viral Short',
+                platform: clip.platform_format,
+            });
+        } finally {
+            setAnalyzingThumbClipId(null);
         }
-
-        onCreateCoverThumbnail({
-            imageDataUrl,
-            title: clip.hook_title || clip.title || 'Viral Short',
-            platform: clip.platform_format,
-        });
     };
 
     const handleUrlSubmit = () => {
@@ -1042,6 +1056,7 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated, 
                                         {onCreateCoverThumbnail && (
                                             <button
                                                 type="button"
+                                                disabled={analyzingThumbClipId === clip.id}
                                                 onClick={() => handleSendClipToThumbnail(clip)}
                                                 style={{
                                                     width: '100%',
@@ -1053,10 +1068,13 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated, 
                                                     color: '#571c86',
                                                     fontWeight: 700,
                                                     fontSize: '12.5px',
-                                                    cursor: 'pointer',
+                                                    cursor: analyzingThumbClipId === clip.id ? 'wait' : 'pointer',
+                                                    opacity: analyzingThumbClipId === clip.id ? 0.75 : 1,
                                                 }}
                                             >
-                                                🎨 Make Cover Thumbnail
+                                                {analyzingThumbClipId === clip.id
+                                                    ? '🔍 Finding sharpest face shots...'
+                                                    : '🎨 Make Cover Thumbnail'}
                                             </button>
                                         )}
                                     </div>

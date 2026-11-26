@@ -256,3 +256,72 @@ export const analyzeVideoAndSuggestStyles = async (
         throw new Error("The AI returned an invalid format for style analysis.");
     }
 };
+
+/**
+ * Fast vision selector for Content Repurpose -> Thumbnail Studio bridge.
+ * Scans 6-8 frames from a clip and returns the top 1-3 sharpest, clearest face / reaction shots
+ * (skipping dark, blurry, blinking, or faceless transition frames).
+ */
+export const pickBestThumbnailShotsFromFrames = async (
+    ai: GoogleGenAI,
+    frames: ImageAsset[],
+    maxShots: number = 3
+): Promise<ImageAsset[]> => {
+    if (!frames || frames.length === 0) return [];
+    if (frames.length === 1) return frames;
+
+    try {
+        const parts: Part[] = [];
+        frames.forEach((frame, idx) => {
+            parts.push({ text: `Frame ${idx}:` });
+            parts.push({ inlineData: { data: frame.base64, mimeType: frame.mimeType } });
+        });
+        parts.push({
+            text: `You are a veteran YouTube Thumbnail Designer picking the BEST ${maxShots} real shots from ${frames.length} frames of a short clip (indexed 0 to ${frames.length - 1}).
+Ranking rules:
+1. #1 MUST be the sharpest, brightest, clearest close-up or medium shot showing a human face with eyes open and strong/engaging expression (NEVER pick black/dark frames, motion blur, blinking, backs of heads, or empty B-roll if a clear face exists).
+2. #2 and #3 should be the next best distinct clear shots (a different reaction, second speaker/person, or key visual moment).
+Return ONLY valid JSON: { "bestFrameIndices": [2, 4, 1] }`,
+        });
+
+        const response = await callWithFallback(
+            () =>
+                ai.models.generateContent({
+                    model: getModelWithFallback('TEXT', false),
+                    contents: { parts },
+                    config: { responseMimeType: 'application/json', temperature: 0.2 } as any,
+                }),
+            () =>
+                ai.models.generateContent({
+                    model: getModelWithFallback('TEXT', true),
+                    contents: { parts },
+                    config: { responseMimeType: 'application/json', temperature: 0.2 } as any,
+                }),
+            'Best thumbnail shot selection fallback'
+        );
+
+        const raw = (response.text || '').replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
+        if (Array.isArray(parsed?.bestFrameIndices)) {
+            const valid = Array.from(
+                new Set(
+                    parsed.bestFrameIndices
+                        .map((n: any) => Number(n))
+                        .filter((n: number) => Number.isInteger(n) && n >= 0 && n < frames.length)
+                )
+            ).slice(0, maxShots) as number[];
+            if (valid.length > 0) {
+                return valid.map((idx) => frames[idx]);
+            }
+        }
+    } catch (err) {
+        console.warn('AI best-shot selection fell back to middle frames:', err);
+    }
+
+    // Smart non-edge fallback if AI fails
+    const mid = Math.floor(frames.length / 2);
+    return [frames[mid], frames[Math.max(0, mid - 1)], frames[Math.min(frames.length - 1, mid + 1)]]
+        .filter((v, i, arr) => v && arr.indexOf(v) === i)
+        .slice(0, maxShots);
+};
