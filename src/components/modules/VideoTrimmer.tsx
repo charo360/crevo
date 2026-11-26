@@ -130,7 +130,6 @@ export const VideoTrimmer: FC<VideoTrimmerProps> = ({ videoUrl, onVideoLoad, tri
                     src={videoUrl}
                     onLoadedMetadata={handleLoadedMetadata}
                     className="trimmer-video"
-                    playsInline
                     preload="metadata"
                     style={{
                         width: '100%',
