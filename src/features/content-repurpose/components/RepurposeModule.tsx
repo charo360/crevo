@@ -188,6 +188,21 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated, 
             ? clip.thumbnail_url
             : '';
 
+        if (!imageDataUrl && clip.thumbnail_url && clip.thumbnail_url.startsWith('blob:')) {
+            try {
+                const resp = await fetch(clip.thumbnail_url);
+                const thumbBlob = await resp.blob();
+                imageDataUrl = await new Promise<string>((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+                    reader.onerror = () => resolve('');
+                    reader.readAsDataURL(thumbBlob);
+                });
+            } catch {
+                // fallback below
+            }
+        }
+
         if (!imageDataUrl && clip.clip_url) {
             try {
                 const videoEl = document.querySelector(`video[src="${clip.clip_url}"]`) as HTMLVideoElement | null;
