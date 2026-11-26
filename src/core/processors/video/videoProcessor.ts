@@ -399,8 +399,8 @@ export async function getVideoMetadata(videoFile: File | Blob): Promise<{
 export async function generateThumbnail(
     videoFile: File | Blob,
     timestamp: number,
-    width: number = 640,
-    height: number = 360
+    maxDimension: number = 720,
+    _unusedHeight?: number
 ): Promise<Blob> {
     return new Promise((resolve, reject) => {
         const url = URL.createObjectURL(videoFile);
@@ -408,71 +408,138 @@ export async function generateThumbnail(
         video.muted = true;
         video.playsInline = true;
         video.preload = 'auto';
+        video.style.position = 'fixed';
+        video.style.left = '-9999px';
+        video.style.top = '-9999px';
+        video.style.width = '2px';
+        video.style.height = '2px';
+        video.style.opacity = '0.001';
+        video.style.pointerEvents = 'none';
+        document.body.appendChild(video);
         video.src = url;
 
+        let finished = false;
+        let candidates: number[] = [];
+        let candidateIndex = 0;
+
         const cleanup = () => {
-            video.onloadedmetadata = null;
+            video.onloadeddata = null;
             video.onseeked = null;
             video.onerror = null;
+            video.pause();
+            video.removeAttribute('src');
+            video.load();
+            if (video.parentNode) video.parentNode.removeChild(video);
             URL.revokeObjectURL(url);
         };
 
-        const timeoutId = window.setTimeout(() => {
+        const finishResolve = (blob: Blob) => {
+            if (finished) return;
+            finished = true;
+            window.clearTimeout(timeoutId);
             cleanup();
-            reject(new Error('Thumbnail generation timed out'));
-        }, 15000);
-
-        video.onloadedmetadata = () => {
-            const safeTime = Number.isFinite(video.duration) && video.duration > 0
-                ? Math.min(Math.max(0, timestamp), Math.max(0, video.duration - 0.1))
-                : 0;
-            video.currentTime = safeTime;
+            resolve(blob);
         };
 
-        video.onseeked = () => {
+        const finishReject = (err: Error) => {
+            if (finished) return;
+            finished = true;
             window.clearTimeout(timeoutId);
+            cleanup();
+            reject(err);
+        };
+
+        const timeoutId = window.setTimeout(() => {
+            finishReject(new Error('Thumbnail generation timed out'));
+        }, 15000);
+
+        const seekNext = () => {
+            if (finished || candidateIndex >= candidates.length) return;
+            const target = candidates[candidateIndex++];
             try {
-                const canvas = document.createElement('canvas');
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                if (!ctx) {
-                    cleanup();
-                    reject(new Error('Canvas 2D context unavailable'));
-                    return;
-                }
-
-                const vw = video.videoWidth || width;
-                const vh = video.videoHeight || height;
-                const scale = Math.max(width / vw, height / vh);
-                const drawW = vw * scale;
-                const drawH = vh * scale;
-                const dx = (width - drawW) / 2;
-                const dy = (height - drawH) / 2;
-
-                ctx.drawImage(video, dx, dy, drawW, drawH);
-                canvas.toBlob(
-                    (blob) => {
-                        cleanup();
-                        if (blob) {
-                            resolve(blob);
-                        } else {
-                            reject(new Error('Failed to encode thumbnail JPEG'));
-                        }
-                    },
-                    'image/jpeg',
-                    0.85
-                );
-            } catch (err: any) {
-                cleanup();
-                reject(new Error(`Failed to draw video thumbnail: ${err?.message || err}`));
+                video.currentTime = target;
+            } catch {
+                // ignore
             }
         };
 
+        video.onloadeddata = () => {
+            if (finished) return;
+            const dur = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 10;
+            const minSafe = dur > 2.5 ? 1.2 : dur * 0.25;
+            const maxSafe = Math.max(minSafe, dur - (dur > 2.5 ? 1.2 : 0.2));
+            const clamp = (t: number) => Math.min(maxSafe, Math.max(minSafe, t));
+            candidates = [
+                clamp(timestamp > 1 ? timestamp : dur * 0.35),
+                clamp(dur * 0.55),
+                clamp(dur * 0.25),
+                clamp(dur * 0.72),
+            ];
+            seekNext();
+        };
+
+        video.onseeked = () => {
+            if (finished) return;
+            requestAnimationFrame(() => {
+                if (finished) return;
+                try {
+                    const vw = video.videoWidth || 720;
+                    const vh = video.videoHeight || 1280;
+                    const scale = Math.min(1, maxDimension / Math.max(vw, vh));
+                    const outW = Math.max(2, Math.round(vw * scale));
+                    const outH = Math.max(2, Math.round(vh * scale));
+
+                    const canvas = document.createElement('canvas');
+                    canvas.width = outW;
+                    canvas.height = outH;
+                    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                    if (!ctx) {
+                        finishReject(new Error('Canvas 2D context unavailable'));
+                        return;
+                    }
+
+                    ctx.drawImage(video, 0, 0, outW, outH);
+
+                    // Check average brightness so we never return a pure black fade-in/transition frame
+                    let avgLuma = 100;
+                    try {
+                        const sample = ctx.getImageData(0, 0, outW, outH).data;
+                        let sum = 0;
+                        let count = 0;
+                        const step = Math.max(4, Math.floor(sample.length / 4 / 800)) * 4;
+                        for (let i = 0; i < sample.length; i += step) {
+                            sum += 0.299 * sample[i] + 0.587 * sample[i + 1] + 0.114 * sample[i + 2];
+                            count++;
+                        }
+                        if (count > 0) avgLuma = sum / count;
+                    } catch {
+                        // ignore
+                    }
+
+                    if (avgLuma < 14 && candidateIndex < candidates.length) {
+                        seekNext();
+                        return;
+                    }
+
+                    canvas.toBlob(
+                        (blob) => {
+                            if (blob) {
+                                finishResolve(blob);
+                            } else {
+                                finishReject(new Error('Failed to encode thumbnail JPEG'));
+                            }
+                        },
+                        'image/jpeg',
+                        0.9
+                    );
+                } catch (err: any) {
+                    finishReject(new Error('Failed to draw video thumbnail: ' + (err?.message || err)));
+                }
+            });
+        };
+
         video.onerror = () => {
-            window.clearTimeout(timeoutId);
-            cleanup();
-            reject(new Error('Failed to load video for thumbnail'));
+            finishReject(new Error('Failed to load video for thumbnail'));
         };
     });
 }

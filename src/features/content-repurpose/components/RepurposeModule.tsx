@@ -206,7 +206,8 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated, 
         if (!imageDataUrl && clip.clip_url) {
             try {
                 const videoEl = document.querySelector(`video[src="${clip.clip_url}"]`) as HTMLVideoElement | null;
-                if (videoEl && videoEl.videoWidth > 0 && videoEl.videoHeight > 0) {
+                // Only capture directly from the <video> if the user has scrubbed/played past the fade-in (1s+)
+                if (videoEl && videoEl.videoWidth > 0 && videoEl.videoHeight > 0 && videoEl.currentTime >= 1) {
                     const canvas = document.createElement('canvas');
                     canvas.width = videoEl.videoWidth;
                     canvas.height = videoEl.videoHeight;
@@ -865,7 +866,7 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated, 
                                             src={clip.clip_url} 
                                             poster={clip.thumbnail_url || undefined}
                                             controls 
-                                            preload="metadata"
+                                            preload={clip.thumbnail_url ? 'none' : 'metadata'}
                                             style={{ 
                                                 width: '100%', 
                                                 height: '100%', 

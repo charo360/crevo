@@ -293,7 +293,7 @@ export async function recutViralClip(
 
     let thumbnailUrl = '';
     try {
-        const thumbnailBlob = await generateThumbnail(blob, Math.min(1.5, clipDuration / 2));
+        const thumbnailBlob = await generateThumbnail(blob, Math.max(2, clipDuration * 0.35));
         thumbnailUrl = URL.createObjectURL(thumbnailBlob);
     } catch (thumbErr) {
         console.warn('Re-cut thumbnail generation skipped:', thumbErr);
@@ -370,7 +370,7 @@ async function generateClipFromMoment(
     // Generate thumbnail from the actual generated clip blob (works for both local uploads and YouTube imports)
     let thumbnailUrl = '';
     try {
-        const thumbnailBlob = await generateThumbnail(blob, Math.min(1.5, clipDuration / 2));
+        const thumbnailBlob = await generateThumbnail(blob, Math.max(2, clipDuration * 0.35));
         thumbnailUrl = URL.createObjectURL(thumbnailBlob);
     } catch (thumbErr) {
         console.warn('Clip thumbnail generation skipped:', thumbErr);
