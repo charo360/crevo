@@ -210,7 +210,7 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
         try {
             let videoFrames: ImageAsset[] = [];
             if (videoAsset) {
-                videoFrames = await extractFramesFromVideo(videoAsset.url, trimTimes.start, trimTimes.end, 3);
+                videoFrames = await extractFramesFromVideo(videoAsset.url, trimTimes.start, trimTimes.end, 3, videoAsset.file);
             }
             const allImages = [...images, ...videoFrames];
             const results = await generateDesign(
@@ -271,7 +271,7 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
         setAnalysisResult(null);
 
         try {
-            const frames = await extractFramesFromVideo(videoAsset.url, trimTimes.start, trimTimes.end, 5);
+            const frames = await extractFramesFromVideo(videoAsset.url, trimTimes.start, trimTimes.end, 5, videoAsset.file);
             const result = await analyzeVideoAndSuggestStyles(ai.current, frames);
             if (user) {
                 await deductCredits(user.id, 'Analyze Video', CREDIT_COSTS.ANALYZE_VIDEO, { feature: 'analyze_video' });
@@ -310,7 +310,7 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
         setIsExtractingFaces(true);
         try {
             // Scan 8 evenly spaced frames across the selected clip range to capture different people & peak moments
-            const frames = await extractFramesFromVideo(videoAsset.url, trimTimes.start, trimTimes.end, 8);
+            const frames = await extractFramesFromVideo(videoAsset.url, trimTimes.start, trimTimes.end, 8, videoAsset.file);
             if (!frames || frames.length === 0) {
                 throw new Error("Could not extract frames from the video.");
             }

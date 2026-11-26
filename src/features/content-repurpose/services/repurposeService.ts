@@ -67,7 +67,8 @@ export async function repurposeVideo(
             videoUrl,
             0,
             metadata.duration,
-            targetFrames
+            targetFrames,
+            videoFile
         );
         onProgress?.(20, 100, 'AI detecting top viral moments...');
         

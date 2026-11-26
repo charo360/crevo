@@ -1666,6 +1666,144 @@ app.post('/api/video/upload', requireAuth, (req, res) => {
     req.pipe(writeStream);
 });
 
+app.post('/api/video/extract-frames', requireAuth, (req, res) => {
+    cleanupOldTempVideos();
+    ensureVideoTmpDir();
+
+    const startParam = Math.max(0, Number(req.query.start || 0) || 0);
+    const endParam = Math.max(0, Number(req.query.end || 0) || 0);
+    const frameCount = Math.min(8, Math.max(1, Number(req.query.count || 5) || 5));
+
+    const jobId = crypto.randomUUID();
+    const inputPath = path.join(VIDEO_TMP_DIR, `frames_in_${jobId}.bin`);
+    const outFiles = [];
+    const writeStream = fs.createWriteStream(inputPath);
+    let totalBytes = 0;
+    let aborted = false;
+
+    const cleanupAll = () => {
+        try {
+            if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+        } catch {
+            // ignore
+        }
+        for (const f of outFiles) {
+            try {
+                if (fs.existsSync(f)) fs.unlinkSync(f);
+            } catch {
+                // ignore
+            }
+        }
+    };
+
+    req.on('data', (chunk) => {
+        if (aborted) return;
+        totalBytes += chunk.length;
+        if (totalBytes > MAX_VIDEO_UPLOAD_BYTES) {
+            aborted = true;
+            writeStream.destroy();
+            cleanupAll();
+            if (!res.headersSent) {
+                res.status(413).json({ error: 'Video file exceeds 5 GB limit' });
+            }
+            req.destroy();
+        }
+    });
+
+    req.on('error', (err) => {
+        aborted = true;
+        writeStream.destroy();
+        cleanupAll();
+        if (!res.headersSent) {
+            res.status(500).json({ error: `Video stream error: ${err.message}` });
+        }
+    });
+
+    writeStream.on('error', (err) => {
+        aborted = true;
+        cleanupAll();
+        if (!res.headersSent) {
+            res.status(500).json({ error: `Disk write error: ${err.message}` });
+        }
+    });
+
+    writeStream.on('finish', async () => {
+        if (aborted || res.headersSent) return;
+        if (totalBytes === 0) {
+            cleanupAll();
+            return res.status(400).json({ error: 'Empty video file' });
+        }
+
+        try {
+            let duration = 0;
+            try {
+                const { stdout } = await execFileAsync('ffprobe', [
+                    '-v', 'error',
+                    '-show_entries', 'format=duration',
+                    '-of', 'default=noprint_wrappers=1:nokey=1',
+                    inputPath,
+                ]);
+                duration = Math.max(0, parseFloat(String(stdout || '').trim()) || 0);
+            } catch {
+                duration = endParam > startParam ? endParam : 10;
+            }
+
+            const safeDur = duration > 0 ? duration : 10;
+            const effectiveStart = Math.min(startParam, Math.max(0, safeDur - 0.2));
+            const effectiveEnd = endParam > effectiveStart ? Math.min(endParam, safeDur) : safeDur;
+            const span = Math.max(0.1, effectiveEnd - effectiveStart);
+
+            const frames = [];
+            for (let i = 0; i < frameCount; i++) {
+                const t = frameCount === 1
+                    ? effectiveStart
+                    : Math.min(Math.max(0, effectiveStart + (span * i) / (frameCount - 1)), Math.max(0, safeDur - 0.1));
+                const outPath = path.join(VIDEO_TMP_DIR, `frame_${jobId}_${i}.jpg`);
+                outFiles.push(outPath);
+
+                try {
+                    await execFileAsync('ffmpeg', [
+                        '-y',
+                        '-ss', t.toFixed(2),
+                        '-i', inputPath,
+                        '-frames:v', '1',
+                        '-vf', 'scale=min(1024\\,iw):-2',
+                        '-q:v', '4',
+                        outPath,
+                    ], { maxBuffer: 5 * 1024 * 1024 });
+
+                    if (fs.existsSync(outPath)) {
+                        const buf = fs.readFileSync(outPath);
+                        if (buf.length > 500) {
+                            const base64 = buf.toString('base64');
+                            frames.push({
+                                id: `srv_frame_${Date.now()}_${i}`,
+                                base64,
+                                mimeType: 'image/jpeg',
+                                url: `data:image/jpeg;base64,${base64}`,
+                            });
+                        }
+                    }
+                } catch (frameErr) {
+                    console.warn(`FFmpeg single frame ${i} failed:`, frameErr?.message);
+                }
+            }
+
+            cleanupAll();
+            if (frames.length === 0) {
+                return res.status(422).json({ error: 'Could not decode any video frames from this file.' });
+            }
+            return res.json({ duration: safeDur, frames });
+        } catch (err) {
+            cleanupAll();
+            console.error('Server extract-frames error:', err?.message || err);
+            return res.status(500).json({ error: 'Failed to extract frames from video.' });
+        }
+    });
+
+    req.pipe(writeStream);
+});
+
 app.post('/api/video/clip', requireAuth, async (req, res) => {
     const {
         uploadId,
