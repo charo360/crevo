@@ -9,6 +9,7 @@ import { toast } from 'react-toastify';
 import { GoogleGenAI } from "@google/genai";
 import { createAiClient } from '../../../core/services/ai-providers/openrouterClient';
 import { repurposeVideo } from '../services/repurposeService';
+import { isSupportedVideoFile } from '../../../shared/utils/video-utils';
 import { RepurposeResult, ClipGenerationOptions } from '../../../types/repurpose';
 import { useAuth } from '../../../contexts/AuthContext';
 
@@ -52,9 +53,9 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
                     return;
                 }
                 
-                // Check file type
-                if (!file.type.startsWith('video/')) {
-                    toast.error('Please upload a valid video file');
+                // Check file type (mobile-safe for Android/iOS empty MIME types & .mov/.m4v/.3gp)
+                if (!isSupportedVideoFile(file)) {
+                    toast.error('Please upload a valid video file (MP4, MOV, WebM, M4V, 3GP)');
                     return;
                 }
                 
@@ -316,7 +317,7 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
                         type="file" 
                         ref={fileInputRef} 
                         onChange={handleFileChange} 
-                        accept="video/*" 
+                        accept="video/*,.mp4,.mov,.m4v,.webm,.mkv,.3gp,.avi" 
                         style={{ display: 'none' }} 
                     />
                 </div>

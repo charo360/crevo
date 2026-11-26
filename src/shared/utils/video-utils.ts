@@ -1,6 +1,25 @@
 import { ImageAsset } from '../../types';
 
 const MAX_FRAME_WIDTH = 1024;
+const VIDEO_EXT_RE = /\.(mp4|mov|m4v|webm|mkv|avi|3gp|3g2|mpeg|mpg|ts|mts|m2ts|ogg|ogv|flv|wmv)$/i;
+const NON_VIDEO_EXT_RE = /\.(jpg|jpeg|png|gif|webp|heic|heif|svg|pdf|txt|doc|docx|zip|mp3|wav|m4a)$/i;
+
+/**
+ * Mobile-safe video file check.
+ * Android Gallery/Files and iOS Safari frequently report an empty MIME type ("")
+ * or "application/octet-stream" for valid .mp4/.mov videos.
+ */
+export function isSupportedVideoFile(file: File): boolean {
+    if (!file) return false;
+    const type = (file.type || '').toLowerCase().trim();
+    const name = (file.name || '').trim();
+    if (type.startsWith('video/')) return true;
+    if (VIDEO_EXT_RE.test(name)) return true;
+    if ((!type || type === 'application/octet-stream') && !NON_VIDEO_EXT_RE.test(name)) {
+        return true;
+    }
+    return false;
+}
 
 export const extractFramesFromVideo = (
     videoUrl: string,

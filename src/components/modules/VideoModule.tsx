@@ -4,6 +4,7 @@ import { VideoAsset, AnalysisResult, VeoAspectRatio, Platform } from '../../type
 import { Module } from './Module';
 import { ICONS } from '../../constants';
 import { VideoTrimmer } from './VideoTrimmer';
+import { isSupportedVideoFile } from '../../shared/utils/video-utils';
 
 interface VideoModuleProps {
   videoAsset: VideoAsset | null;
@@ -35,8 +36,8 @@ export const VideoModule: FC<VideoModuleProps> = (props) => {
         toast.error('Video file size must be less than 10GB');
         return;
       }
-      if (!file.type.startsWith('video/')) {
-        toast.error('Please upload a valid video file (MP4, MOV, WebM)');
+      if (!isSupportedVideoFile(file)) {
+        toast.error('Please upload a valid video file (MP4, MOV, WebM, M4V, 3GP)');
         return;
       }
       if (props.videoAsset?.url?.startsWith('blob:')) {
@@ -256,7 +257,7 @@ export const VideoModule: FC<VideoModuleProps> = (props) => {
             type="file"
             ref={fileInputRef}
             onChange={handleFileChange}
-            accept="video/*"
+            accept="video/*,.mp4,.mov,.m4v,.webm,.mkv,.3gp,.avi"
             style={{ display: 'none' }}
           />
         </div>
