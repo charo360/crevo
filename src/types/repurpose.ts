@@ -135,6 +135,9 @@ export interface ViralMoment {
     duration: number;
     virality_score: number; // 0-100
     confidence: number; // 0-1
+    hook_title?: string; // Short, human, scroll-stopping viral title (4-8 words)
+    social_caption?: string; // Natural 1-sentence post caption
+    hashtags?: string[]; // Topic-specific hashtags
     reasoning: string; // AI explanation of why this moment is viral-worthy
     clip_suggestions: Array<{
         start_time: number;

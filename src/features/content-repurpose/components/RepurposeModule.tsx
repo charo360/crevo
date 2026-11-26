@@ -909,6 +909,11 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated, 
                                         <div style={{ fontWeight: 700, color: '#1f2937', marginBottom: '3px', lineHeight: 1.35 }}>
                                             {clip.hook_title || clip.title}
                                         </div>
+                                        {clip.description && (
+                                            <div style={{ color: '#4b5563', fontSize: '11.5px', marginBottom: '4px', lineHeight: 1.35 }}>
+                                                {clip.description}
+                                            </div>
+                                        )}
                                         <div style={{ color: '#571c86', fontWeight: 600, fontSize: '11px', marginBottom: '6px' }}>
                                             {(clip.hashtags && clip.hashtags.length > 0 ? clip.hashtags : ['#shorts', '#viral']).join(' ')}
                                         </div>

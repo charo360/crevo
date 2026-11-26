@@ -125,7 +125,8 @@ export async function repurposeVideo(
             metadata.duration,
             videoTranscript,
             frames,
-            repurposedVideo.id
+            repurposedVideo.id,
+            originalTitle
         );
         onProgress?.(30, 100, 'Uploading video (0%)...');
         
@@ -386,18 +387,31 @@ async function generateClipFromMoment(
         aspectRatio: platformSettings.aspectRatio,
     });
     
-    // Get transcript snippet if available
-    const transcriptSnippet = moment.reasoning || '';
-    const platformTagsMap: Record<string, string[]> = {
-        youtube_shorts: ['#shorts', '#youtubeshorts', '#viral', '#creator'],
-        tiktok: ['#fyp', '#tiktok', '#viral', '#trending'],
-        instagram_reels: ['#reels', '#instagramreels', '#explore', '#viral'],
+    // Use AI-generated human creator hook title, casual caption, and topic-specific hashtags
+    const platformPrimaryTag: Record<string, string> = {
+        youtube_shorts: '#shorts',
+        tiktok: '#fyp',
+        instagram_reels: '#reels',
+        twitter: '#video',
+    };
+    const fallbackTagsMap: Record<string, string[]> = {
+        youtube_shorts: ['#shorts', '#youtubeshorts', '#viral'],
+        tiktok: ['#fyp', '#tiktok', '#viral'],
+        instagram_reels: ['#reels', '#instagramreels', '#explore'],
         twitter: ['#video', '#highlights', '#trending'],
     };
-    const baseTags = platformTagsMap[platform] || ['#shorts', '#viral', '#clips'];
-    const hookTitle = transcriptSnippet
-        ? transcriptSnippet.split(/[.!?]/)[0].trim().slice(0, 72)
-        : `High-Retention Clip (${Math.round(startTime)}s–${Math.round(endTime)}s)`;
+    const aiTags: string[] = Array.isArray(moment.hashtags) && moment.hashtags.length > 0 ? moment.hashtags : [];
+    const primaryTag = platformPrimaryTag[platform] || '#shorts';
+    const mergedTags = aiTags.length > 0
+        ? Array.from(new Set([...aiTags, primaryTag])).slice(0, 6)
+        : (fallbackTagsMap[platform] || ['#shorts', '#viral']);
+
+    const hookTitle =
+        (moment.hook_title && String(moment.hook_title).trim()) ||
+        `Don't Miss This Moment (${Math.round(startTime)}s)`;
+    const socialCaption =
+        (moment.social_caption && String(moment.social_caption).trim()) ||
+        '';
     
     const clip: ViralClip = {
         id: `clip_${Date.now()}_${platform}_${Math.random().toString(36).substr(2, 9)}`,
@@ -409,12 +423,12 @@ async function generateClipFromMoment(
         duration: clipDuration,
         virality_score: moment.virality_score,
         engagement_score: Math.round(moment.confidence * 100),
-        title: `Viral Clip - ${platform}`,
+        title: hookTitle,
         hook_title: hookTitle,
-        description: transcriptSnippet,
-        hashtags: baseTags,
+        description: socialCaption,
+        hashtags: mergedTags,
         thumbnail_url: thumbnailUrl,
-        transcript_snippet: transcriptSnippet,
+        transcript_snippet: socialCaption || moment.reasoning || '',
         platform_format: platform as any,
         aspect_ratio: platformSettings.aspectRatio,
         created_at: new Date().toISOString(),

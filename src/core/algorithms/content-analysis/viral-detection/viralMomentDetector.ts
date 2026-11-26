@@ -70,7 +70,8 @@ export async function analyzeVideoForViralMoments(
     videoDuration: number,
     transcript?: string | null,
     frames?: ImageAsset[],
-    repurposedVideoId?: string
+    repurposedVideoId?: string,
+    originalTitle?: string
 ): Promise<MLAnalysis> {
     const startTime = Date.now();
     await imageGenRateLimiter.acquire('viral-moment-analysis');
@@ -98,15 +99,30 @@ export async function analyzeVideoForViralMoments(
         });
     });
 
+    const titleNote = originalTitle
+        ? `\nOriginal video title (match this human creator energy & voice): "${originalTitle}"`
+        : '';
     const transcriptNote = transcript
         ? `\nTranscript excerpt:\n"${transcript.slice(0, 4000)}"`
         : '';
 
     parts.push({
-        text: `You are a Top Short-Form Viral Video Editor (YouTube Shorts, TikTok, Reels).
-Analyze the ${sampledFrames.length} timestamped frames above from a ${Math.round(safeDuration)}-second video${transcriptNote}.
+        text: `You are a viral YouTube Shorts & TikTok creator and strategist (like MrBeast, Ryan Trahan, Diary of a CEO).
+Analyze the ${sampledFrames.length} timestamped frames above from a ${Math.round(safeDuration)}-second video.${titleNote}${transcriptNote}
 
 Identify the 3 to 5 MOST viral, high-retention clip windows (each 15 to 45 seconds long, strictly within 0 to ${Math.floor(safeDuration)} seconds, non-overlapping).
+
+CRITICAL RULES FOR "hook_title" (MUST SOUND 100% HUMAN, NEVER AI):
+- Write a short, punchy, scroll-stopping title that makes a real person click immediately (4 to 8 words MAX, under 55 characters).
+- Sound like a real creator talking to viewers — use curiosity gaps, stakes, conflict, numbers, or emotion (e.g., "He Got Eliminated Over 1 Second", "60 Seconds Left... Nobody Expected This", "Never Hesitate In This Game").
+- STRICTLY FORBIDDEN robotic/AI phrasing: NEVER start with "The unexpected...", "The immediate...", "The host's...", "A shocking...", "This moment...", and NEVER use essay/analysis words like "indecision", "high stakes", "direct address", "creates intrigue", "narrative", "tension", "delve", or "unleash".
+- NEVER cut off a sentence mid-word. Every title must be a complete, punchy thought.
+
+CRITICAL RULES FOR "social_caption":
+- Write 1 short, casual, human sentence (8-16 words) that sparks comments (e.g., "Would you have survived this round or folded under pressure? 👇").
+
+CRITICAL RULES FOR "hashtags":
+- Return 4 to 5 specific hashtags matching the actual video topic/niche (lowercase, starting with #).
 
 Return ONLY valid JSON with this exact schema:
 {
@@ -115,7 +131,10 @@ Return ONLY valid JSON with this exact schema:
       "start_time": <number in seconds>,
       "end_time": <number in seconds>,
       "virality_score": <integer 65-98>,
-      "reasoning": "<one short sentence explaining why this moment will go viral>"
+      "hook_title": "<4-8 word human viral title>",
+      "social_caption": "<1 short casual human caption>",
+      "hashtags": ["#topic1", "#topic2", "#topic3", "#topic4"],
+      "reasoning": "<internal 1-sentence editor note>"
     }
   ]
 }`,
@@ -129,13 +148,13 @@ Return ONLY valid JSON with this exact schema:
                 ai.models.generateContent({
                     model: getModelWithFallback('TEXT', false),
                     contents: { parts },
-                    config: { responseMimeType: 'application/json', temperature: 0.3 } as any,
+                    config: { responseMimeType: 'application/json', temperature: 0.65 } as any,
                 }),
             () =>
                 ai.models.generateContent({
                     model: getModelWithFallback('TEXT', true),
                     contents: { parts },
-                    config: { responseMimeType: 'application/json', temperature: 0.3 } as any,
+                    config: { responseMimeType: 'application/json', temperature: 0.65 } as any,
                 }),
             'Failed to analyze video for viral moments'
         );
@@ -149,6 +168,15 @@ Return ONLY valid JSON with this exact schema:
                     const end = Math.round(Math.max(start + 5, Math.min(safeDuration, rawEnd)));
                     const duration = Math.max(5, end - start);
                     const score = Math.max(50, Math.min(99, Math.round(Number(m.virality_score) || 80)));
+                    const rawHookTitle = String(m.hook_title || m.title || '').replace(/^["']|["']$/g, '').trim();
+                    const rawCaption = String(m.social_caption || m.caption || '').replace(/^["']|["']$/g, '').trim();
+                    const rawTags = Array.isArray(m.hashtags)
+                        ? m.hashtags
+                              .map((t: any) => String(t || '').trim())
+                              .filter(Boolean)
+                              .map((t: string) => (t.startsWith('#') ? t : `#${t.replace(/\s+/g, '')}`))
+                              .slice(0, 6)
+                        : [];
                     return {
                         id: `moment_${Date.now()}_${idx}`,
                         start_time: start,
@@ -156,6 +184,9 @@ Return ONLY valid JSON with this exact schema:
                         duration,
                         virality_score: score,
                         confidence: 0.85,
+                        hook_title: rawHookTitle || undefined,
+                        social_caption: rawCaption || undefined,
+                        hashtags: rawTags.length > 0 ? rawTags : undefined,
                         reasoning: String(m.reasoning || m.reason || 'Strong visual and narrative hook.'),
                         clip_suggestions: [
                             {
