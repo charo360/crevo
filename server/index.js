@@ -1582,6 +1582,7 @@ Rules:
         if (validCues.length === 0) return null;
 
         const isVertical = width < height;
+        const resScale = isVertical ? height / 1280 : width / 1280;
         const styleKey = String(captionStyle || 'hormozi').toLowerCase();
         const posKey = String(captionPosition || 'bottom').toLowerCase();
 
@@ -1590,12 +1591,14 @@ Rules:
         const marginV =
             posKey === 'middle'
                 ? 0
-                : posKey === 'top'
-                    ? (isVertical ? 150 : 55)
-                    : (isVertical ? 220 : 70);
+                : Math.round(
+                      (posKey === 'top'
+                          ? (isVertical ? 150 : 55)
+                          : (isVertical ? 220 : 70)) * resScale
+                  );
 
         // ASS colors are &HAABBGGRR (Blue-Green-Red!)
-        let fontSize = isVertical ? 48 : 38;
+        let fontSize = Math.round((isVertical ? 48 : 38) * resScale);
         let primary = '&H0000EAFF';   // Hormozi bright yellow active word
         let secondary = '&H00FFFFFF'; // White before highlight
         let outlineColor = '&H00000000';
@@ -1803,12 +1806,12 @@ app.post('/api/video/import-url', requireAuth, async (req, res) => {
     };
 
     try {
-        // Download up to 720p MP4 via yt-dlp (fast, crisp for 9:16 shorts, capped at 500MB)
+        // Download up to 1080p Full HD MP4 via yt-dlp (capped at 500MB)
         const ytArgs = [
             '--no-playlist',
             '--no-warnings',
             '--max-filesize', '500M',
-            '-f', 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best[ext=mp4]/best',
+            '-f', 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best[ext=mp4]/best',
             '--merge-output-format', 'mp4',
             '--print', 'after_move:%(title)s',
             '-o', filePath,
@@ -2085,17 +2088,17 @@ app.post('/api/video/clip', requireAuth, async (req, res) => {
     const end = Math.max(start + 1, Number(endTime) || start + 15);
     const duration = Math.max(1, end - start);
 
-    let outputWidth = 720;
-    let outputHeight = 1280;
+    let outputWidth = 1080;
+    let outputHeight = 1920;
     if (aspectRatio === '16:9') {
-        outputWidth = 1280;
-        outputHeight = 720;
+        outputWidth = 1920;
+        outputHeight = 1080;
     } else if (aspectRatio === '1:1') {
-        outputWidth = 720;
-        outputHeight = 720;
+        outputWidth = 1080;
+        outputHeight = 1080;
     } else if (aspectRatio === '4:5') {
-        outputWidth = 720;
-        outputHeight = 900;
+        outputWidth = 1080;
+        outputHeight = 1350;
     }
 
     const targetFps = Math.min(60, Math.max(15, Number(fps) || 30));
@@ -2152,10 +2155,10 @@ app.post('/api/video/clip', requireAuth, async (req, res) => {
             const halfH = Math.floor(outputHeight / 2);
             filterParts.push(`[0:v]split=2[left_raw][right_raw]`);
             filterParts.push(
-                `[left_raw]crop=iw/2:ih:0:0,scale=${outputWidth}:${halfH}:force_original_aspect_ratio=increase,crop=${outputWidth}:${halfH}[top_v]`
+                `[left_raw]crop=iw/2:ih:0:0,scale=${outputWidth}:${halfH}:force_original_aspect_ratio=increase:flags=lanczos,crop=${outputWidth}:${halfH}[top_v]`
             );
             filterParts.push(
-                `[right_raw]crop=iw/2:ih:iw/2:0,scale=${outputWidth}:${halfH}:force_original_aspect_ratio=increase,crop=${outputWidth}:${halfH}[bot_v]`
+                `[right_raw]crop=iw/2:ih:iw/2:0,scale=${outputWidth}:${halfH}:force_original_aspect_ratio=increase:flags=lanczos,crop=${outputWidth}:${halfH}[bot_v]`
             );
             filterParts.push(`[top_v][bot_v]vstack=inputs=2${postChain}[v]`);
         } else {
@@ -2166,7 +2169,7 @@ app.post('/api/video/clip', requireAuth, async (req, res) => {
                 cropExpr = `crop=${outputWidth}:${outputHeight}:iw-${outputWidth}:(ih-${outputHeight})/2`;
             }
             const baseFilters = [
-                `scale=${outputWidth}:${outputHeight}:force_original_aspect_ratio=increase`,
+                `scale=${outputWidth}:${outputHeight}:force_original_aspect_ratio=increase:flags=lanczos`,
                 cropExpr,
                 ...postFilters,
             ];
@@ -2188,15 +2191,15 @@ app.post('/api/video/clip', requireAuth, async (req, res) => {
             '-filter_complex', filterParts.join(';'),
             '-map', '[v]',
             '-c:v', 'libx264',
-            '-preset', 'ultrafast',
-            '-crf', '23',
+            '-preset', 'veryfast',
+            '-crf', '18',
             '-pix_fmt', 'yuv420p',
             '-r', String(targetFps),
             '-movflags', '+faststart',
         ];
 
         if (audioAvailable) {
-            args.push('-map', useAudioFilter ? '[a]' : '0:a', '-c:a', 'aac', '-b:a', '128k');
+            args.push('-map', useAudioFilter ? '[a]' : '0:a', '-c:a', 'aac', '-b:a', '192k');
         } else {
             args.push('-an');
         }
