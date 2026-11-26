@@ -2113,6 +2113,7 @@ app.get('/api/admin/overview', requireAdmin, async (_req, res) => {
             viralClipsCount,
             freeTrials,
             subscribers,
+            allUsages,
         ] = await Promise.all([
             User.find({}, { passwordHash: 0 }).sort({ created_at: -1 }).lean(),
             UserCredits.find({}).lean(),
@@ -2121,6 +2122,7 @@ app.get('/api/admin/overview', requireAdmin, async (_req, res) => {
             ViralClip.countDocuments({}),
             FreeTrialUsage.find({}).sort({ created_at: -1 }).limit(100).lean(),
             NewsletterSubscriber.find({}).sort({ created_at: -1 }).limit(100).lean(),
+            CreditUsage.find({}).sort({ created_at: -1 }).limit(2000).lean(),
         ]);
 
         const creditsByUser = new Map();
@@ -2182,6 +2184,76 @@ app.get('/api/admin/overview', requireAdmin, async (_req, res) => {
 
         const totalFreeTrials = await FreeTrialUsage.countDocuments({});
 
+        const classifyUsageActivity = (u) => {
+            const p = String(u.platform || u.metadata?.platform || '').toLowerCase();
+            const f = String(u.metadata?.feature || '').toLowerCase();
+            const ft = String(u.feature_type || '').toLowerCase();
+
+            if (p === 'youtube_improve') return { key: 'youtube_improve', label: 'Improve YouTube Thumbnail', icon: '✨' };
+            if (p === 'youtube') return { key: 'youtube', label: 'YouTube Thumbnail', icon: '🎬' };
+            if (p === 'podcast') return { key: 'podcast', label: 'Podcast Cover', icon: '🎙️' };
+            if (p === 'tiktok') return { key: 'tiktok', label: 'TikTok / Shorts Cover', icon: '📱' };
+            if (p === 'twitter_card' || p === 'twitter') return { key: 'twitter', label: 'Twitter / X Card', icon: '🐦' };
+            if (p === 'resize') return { key: 'resize', label: 'Smart Image Resize', icon: '🪄' };
+            if (f === 'content_repurpose' || ft === 'repurpose') return { key: 'repurpose', label: 'Video Repurpose (Viral Clips)', icon: '✂️' };
+            if (f === 'image_generation' || ft === 'image_generation') return { key: 'image_generation', label: 'AI Image Generator', icon: '🖼️' };
+            if (f === 'image_edit') return { key: 'image_edit', label: 'AI Image Edit', icon: '🖌️' };
+            if (f === 'image_upscale') return { key: 'image_upscale', label: 'AI Image Upscale', icon: '🔍' };
+            if (f === 'extract_faces') return { key: 'extract_faces', label: 'Video Face Extraction', icon: '👤' };
+            if (f === 'analyze_video') return { key: 'analyze_video', label: 'Video Style Analysis', icon: '🧠' };
+            if (f === 'video_generation' || ft === 'video_generation') return { key: 'video_generation', label: 'AI Video Generation', icon: '🎥' };
+            if (ft === 'thumbnail') return { key: 'youtube', label: 'YouTube Thumbnail', icon: '🎬' };
+            return { key: 'other', label: 'Other Studio Action', icon: '⚡' };
+        };
+
+        const activityMap = new Map();
+        const recentActivity = [];
+        let totalActivityRuns = 0;
+
+        for (const u of allUsages) {
+            const cat = classifyUsageActivity(u);
+            totalActivityRuns += 1;
+            let entry = activityMap.get(cat.key);
+            if (!entry) {
+                entry = {
+                    key: cat.key,
+                    label: cat.label,
+                    icon: cat.icon,
+                    runs: 0,
+                    credits_used: 0,
+                    userSet: new Set(),
+                };
+                activityMap.set(cat.key, entry);
+            }
+            entry.runs += 1;
+            entry.credits_used += Number(u.credits_used || 0);
+            if (u.user_id) entry.userSet.add(String(u.user_id));
+
+            if (recentActivity.length < 100) {
+                recentActivity.push({
+                    id: String(u._id),
+                    email: userEmailById.get(String(u.user_id)) || String(u.user_id || '-'),
+                    activity_key: cat.key,
+                    activity_label: cat.label,
+                    activity_icon: cat.icon,
+                    credits_used: Number(u.credits_used || 0),
+                    created_at: u.created_at,
+                });
+            }
+        }
+
+        const activityBreakdown = Array.from(activityMap.values())
+            .map((e) => ({
+                key: e.key,
+                label: e.label,
+                icon: e.icon,
+                runs: e.runs,
+                unique_users: e.userSet.size,
+                credits_used: e.credits_used,
+                share_pct: totalActivityRuns > 0 ? Math.round((e.runs / totalActivityRuns) * 100) : 0,
+            }))
+            .sort((a, b) => b.runs - a.runs);
+
         return res.json({
             summary: {
                 total_users: users.length,
@@ -2194,7 +2266,10 @@ app.get('/api/admin/overview', requireAdmin, async (_req, res) => {
                 total_viral_clips: viralClipsCount,
                 total_free_trials: totalFreeTrials,
                 total_subscribers: subscribers.length,
+                total_activity_runs: totalActivityRuns,
             },
+            activity_breakdown: activityBreakdown,
+            recent_activity: recentActivity,
             users: formattedUsers,
             payments: formattedPayments,
             free_trials: freeTrials.map((t) => ({

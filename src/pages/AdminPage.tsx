@@ -42,6 +42,26 @@ interface AdminSubscriberRow {
     created_at: string;
 }
 
+interface AdminActivityBreakdownRow {
+    key: string;
+    label: string;
+    icon: string;
+    runs: number;
+    unique_users: number;
+    credits_used: number;
+    share_pct: number;
+}
+
+interface AdminRecentActivityRow {
+    id: string;
+    email: string;
+    activity_key: string;
+    activity_label: string;
+    activity_icon: string;
+    credits_used: number;
+    created_at: string;
+}
+
 interface AdminOverviewData {
     summary: {
         total_users: number;
@@ -54,7 +74,10 @@ interface AdminOverviewData {
         total_viral_clips: number;
         total_free_trials: number;
         total_subscribers: number;
+        total_activity_runs?: number;
     };
+    activity_breakdown?: AdminActivityBreakdownRow[];
+    recent_activity?: AdminRecentActivityRow[];
     users: AdminUserRow[];
     payments: AdminPaymentRow[];
     free_trials: AdminTrialRow[];
@@ -82,8 +105,9 @@ export const AdminPage: FC = () => {
     const [data, setData] = useState<AdminOverviewData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<'users' | 'payments' | 'trials' | 'leads' | 'inbox'>('users');
+    const [activeTab, setActiveTab] = useState<'users' | 'activity' | 'payments' | 'trials' | 'leads' | 'inbox'>('users');
     const [search, setSearch] = useState('');
+    const [activityFilter, setActivityFilter] = useState<string>('all');
     const [userFilter, setUserFilter] = useState<'all' | 'paid' | 'free'>('all');
     const [grantModalUser, setGrantModalUser] = useState<AdminUserRow | null>(null);
     const [grantAmount, setGrantAmount] = useState('50');
@@ -284,6 +308,7 @@ export const AdminPage: FC = () => {
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px' }}>
                             {[
                                 { id: 'users', label: `Users (${data.users.length})` },
+                                { id: 'activity', label: `📊 Activity & Interest (${data.summary.total_activity_runs || 0})` },
                                 { id: 'payments', label: `Payments (${data.payments.length})` },
                                 { id: 'inbox', label: '📬 Inbox (sam@crevo.app)' },
                                 { id: 'trials', label: `Free Trials (${data.free_trials.length})` },
@@ -514,6 +539,133 @@ export const AdminPage: FC = () => {
                                         )}
                                     </tbody>
                                 </table>
+                            </div>
+                        )}
+
+                        {/* Activity & Interest Breakdown Tab */}
+                        {activeTab === 'activity' && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                                {/* Popularity Breakdown */}
+                                <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '16px', padding: '20px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '16px' }}>
+                                        <div>
+                                            <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: '#111827' }}>
+                                                What Users Are Actually Creating
+                                            </h3>
+                                            <p style={{ margin: '2px 0 0', fontSize: '13px', color: '#6b7280' }}>
+                                                Separated by platform &amp; feature (click any row to filter recent activity).
+                                            </p>
+                                        </div>
+                                        {activityFilter !== 'all' && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setActivityFilter('all')}
+                                                style={{
+                                                    padding: '6px 12px',
+                                                    borderRadius: '8px',
+                                                    border: '1px solid #d8ccf0',
+                                                    background: '#faf7ff',
+                                                    color: '#571c86',
+                                                    fontWeight: 600,
+                                                    fontSize: '12px',
+                                                    cursor: 'pointer',
+                                                }}
+                                            >
+                                                Clear filter
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {!data.activity_breakdown || data.activity_breakdown.length === 0 ? (
+                                        <p style={{ color: '#6b7280', fontSize: '14px', margin: 0 }}>
+                                            No user activity recorded yet. As soon as users generate thumbnails, podcast covers, resizes, or clips, they will appear here.
+                                        </p>
+                                    ) : (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                            {data.activity_breakdown.map((item) => {
+                                                const isSelected = activityFilter === item.key;
+                                                return (
+                                                    <div
+                                                        key={item.key}
+                                                        onClick={() => setActivityFilter(isSelected ? 'all' : item.key)}
+                                                        style={{
+                                                            padding: '12px 14px',
+                                                            borderRadius: '12px',
+                                                            border: isSelected ? '1.5px solid #571c86' : '1px solid #f0ebf8',
+                                                            background: isSelected ? '#faf7ff' : '#ffffff',
+                                                            cursor: 'pointer',
+                                                        }}
+                                                    >
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '6px' }}>
+                                                            <span style={{ fontWeight: 700, fontSize: '14px', color: '#111827' }}>
+                                                                {item.icon} {item.label}
+                                                            </span>
+                                                            <div style={{ display: 'flex', gap: '14px', fontSize: '12.5px', color: '#4b5563', fontWeight: 600 }}>
+                                                                <span><strong style={{ color: '#111827' }}>{item.runs}</strong> runs</span>
+                                                                <span><strong style={{ color: '#571c86' }}>{item.unique_users}</strong> users</span>
+                                                                <span><strong>{item.credits_used}</strong> credits</span>
+                                                                <span style={{ color: '#571c86', fontWeight: 800 }}>{item.share_pct}%</span>
+                                                            </div>
+                                                        </div>
+                                                        <div style={{ width: '100%', height: '8px', borderRadius: '999px', background: '#f3e8ff', overflow: 'hidden' }}>
+                                                            <div
+                                                                style={{
+                                                                    width: `${Math.max(3, item.share_pct)}%`,
+                                                                    height: '100%',
+                                                                    borderRadius: '999px',
+                                                                    background: 'linear-gradient(90deg, #571c86, #9333ea)',
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Recent Activity Feed */}
+                                <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '16px', padding: '18px', overflowX: 'auto' }}>
+                                    <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 800, color: '#111827' }}>
+                                        Recent User Activity {activityFilter !== 'all' ? '(Filtered)' : '(Latest 100)'}
+                                    </h3>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
+                                        <thead>
+                                            <tr style={{ textAlign: 'left', borderBottom: '1px solid #e5e7eb', color: '#6b7280', fontSize: '12px' }}>
+                                                <th style={{ padding: '10px 8px' }}>User</th>
+                                                <th style={{ padding: '10px 8px' }}>Activity / Feature</th>
+                                                <th style={{ padding: '10px 8px' }}>Credits Used</th>
+                                                <th style={{ padding: '10px 8px' }}>When</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {(data.recent_activity || [])
+                                                .filter((a) => activityFilter === 'all' || a.activity_key === activityFilter)
+                                                .map((a) => (
+                                                    <tr key={a.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                                                        <td style={{ padding: '10px 8px', fontWeight: 600, color: '#111827' }}>{a.email}</td>
+                                                        <td style={{ padding: '10px 8px' }}>
+                                                            <span
+                                                                style={{
+                                                                    display: 'inline-block',
+                                                                    padding: '3px 10px',
+                                                                    borderRadius: '999px',
+                                                                    background: '#f3e8ff',
+                                                                    color: '#571c86',
+                                                                    fontWeight: 700,
+                                                                    fontSize: '12px',
+                                                                }}
+                                                            >
+                                                                {a.activity_icon} {a.activity_label}
+                                                            </span>
+                                                        </td>
+                                                        <td style={{ padding: '10px 8px', fontWeight: 700, color: '#374151' }}>{a.credits_used}</td>
+                                                        <td style={{ padding: '10px 8px', color: '#6b7280', fontSize: '12.5px' }}>{formatDate(a.created_at)}</td>
+                                                    </tr>
+                                                ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         )}
 
