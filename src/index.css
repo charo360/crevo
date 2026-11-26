@@ -793,31 +793,23 @@ input[type="color"]::-moz-color-swatch {
 .design-card-image-wrapper {
   position: relative;
   width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: #110d1b;
+  background-color: transparent;
 }
 
 .design-card-image {
-  width: auto;
-  max-width: 100%;
+  width: 100%;
   height: auto;
-  max-height: 460px;
-  object-fit: contain;
+  object-fit: cover;
   display: block;
-  margin: 0 auto;
 }
 
 .design-card-video {
-  width: auto;
-  max-width: 100%;
+  width: 100%;
   height: auto;
   max-height: 460px;
   object-fit: contain;
-  background-color: #110d1b;
+  background-color: var(--surface-1);
   display: block;
-  margin: 0 auto;
 }
 
 .design-card-description {

@@ -24,6 +24,7 @@ export const DesignCard: FC<DesignCardProps> = ({
     onAdapt 
 }) => {
     const [isAdaptMenuOpen, setIsAdaptMenuOpen] = useState(false);
+    const [isPortrait, setIsPortrait] = useState(false);
     const adaptButtonRef = useRef<HTMLDivElement>(null);
     
     const handleEdit = () => onEdit(design);
@@ -50,7 +51,14 @@ export const DesignCard: FC<DesignCardProps> = ({
     }, []);
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div
+            style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px',
+                ...(isPortrait ? { maxWidth: '300px', width: '100%', margin: '0 auto' } : {}),
+            }}
+        >
             <div className="design-card">
                 {design.image && !(design.isEditing || design.isUpscaling || design.isResizing) && (
                      <div className="design-card-actions">
@@ -92,6 +100,10 @@ export const DesignCard: FC<DesignCardProps> = ({
                             className="design-card-image"
                             src={design.image.url}
                             alt={design.description || design.score?.variationLabel || 'Generated thumbnail'}
+                            onLoad={(e) => {
+                                const img = e.currentTarget;
+                                setIsPortrait(img.naturalHeight > img.naturalWidth * 1.05);
+                            }}
                         />
                     )}
                 </div>
