@@ -1736,6 +1736,189 @@ app.post('/api/video/upload', requireAuth, (req, res) => {
     req.pipe(writeStream);
 });
 
+app.get('/api/video/stream/:uploadId', (req, res, next) => {
+    if (!req.headers.authorization && typeof req.query.token === 'string' && req.query.token.trim()) {
+        req.headers.authorization = `Bearer ${req.query.token.trim()}`;
+    }
+    return requireAuth(req, res, next);
+}, (req, res) => {
+    const uploadId = String(req.params.uploadId || '').trim();
+    if (!/^[0-9a-f-]{36}$/i.test(uploadId)) {
+        return res.status(400).json({ error: 'Invalid uploadId' });
+    }
+    const filePath = path.join(VIDEO_TMP_DIR, `${uploadId}.mp4`);
+    if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: 'Video expired or not found' });
+    }
+    res.setHeader('Content-Type', 'video/mp4');
+    return res.sendFile(filePath);
+});
+
+app.post('/api/video/import-url', requireAuth, async (req, res) => {
+    cleanupOldTempVideos();
+    ensureVideoTmpDir();
+
+    const rawUrl = String(req.body?.url || '').trim();
+    if (!rawUrl) {
+        return res.status(400).json({ error: 'Please enter a YouTube URL' });
+    }
+
+    let parsedUrl;
+    try {
+        parsedUrl = new URL(rawUrl);
+    } catch {
+        return res.status(400).json({ error: 'Invalid URL format' });
+    }
+
+    const host = parsedUrl.hostname.toLowerCase();
+    const isYouTube =
+        host === 'youtu.be' ||
+        host === 'youtube.com' ||
+        host === 'www.youtube.com' ||
+        host === 'm.youtube.com';
+
+    if (!['http:', 'https:'].includes(parsedUrl.protocol) || !isYouTube) {
+        return res.status(400).json({
+            error: 'Please paste a valid YouTube link (youtube.com or youtu.be)',
+        });
+    }
+
+    const uploadId = crypto.randomUUID();
+    const filePath = path.join(VIDEO_TMP_DIR, `${uploadId}.mp4`);
+    const frameFiles = [];
+
+    const cleanup = () => {
+        try {
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        } catch {
+            // ignore
+        }
+        for (const f of frameFiles) {
+            try {
+                if (fs.existsSync(f)) fs.unlinkSync(f);
+            } catch {
+                // ignore
+            }
+        }
+    };
+
+    try {
+        // Download up to 720p MP4 via yt-dlp (fast, crisp for 9:16 shorts, capped at 500MB)
+        const ytArgs = [
+            '--no-playlist',
+            '--no-warnings',
+            '--max-filesize', '500M',
+            '-f', 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best[ext=mp4]/best',
+            '--merge-output-format', 'mp4',
+            '--print', 'after_move:%(title)s',
+            '-o', filePath,
+            parsedUrl.toString(),
+        ];
+
+        const { stdout: ytOut } = await execFileAsync('yt-dlp', ytArgs, {
+            timeout: 180000,
+            maxBuffer: 10 * 1024 * 1024,
+        });
+
+        if (!fs.existsSync(filePath)) {
+            throw new Error('Video could not be downloaded. It may exceed 500MB or be unavailable.');
+        }
+
+        const title =
+            String(ytOut || '')
+                .split(/\r?\n/)
+                .map((s) => s.trim())
+                .filter(Boolean)
+                .pop() || 'YouTube Video';
+
+        const stat = fs.statSync(filePath);
+
+        // Probe exact duration & dimensions with ffprobe
+        let duration = 60;
+        let width = 1280;
+        let height = 720;
+        try {
+            const { stdout: probeOut } = await execFileAsync('ffprobe', [
+                '-v', 'error',
+                '-select_streams', 'v:0',
+                '-show_entries', 'stream=width,height:format=duration',
+                '-of', 'json',
+                filePath,
+            ], { timeout: 20000 });
+            const parsed = JSON.parse(probeOut || '{}');
+            const parsedDur = Number(parsed?.format?.duration || 0);
+            if (Number.isFinite(parsedDur) && parsedDur > 0) duration = parsedDur;
+            const st = Array.isArray(parsed?.streams) ? parsed.streams[0] : null;
+            if (st?.width) width = Number(st.width);
+            if (st?.height) height = Number(st.height);
+        } catch (probeErr) {
+            console.warn('ffprobe warning on imported YouTube video:', probeErr?.message || probeErr);
+        }
+
+        // Extract 6-10 evenly spaced JPEG preview frames for AI viral moment detection
+        const frameCount = Math.min(10, Math.max(6, Math.ceil(duration / 15)));
+        const safeStart = duration > 2 ? 0.5 : 0;
+        const safeSpan = Math.max(1, duration - safeStart - 0.5);
+        const frames = [];
+
+        for (let i = 0; i < frameCount; i++) {
+            const ts = safeStart + (safeSpan * (i + 0.5)) / frameCount;
+            const outImg = path.join(VIDEO_TMP_DIR, `yt_frame_${uploadId}_${i}.jpg`);
+            frameFiles.push(outImg);
+            try {
+                await execFileAsync('ffmpeg', [
+                    '-y',
+                    '-ss', ts.toFixed(3),
+                    '-i', filePath,
+                    '-frames:v', '1',
+                    '-vf', "scale='min(640,iw)':-2",
+                    '-q:v', '4',
+                    outImg,
+                ], { timeout: 20000 });
+                if (fs.existsSync(outImg)) {
+                    const b64 = fs.readFileSync(outImg).toString('base64');
+                    frames.push(`data:image/jpeg;base64,${b64}`);
+                }
+            } catch {
+                // skip individual frame errors
+            }
+        }
+
+        // Clean up temporary frame JPEGs (keep the downloaded MP4 for clipping!)
+        for (const f of frameFiles) {
+            try {
+                if (fs.existsSync(f)) fs.unlinkSync(f);
+            } catch {
+                // ignore
+            }
+        }
+
+        return res.json({
+            uploadId,
+            title,
+            duration,
+            width,
+            height,
+            size: stat.size,
+            frames,
+            previewUrl: `/api/video/stream/${uploadId}`,
+        });
+    } catch (err) {
+        cleanup();
+        const rawErr = String(err?.stderr || err?.message || 'YouTube import failed');
+        console.error('YouTube import error:', rawErr.slice(0, 400));
+        let friendly = 'Could not import that YouTube video. Try another public video or upload the MP4 directly.';
+        if (/Sign in to confirm|bot|cookies/i.test(rawErr)) {
+            friendly = 'YouTube temporarily blocked automated download for this video. Please download the MP4 and upload it directly.';
+        } else if (/Private video|Video unavailable|members-only/i.test(rawErr)) {
+            friendly = 'This YouTube video is private, members-only, or unavailable.';
+        } else if (/max-filesize|File is larger/i.test(rawErr)) {
+            friendly = 'This YouTube video exceeds the 500MB import limit. Please upload a shorter clip or local file.';
+        }
+        return res.status(400).json({ error: friendly });
+    }
+});
+
 app.post('/api/video/extract-frames', requireAuth, (req, res) => {
     cleanupOldTempVideos();
     ensureVideoTmpDir();

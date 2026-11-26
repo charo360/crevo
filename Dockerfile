@@ -14,8 +14,10 @@ FROM node:20-alpine
 
 WORKDIR /usr/src/app
 
-# Install native FFmpeg + DejaVu fonts for burned-in ASS subtitles
-RUN apk add --no-cache ffmpeg font-dejavu
+# Install native FFmpeg, DejaVu fonts (ASS subtitles), Python3 + latest yt-dlp (YouTube URL import)
+RUN apk add --no-cache ffmpeg font-dejavu python3 curl \
+    && curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
+    && chmod a+rx /usr/local/bin/yt-dlp
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev

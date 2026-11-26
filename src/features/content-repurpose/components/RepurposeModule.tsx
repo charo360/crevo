@@ -9,15 +9,20 @@ import { toast } from 'react-toastify';
 import { GoogleGenAI } from "@google/genai";
 import { createAiClient } from '../../../core/services/ai-providers/openrouterClient';
 import { repurposeVideo, recutViralClip } from '../services/repurposeService';
+import { setServerUploadCache } from '../../../core/processors/video';
+import { getAuthToken } from '../../../lib/api';
 import { isSupportedVideoFile } from '../../../shared/utils/video-utils';
 import { RepurposeResult, ClipGenerationOptions, CropMode, CaptionStyle, CaptionPosition, ViralClip } from '../../../types/repurpose';
 import { useAuth } from '../../../contexts/AuthContext';
 
+const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+
 interface RepurposeModuleProps {
     onResultsGenerated?: (results: RepurposeResult) => void;
+    onCreateCoverThumbnail?: (payload: { imageDataUrl: string; title: string; platform?: string }) => void;
 }
 
-export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }) => {
+export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated, onCreateCoverThumbnail }) => {
     const { user, refreshCredits } = useAuth();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const urlInputRef = useRef<HTMLInputElement>(null);
@@ -25,6 +30,18 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
     const [videoFile, setVideoFile] = useState<File | null>(null);
     const [videoUrl, setVideoUrl] = useState<string>('');
     const [videoPreviewUrl, setVideoPreviewUrl] = useState<string>('');
+    const [youtubeInputUrl, setYoutubeInputUrl] = useState<string>('');
+    const [isImportingYoutube, setIsImportingYoutube] = useState(false);
+    const [importedMeta, setImportedMeta] = useState<{
+        uploadId: string;
+        title: string;
+        duration: number;
+        width: number;
+        height: number;
+        fileSize: number;
+        frames: string[];
+        sourceUrl: string;
+    } | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [progress, setProgress] = useState(0);
     const [progressStatus, setProgressStatus] = useState('Starting...');
@@ -105,6 +122,7 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
                     return;
                 }
                 
+                setImportedMeta(null);
                 setVideoFile(file);
                 setVideoUrl(URL.createObjectURL(file));
                 setVideoPreviewUrl(URL.createObjectURL(file));
@@ -113,6 +131,90 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
                 toast.error(`Failed to upload video: ${error.message || 'Unknown error'}`);
             }
         }
+    };
+
+    const handleImportYoutubeUrl = async () => {
+        const raw = youtubeInputUrl.trim();
+        if (!raw) {
+            toast.error('Please paste a YouTube video link first.');
+            return;
+        }
+        const token = getAuthToken();
+        if (!token) {
+            toast.error('Please sign in to import a YouTube video.');
+            return;
+        }
+        setIsImportingYoutube(true);
+        try {
+            const res = await fetch(`${API_BASE}/api/video/import-url`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ url: raw }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                throw new Error(data?.error || 'Could not import YouTube video');
+            }
+            const safeName = `${(data.title || 'youtube-video').replace(/[^a-z0-9-_ ]/gi, '').slice(0, 60) || 'youtube-video'}.mp4`;
+            const markerFile = new File([], safeName, { type: 'video/mp4' });
+            setServerUploadCache(markerFile, data.uploadId);
+            setVideoFile(markerFile);
+            setVideoUrl(raw);
+            setVideoPreviewUrl(`${API_BASE}${data.previewUrl}?token=${encodeURIComponent(token)}`);
+            setImportedMeta({
+                uploadId: data.uploadId,
+                title: data.title || 'YouTube Video',
+                duration: Number(data.duration || 60),
+                width: Number(data.width || 1280),
+                height: Number(data.height || 720),
+                fileSize: Number(data.size || 0),
+                frames: Array.isArray(data.frames) ? data.frames : [],
+                sourceUrl: raw,
+            });
+            toast.success(`Imported "${data.title || 'YouTube video'}"! Ready to generate viral clips.`);
+        } catch (err: any) {
+            toast.error(err?.message || 'Failed to import YouTube video.');
+        } finally {
+            setIsImportingYoutube(false);
+        }
+    };
+
+    const handleSendClipToThumbnail = async (clip: ViralClip) => {
+        if (!onCreateCoverThumbnail) return;
+        let imageDataUrl = clip.thumbnail_url && clip.thumbnail_url.startsWith('data:image/')
+            ? clip.thumbnail_url
+            : '';
+
+        if (!imageDataUrl && clip.clip_url) {
+            try {
+                const videoEl = document.querySelector(`video[src="${clip.clip_url}"]`) as HTMLVideoElement | null;
+                if (videoEl && videoEl.videoWidth > 0 && videoEl.videoHeight > 0) {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = videoEl.videoWidth;
+                    canvas.height = videoEl.videoHeight;
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                        ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+                        imageDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+                    }
+                }
+            } catch {
+                // fallback below
+            }
+        }
+
+        if (!imageDataUrl && importedMeta?.frames?.length) {
+            imageDataUrl = importedMeta.frames[Math.floor(importedMeta.frames.length / 2)] || importedMeta.frames[0];
+        }
+
+        onCreateCoverThumbnail({
+            imageDataUrl,
+            title: clip.hook_title || clip.title || 'Viral Short',
+            platform: clip.platform_format,
+        });
     };
 
     const handleUrlSubmit = () => {
@@ -155,7 +257,11 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
             let validVideoUrl: string;
             let shouldRevokeBlobUrl = false;
             
-            if (videoFile) {
+            if (importedMeta && videoFile) {
+                videoBlob = videoFile;
+                validVideoUrl = importedMeta.sourceUrl;
+                shouldRevokeBlobUrl = false;
+            } else if (videoFile) {
                 videoBlob = videoFile;
                 // Create blob URL for file uploads
                 validVideoUrl = URL.createObjectURL(videoFile);
@@ -193,12 +299,21 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
                 const result = await repurposeVideo(
                     ai.current,
                     videoBlob,
-                    validVideoUrl, // Use the blob URL
+                    validVideoUrl, // Use the blob URL or YouTube URL
                     user.id,
                     options,
-                    undefined, // originalTitle
+                    importedMeta?.title, // originalTitle
                     undefined, // transcript
-                    progressCallback
+                    progressCallback,
+                    importedMeta
+                        ? {
+                              duration: importedMeta.duration,
+                              width: importedMeta.width,
+                              height: importedMeta.height,
+                              frames: importedMeta.frames,
+                              fileSize: importedMeta.fileSize,
+                          }
+                        : undefined
                 );
 
                 setProgress(100);
@@ -285,12 +400,15 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
                                         color: 'var(--text-primary, #111)',
                                     }}
                                 >
-                                    {videoFile?.name || 'Uploaded video'}
-                                    {videoFile && (
+                                    {importedMeta?.title || videoFile?.name || 'Uploaded video'}
+                                    {(importedMeta?.fileSize || (videoFile && videoFile.size > 0)) && (
                                         <span style={{ fontWeight: 400, color: 'var(--text-secondary, #6b7280)', marginLeft: '6px' }}>
-                                            ({videoFile.size >= 1024 * 1024 * 1024
-                                                ? `${(videoFile.size / (1024 * 1024 * 1024)).toFixed(2)} GB`
-                                                : `${(videoFile.size / (1024 * 1024)).toFixed(1)} MB`})
+                                            {(() => {
+                                                const bytes = importedMeta?.fileSize || videoFile?.size || 0;
+                                                return bytes >= 1024 * 1024 * 1024
+                                                    ? `(${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB)`
+                                                    : `(${(bytes / (1024 * 1024)).toFixed(1)} MB)`;
+                                            })()}
                                         </span>
                                     )}
                                 </span>
@@ -313,9 +431,11 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
                                 <button
                                     type="button"
                                     onClick={() => {
+                                        setImportedMeta(null);
                                         setVideoFile(null);
                                         setVideoUrl('');
                                         setVideoPreviewUrl('');
+                                        setYoutubeInputUrl('');
                                     }}
                                     className="remove-video-btn"
                                     style={{
@@ -334,29 +454,106 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
                             </div>
                         </div>
                     ) : (
-                        <div
-                            className="upload-area"
-                            onClick={() => fileInputRef.current?.click()}
-                            onDragOver={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                            }}
-                            onDrop={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                const file = e.dataTransfer.files?.[0];
-                                if (file) {
-                                    handleFileChange({ target: { files: [file] } } as any);
-                                }
-                            }}
-                        >
-                            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--primary, #571c86)" strokeWidth="2">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                <polyline points="17 8 12 3 7 8"></polyline>
-                                <line x1="12" y1="3" x2="12" y2="15"></line>
-                            </svg>
-                            <p>Click to upload or drag &amp; drop a video</p>
-                            <p className="upload-hint">MP4, MOV, WebM up to 5GB — AI finds top viral moments &amp; clips them in seconds</p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            {/* Direct YouTube URL Import */}
+                            <div
+                                style={{
+                                    display: 'flex',
+                                    flexWrap: 'wrap',
+                                    gap: '8px',
+                                    alignItems: 'center',
+                                    padding: '10px 12px',
+                                    borderRadius: '12px',
+                                    background: '#faf7ff',
+                                    border: '1px solid #e4dcf2',
+                                }}
+                            >
+                                <input
+                                    ref={urlInputRef}
+                                    type="url"
+                                    value={youtubeInputUrl}
+                                    onChange={(e) => setYoutubeInputUrl(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && !isImportingYoutube) {
+                                            e.preventDefault();
+                                            handleImportYoutubeUrl();
+                                        }
+                                    }}
+                                    placeholder="Paste a YouTube link (e.g. https://youtube.com/watch?v=...)"
+                                    disabled={isImportingYoutube}
+                                    style={{
+                                        flex: '1 1 240px',
+                                        minWidth: 0,
+                                        padding: '9px 12px',
+                                        borderRadius: '8px',
+                                        border: '1px solid #d8ccf0',
+                                        background: '#ffffff',
+                                        fontSize: '14px',
+                                        color: '#111827',
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleImportYoutubeUrl}
+                                    disabled={isImportingYoutube || !youtubeInputUrl.trim()}
+                                    style={{
+                                        padding: '9px 16px',
+                                        borderRadius: '8px',
+                                        border: 'none',
+                                        background: '#571c86',
+                                        color: '#ffffff',
+                                        fontWeight: 700,
+                                        fontSize: '13.5px',
+                                        cursor: isImportingYoutube ? 'wait' : 'pointer',
+                                        opacity: isImportingYoutube || !youtubeInputUrl.trim() ? 0.65 : 1,
+                                        whiteSpace: 'nowrap',
+                                    }}
+                                >
+                                    {isImportingYoutube ? 'Importing YouTube...' : '▶ Import YouTube'}
+                                </button>
+                            </div>
+
+                            <div
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '10px',
+                                    color: '#9ca3af',
+                                    fontSize: '11.5px',
+                                    fontWeight: 700,
+                                    letterSpacing: '0.06em',
+                                    textTransform: 'uppercase',
+                                }}
+                            >
+                                <span style={{ flex: 1, height: '1px', background: '#e5e7eb' }} />
+                                <span>OR UPLOAD A VIDEO FILE</span>
+                                <span style={{ flex: 1, height: '1px', background: '#e5e7eb' }} />
+                            </div>
+
+                            <div
+                                className="upload-area"
+                                onClick={() => fileInputRef.current?.click()}
+                                onDragOver={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                }}
+                                onDrop={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    const file = e.dataTransfer.files?.[0];
+                                    if (file) {
+                                        handleFileChange({ target: { files: [file] } } as any);
+                                    }
+                                }}
+                            >
+                                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--primary, #571c86)" strokeWidth="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="17 8 12 3 7 8"></polyline>
+                                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                                </svg>
+                                <p>Click to upload or drag &amp; drop a video</p>
+                                <p className="upload-hint">MP4, MOV, WebM up to 5GB — AI finds top viral moments &amp; clips them in seconds</p>
+                            </div>
                         </div>
                     )}
                     <input 
@@ -801,7 +998,7 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
                                         </div>
                                     )}
 
-                                    <div className="clip-actions">
+                                    <div className="clip-actions" style={{ flexWrap: 'wrap', gap: '6px' }}>
                                         <a 
                                             href={clip.clip_url} 
                                             download={`viral-clip-${clip.platform_format}-${clip.virality_score}.mp4`}
@@ -821,6 +1018,26 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated }
                                         >
                                             Play/Pause
                                         </button>
+                                        {onCreateCoverThumbnail && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleSendClipToThumbnail(clip)}
+                                                style={{
+                                                    width: '100%',
+                                                    marginTop: '4px',
+                                                    padding: '8px 12px',
+                                                    borderRadius: '8px',
+                                                    border: '1px solid #d8ccf0',
+                                                    background: 'linear-gradient(135deg, #f5efff 0%, #ede3ff 100%)',
+                                                    color: '#571c86',
+                                                    fontWeight: 700,
+                                                    fontSize: '12.5px',
+                                                    cursor: 'pointer',
+                                                }}
+                                            >
+                                                🎨 Make Cover Thumbnail
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             </div>

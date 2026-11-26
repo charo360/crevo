@@ -27,6 +27,12 @@ let serverFFmpegAvailable = true;
 let serverUploadedFile: File | Blob | null = null;
 let serverUploadId: string | null = null;
 
+export function setServerUploadCache(fileMarker: File | Blob, uploadId: string): void {
+    serverUploadedFile = fileMarker;
+    serverUploadId = uploadId;
+    serverFFmpegAvailable = true;
+}
+
 export async function clearCachedVideoInput(): Promise<void> {
     if (serverUploadId) {
         const idToDelete = serverUploadId;

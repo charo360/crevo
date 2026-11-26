@@ -49,27 +49,39 @@ export async function repurposeVideo(
     options: Partial<ClipGenerationOptions> = {},
     originalTitle?: string,
     transcript?: string | null,
-    onProgress?: (current: number, total: number, statusText?: string) => void
+    onProgress?: (current: number, total: number, statusText?: string) => void,
+    preloaded?: {
+        duration: number;
+        width: number;
+        height: number;
+        frames: string[];
+        fileSize?: number;
+    }
 ): Promise<RepurposeResult> {
     const jobStartTime = Date.now();
     const finalOptions = { ...DEFAULT_OPTIONS, ...options };
     
     try {
-        // Step 1: Get video metadata
+        // Step 1: Get video metadata (reuse server-probed metadata for YouTube imports)
         onProgress?.(5, 100, 'Reading video metadata...');
         toast.info('Analyzing video...');
-        const metadata = await getVideoMetadata(videoFile);
+        const metadata = preloaded
+            ? { duration: preloaded.duration, width: preloaded.width, height: preloaded.height }
+            : await getVideoMetadata(videoFile);
         
         // Step 2: Extract 8-14 evenly spaced frames for fast single-pass AI analysis
         onProgress?.(12, 100, 'Extracting preview frames...');
         const targetFrames = Math.min(14, Math.max(6, Math.ceil(metadata.duration / 10)));
-        const frames = await extractFramesFromVideo(
-            videoUrl,
-            0,
-            metadata.duration,
-            targetFrames,
-            videoFile
-        );
+        const frames =
+            preloaded && Array.isArray(preloaded.frames) && preloaded.frames.length > 0
+                ? preloaded.frames
+                : await extractFramesFromVideo(
+                      videoUrl,
+                      0,
+                      metadata.duration,
+                      targetFrames,
+                      videoFile
+                  );
         onProgress?.(20, 100, 'AI detecting top viral moments...');
         
         // Step 3: Fetch transcript if not provided and URL is YouTube

@@ -757,7 +757,39 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
             {platform === 'repurpose' ? (
                 /* Content Repurpose Module - generates short viral videos */
                 <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
-                    <RepurposeModule />
+                    <RepurposeModule
+                        onCreateCoverThumbnail={({ imageDataUrl, title }) => {
+                            const match = imageDataUrl.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/);
+                            if (match) {
+                                const mimeType = match[1];
+                                const base64 = match[2];
+                                const asset: ImageAsset = {
+                                    id: `clip_cover_${Date.now()}`,
+                                    url: imageDataUrl,
+                                    base64,
+                                    mimeType,
+                                };
+                                setImages([asset]);
+                            }
+                            const shortHeadline = (title || '')
+                                .replace(/[#*_`]/g, '')
+                                .trim()
+                                .split(/\s+/)
+                                .slice(0, 6)
+                                .join(' ');
+                            if (shortHeadline) {
+                                setTextByPlatform((prev) => ({
+                                    ...prev,
+                                    youtube: {
+                                        ...(prev.youtube ?? createDefaultText()),
+                                        headline: shortHeadline,
+                                    },
+                                }));
+                            }
+                            handlePlatformChange('youtube');
+                            toast.success('Clip frame sent to Thumbnail Studio! Click Generate to design your cover.');
+                        }}
+                    />
                 </div>
             ) : platform === 'youtube_tools' ? (
                 /* YouTube Thumbnail Downloader & Transcript Extractor */
