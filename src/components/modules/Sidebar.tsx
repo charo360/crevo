@@ -48,6 +48,8 @@ interface SidebarProps {
     onOriginalTitleChange: (t: string) => void;
     onBatchResize?: (sourceImage: ImageAsset, options: ResizeOption[]) => Promise<void>;
     isBatchResizing?: boolean;
+    outputAspectRatio?: string;
+    onOutputAspectRatioChange?: (ar: string) => void;
     isOpen?: boolean;
     onClose?: () => void;
 }
@@ -105,6 +107,8 @@ export const Sidebar: FC<SidebarProps> = (props) => {
                         onImagesChange={props.onImagesChange}
                         onGenerateImage={props.onGenerateImage}
                         isGeneratingImage={props.isGeneratingImage}
+                        outputAspectRatio={props.outputAspectRatio}
+                        onOutputAspectRatioChange={props.onOutputAspectRatioChange}
                     />
                     <ReferenceThumbnailModule
                         referenceThumbnail={props.referenceThumbnail}

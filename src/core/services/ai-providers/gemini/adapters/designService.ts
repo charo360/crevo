@@ -292,7 +292,8 @@ export const generateDesign = async (
     originalTitle: string, 
     currentText: TextState,
     improveMode: ImproveMode = 'improve',
-    referenceThumbnail: ImageAsset | null = null
+    referenceThumbnail: ImageAsset | null = null,
+    customAspectRatio?: string
 ): Promise<DesignResult[]> => {
     return performanceMonitor.measureFunction('generateDesign', async () => {
         let finalPrompt = '';
@@ -301,6 +302,7 @@ export const generateDesign = async (
             await imageGenRateLimiter.acquire(`generate-${platform}`);
 
             const platformConfig = PLATFORM_CONFIGS[platform];
+            const effectiveAspectRatio = customAspectRatio || platformConfig.aspectRatio;
             const originalYouTubeThumbnail = images.find(img => img.id.startsWith('yt_'));
             const userImages = images.filter(img => !img.id.startsWith('yt_'));
 
@@ -654,11 +656,24 @@ ${weaknessesList}
 - **100% Information & Text Swap:** Completely REMOVE all original text, logos, and watermarks from the reference thumbnail. Replace the text in the same visual style & position using ONLY the user's Headline ("${currentText.headline || ''}") and Subheadline ("${currentText.subheadline || ''}"). NEVER copy words or branding from the reference thumbnail.`
                     : '';
 
-                const variationPrompt = `${finalPrompt}${referenceBlueprintDirective}${designerLikenessDirective}\n\n${variationDirective}`;
+                const aspectOverrideDirective =
+                    effectiveAspectRatio !== platformConfig.aspectRatio
+                        ? `\n\n[USER OUTPUT ASPECT RATIO OVERRIDE — MANDATORY]\nThe user explicitly selected output aspect ratio ${effectiveAspectRatio} (${
+                              effectiveAspectRatio === '9:16'
+                                  ? 'VERTICAL 9:16 portrait'
+                                  : effectiveAspectRatio === '1:1'
+                                    ? 'SQUARE 1:1'
+                                    : effectiveAspectRatio === '4:5'
+                                      ? 'PORTRAIT 4:5'
+                                      : 'WIDESCREEN 16:9 horizontal'
+                          }). Compose the entire design strictly for ${effectiveAspectRatio} and ignore any conflicting orientation note above.`
+                        : '';
+
+                const variationPrompt = `${finalPrompt}${referenceBlueprintDirective}${designerLikenessDirective}${aspectOverrideDirective}\n\n${variationDirective}`;
 
                 const imageConfig = {
                     responseModalities: [Modality.IMAGE],
-                    aspectRatio: platformConfig.aspectRatio,
+                    aspectRatio: effectiveAspectRatio,
                 };
 
                 const response = await callWithFallback(

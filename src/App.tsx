@@ -50,15 +50,20 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
     const { user, refreshCredits } = useAuth();
     // Input state
     const [platform, setPlatform] = useState<Platform>(initialPlatform);
+    const [outputAspectRatio, setOutputAspectRatio] = useState<string>(
+        PLATFORM_CONFIGS[initialPlatform]?.aspectRatio || '16:9'
+    );
     
     // Update platform when initialPlatform prop changes
     useEffect(() => {
         setPlatform(initialPlatform);
+        setOutputAspectRatio(PLATFORM_CONFIGS[initialPlatform]?.aspectRatio || '16:9');
     }, [initialPlatform]);
     
     // Handle platform change
     const handlePlatformChange = (newPlatform: Platform) => {
         setPlatform(newPlatform);
+        setOutputAspectRatio(PLATFORM_CONFIGS[newPlatform]?.aspectRatio || '16:9');
         if (onPlatformChange) {
             onPlatformChange(newPlatform);
         }
@@ -224,7 +229,8 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                 originalYoutubeTitle,
                 text,
                 improveMode,
-                referenceThumbnail
+                referenceThumbnail,
+                outputAspectRatio
             );
             
             // Deduct credits based on actual generated images (2 credits per image) and refresh navbar balance
@@ -758,7 +764,7 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                 /* Content Repurpose Module - generates short viral videos */
                 <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
                     <RepurposeModule
-                        onCreateCoverThumbnail={({ imageDataUrl, images: pickedImages, title }) => {
+                        onCreateCoverThumbnail={({ imageDataUrl, images: pickedImages, title, platform: clipPlatform }) => {
                             const rawUrls = (pickedImages && pickedImages.length > 0 ? pickedImages : [imageDataUrl]).filter(Boolean);
                             const assets: ImageAsset[] = [];
                             rawUrls.forEach((dataUrl, idx) => {
@@ -775,6 +781,12 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                             if (assets.length > 0) {
                                 setImages(assets);
                             }
+                            const isVerticalClip =
+                                clipPlatform === 'youtube_shorts' ||
+                                clipPlatform === 'tiktok' ||
+                                clipPlatform === 'instagram_reels';
+                            const targetPlatform: Platform = isVerticalClip ? 'tiktok' : 'youtube';
+                            const targetRatio = isVerticalClip ? '9:16' : '16:9';
                             const shortHeadline = (title || '')
                                 .replace(/[#*_`]/g, '')
                                 .trim()
@@ -784,17 +796,18 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                             if (shortHeadline) {
                                 setTextByPlatform((prev) => ({
                                     ...prev,
-                                    youtube: {
-                                        ...(prev.youtube ?? createDefaultText()),
+                                    [targetPlatform]: {
+                                        ...(prev[targetPlatform] ?? createDefaultText()),
                                         headline: shortHeadline,
                                     },
                                 }));
                             }
-                            handlePlatformChange('youtube');
+                            handlePlatformChange(targetPlatform);
+                            setOutputAspectRatio(targetRatio);
                             toast.success(
                                 assets.length > 1
-                                    ? `Picked the ${assets.length} sharpest face shots from your clip! Click Generate to design your cover.`
-                                    : 'Sharpest clip frame sent to Thumbnail Studio! Click Generate to design your cover.'
+                                    ? `Picked the ${assets.length} sharpest face shots (${targetRatio})! Click Generate to design your cover.`
+                                    : `Sharpest clip frame sent (${targetRatio})! Click Generate to design your cover.`
                             );
                         }}
                     />
@@ -822,6 +835,8 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                     )}
                     <Sidebar
                         platform={platform}
+                        outputAspectRatio={outputAspectRatio}
+                        onOutputAspectRatioChange={setOutputAspectRatio}
                         text={text} onTextChange={setText}
                         images={images} onImagesChange={setImages}
                         referenceThumbnail={referenceThumbnail} onReferenceThumbnailChange={setReferenceThumbnail}

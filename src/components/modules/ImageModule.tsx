@@ -13,19 +13,37 @@ interface ImageModuleProps {
     onImagesChange: (i: ImageAsset[]) => void;
     onGenerateImage: (p: string, np: string, ar: ImagenAspectRatio) => Promise<ImageAsset | null>;
     isGeneratingImage: boolean;
+    outputAspectRatio?: string;
+    onOutputAspectRatioChange?: (ar: string) => void;
 }
 
-export const ImageModule: FC<ImageModuleProps> = ({ images, onImagesChange, onGenerateImage, isGeneratingImage, platform }) => {
+export const ImageModule: FC<ImageModuleProps> = ({
+    images,
+    onImagesChange,
+    onGenerateImage,
+    isGeneratingImage,
+    platform,
+    outputAspectRatio,
+    onOutputAspectRatioChange,
+}) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [genPrompt, setGenPrompt] = useState('');
     const [negativePrompt, setNegativePrompt] = useState('');
-    const [aspectRatio, setAspectRatio] = useState<ImagenAspectRatio>('16:9');
+    const [localAspectRatio, setLocalAspectRatio] = useState<ImagenAspectRatio>('16:9');
     const [isDragging, setIsDragging] = useState(false);
+
+    const aspectRatio: ImagenAspectRatio =
+        outputAspectRatio && isImagenAspectRatio(outputAspectRatio) ? outputAspectRatio : localAspectRatio;
+
+    const handleSelectAspectRatio = (ar: ImagenAspectRatio) => {
+        setLocalAspectRatio(ar);
+        onOutputAspectRatioChange?.(ar);
+    };
 
     useEffect(() => {
         const platformAspectRatio = PLATFORM_CONFIGS[platform].aspectRatio;
         if (isImagenAspectRatio(platformAspectRatio)) {
-            setAspectRatio(platformAspectRatio);
+            setLocalAspectRatio(platformAspectRatio);
         }
     }, [platform]);
 
@@ -186,10 +204,15 @@ export const ImageModule: FC<ImageModuleProps> = ({ images, onImagesChange, onGe
                 <input type="text" id="negative-prompt" value={negativePrompt} onChange={e => setNegativePrompt(e.target.value)} placeholder="e.g., text, watermarks, blurry" />
             </div>
             <div className="form-group">
-                <label>Aspect Ratio</label>
+                <label>Output Size / Aspect Ratio</label>
                 <div className="aspect-ratio-group">
                     {(['1:1', '16:9', '9:16', '1.91:1'] as ImagenAspectRatio[]).map(ar => (
-                        <button key={ar} className={`aspect-ratio-btn ${aspectRatio === ar ? 'active' : ''}`} onClick={() => setAspectRatio(ar)}>
+                        <button
+                            key={ar}
+                            type="button"
+                            className={`aspect-ratio-btn ${aspectRatio === ar ? 'active' : ''}`}
+                            onClick={() => handleSelectAspectRatio(ar)}
+                        >
                             {ar}
                         </button>
                     ))}

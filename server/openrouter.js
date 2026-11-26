@@ -220,10 +220,11 @@ export async function generateWithOpenRouter({ model, contents, config = {} }) {
 
     if (isImageRequest) {
         payload.modalities = ['image', 'text'];
-        const aspectRatio = config?.aspectRatio || config?.imageConfig?.aspectRatio;
-        if (aspectRatio) {
+        const rawAspectRatio = config?.aspectRatio || config?.imageConfig?.aspectRatio;
+        if (rawAspectRatio) {
+            const normalizedRatio = String(rawAspectRatio).trim() === '1.91:1' ? '16:9' : String(rawAspectRatio).trim();
             payload.image_config = {
-                aspect_ratio: String(aspectRatio),
+                aspect_ratio: normalizedRatio,
             };
         }
     }
