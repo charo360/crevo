@@ -4,6 +4,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { performanceMonitor } from './core/infrastructure/performance-monitoring';
 import { AppRoutes } from './routes/app_route';
+import { OutOfCreditsModal } from './components/modals/OutOfCreditsModal';
 
 export const AppRouter: FC = () => {
     React.useEffect(() => {
@@ -19,6 +20,7 @@ export const AppRouter: FC = () => {
             <AuthProvider>
                 <BrowserRouter>
                     <AppRoutes />
+                    <OutOfCreditsModal />
                 </BrowserRouter>
             </AuthProvider>
         </ErrorBoundary>

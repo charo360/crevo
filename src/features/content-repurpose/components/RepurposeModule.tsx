@@ -22,6 +22,7 @@ import { getAuthToken } from '../../../lib/api';
 import { isSupportedVideoFile, extractFramesFromVideo } from '../../../shared/utils/video-utils';
 import { RepurposeResult, ClipGenerationOptions, CropMode, CaptionStyle, CaptionPosition, ViralClip } from '../../../types/repurpose';
 import { useAuth } from '../../../contexts/AuthContext';
+import { triggerOutOfCreditsModal } from '../../../components/modals/OutOfCreditsModal';
 
 const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 
@@ -110,6 +111,7 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated, 
             const { hasEnoughCredits } = await import('../../../services/payments/creditService');
             const ok = await hasEnoughCredits(user.id, 1);
             if (!ok) {
+                triggerOutOfCreditsModal({ requiredCredits: 1, actionLabel: 'Additional Clip Re-cut' });
                 toast.error('You used all 3 free re-cuts for this clip. You need 1 credit for additional re-cuts.');
                 return;
             }
@@ -419,7 +421,11 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated, 
         const repurposeCreditCost = requestedClipCount >= 6 ? CREDIT_COSTS.REPURPOSE_LARGE : CREDIT_COSTS.REPURPOSE_BASE;
         const hasCredits = await hasEnoughCredits(user.id, repurposeCreditCost);
         if (!hasCredits) {
-            toast.error(`Insufficient credits. You need ${repurposeCreditCost} credits to generate ${requestedClipCount} clips. Please purchase credits to continue.`);
+            triggerOutOfCreditsModal({
+                requiredCredits: repurposeCreditCost,
+                actionLabel: `Generating ${requestedClipCount} viral clips`,
+            });
+            toast.error(`Insufficient credits. You need ${repurposeCreditCost} credits to generate ${requestedClipCount} clips.`);
             return;
         }
 

@@ -28,6 +28,7 @@ import { RepurposeModule } from './features/content-repurpose/components/Repurpo
 import { YouTubeToolsView } from './components/modules/YouTubeToolsView';
 import { CreditManagement } from './components/dashboard/CreditManagement';
 import { useAuth } from './contexts/AuthContext';
+import { triggerOutOfCreditsModal } from './components/modals/OutOfCreditsModal';
 import { hasEnoughCredits, deductCredits, CREDIT_COSTS } from './services/payments/creditService';
 import { saveImageToLibrary } from './services/libraryService';
 
@@ -202,7 +203,8 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
         if (user) {
             const hasCredits = await hasEnoughCredits(user.id, requiredCredits);
             if (!hasCredits) {
-                toast.error(`Insufficient credits. Generating ${requestedVariations} image${requestedVariations > 1 ? 's' : ''} requires ${requiredCredits} credits. Please purchase credits to continue.`);
+                triggerOutOfCreditsModal({ requiredCredits, actionLabel: `Generating ${requestedVariations} thumbnail${requestedVariations > 1 ? 's' : ''}` });
+                toast.error(`Insufficient credits. Generating ${requestedVariations} image${requestedVariations > 1 ? 's' : ''} requires ${requiredCredits} credits.`);
                 return;
             }
         }
@@ -268,6 +270,7 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
         if (user) {
             const hasCredits = await hasEnoughCredits(user.id, CREDIT_COSTS.ANALYZE_VIDEO);
             if (!hasCredits) {
+                triggerOutOfCreditsModal({ requiredCredits: CREDIT_COSTS.ANALYZE_VIDEO, actionLabel: 'Analyzing video' });
                 toast.error(`Insufficient credits. Analyzing video requires ${CREDIT_COSTS.ANALYZE_VIDEO} credit.`);
                 return;
             }
@@ -308,6 +311,7 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
         if (user) {
             const hasCredits = await hasEnoughCredits(user.id, CREDIT_COSTS.EXTRACT_FACES);
             if (!hasCredits) {
+                triggerOutOfCreditsModal({ requiredCredits: CREDIT_COSTS.EXTRACT_FACES, actionLabel: 'Extracting faces' });
                 toast.error(`Insufficient credits. Extracting faces requires ${CREDIT_COSTS.EXTRACT_FACES} credit.`);
                 return;
             }
@@ -389,6 +393,7 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
         if (user) {
             const hasCredits = await hasEnoughCredits(user.id, CREDIT_COSTS.RESIZE_PER_SIZE);
             if (!hasCredits) {
+                triggerOutOfCreditsModal({ requiredCredits: CREDIT_COSTS.RESIZE_PER_SIZE, actionLabel: 'Smart Resize' });
                 toast.error(`Insufficient credits. Resizing requires ${CREDIT_COSTS.RESIZE_PER_SIZE} credit per size.`);
                 return;
             }
@@ -427,6 +432,7 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
         if (user) {
             const hasCredits = await hasEnoughCredits(user.id, requiredCredits);
             if (!hasCredits) {
+                triggerOutOfCreditsModal({ requiredCredits, actionLabel: `Smart Resizing ${options.length} size${options.length > 1 ? 's' : ''}` });
                 toast.error(`Insufficient credits. Resizing ${options.length} size${options.length > 1 ? 's' : ''} requires ${requiredCredits} credit${requiredCredits > 1 ? 's' : ''}.`);
                 return;
             }
@@ -485,7 +491,8 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
         if (user) {
             const hasCredits = await hasEnoughCredits(user.id, CREDIT_COSTS.AI_IMAGE);
             if (!hasCredits) {
-                toast.error(`Insufficient credits. You need ${CREDIT_COSTS.AI_IMAGE} credits to generate images. Please purchase credits to continue.`);
+                triggerOutOfCreditsModal({ requiredCredits: CREDIT_COSTS.AI_IMAGE, actionLabel: 'AI Image Generation' });
+                toast.error(`Insufficient credits. You need ${CREDIT_COSTS.AI_IMAGE} credits to generate images.`);
                 return null;
             }
         }
@@ -517,7 +524,8 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
         if (user) {
             const hasCredits = await hasEnoughCredits(user.id, CREDIT_COSTS.AI_VIDEO);
             if (!hasCredits) {
-                toast.error(`Insufficient credits. You need ${CREDIT_COSTS.AI_VIDEO} credits to generate videos. Please purchase credits to continue.`);
+                triggerOutOfCreditsModal({ requiredCredits: CREDIT_COSTS.AI_VIDEO, actionLabel: 'AI Video Generation' });
+                toast.error(`Insufficient credits. You need ${CREDIT_COSTS.AI_VIDEO} credits to generate videos.`);
                 return;
             }
         }
@@ -600,6 +608,7 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
         if (user) {
             const hasCredits = await hasEnoughCredits(user.id, CREDIT_COSTS.AI_EDIT);
             if (!hasCredits) {
+                triggerOutOfCreditsModal({ requiredCredits: CREDIT_COSTS.AI_EDIT, actionLabel: 'AI Image Edit' });
                 toast.error(`Insufficient credits. Editing an image requires ${CREDIT_COSTS.AI_EDIT} credits.`);
                 return;
             }
@@ -633,6 +642,7 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
         if (user) {
             const hasCredits = await hasEnoughCredits(user.id, CREDIT_COSTS.AI_UPSCALE);
             if (!hasCredits) {
+                triggerOutOfCreditsModal({ requiredCredits: CREDIT_COSTS.AI_UPSCALE, actionLabel: 'AI Image Upscale' });
                 toast.error(`Insufficient credits. Upscaling an image requires ${CREDIT_COSTS.AI_UPSCALE} credits.`);
                 return;
             }
