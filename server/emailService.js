@@ -287,3 +287,34 @@ export function sendNewsletterWelcomeEmail(toEmail) {
         }),
     });
 }
+
+export function sendClipsReadyEmail({ toEmail, fullName, originalTitle, clips = [] }) {
+    const count = clips.length;
+    const greeting = fullName ? `Hi ${escapeHtml(fullName)},` : 'Hi there,';
+    const clipListHtml = clips
+        .slice(0, 6)
+        .map(
+            (c, i) =>
+                `<li style="margin-bottom:8px;"><strong>${i + 1}. ${escapeHtml(c.hook_title || c.title || `Viral Clip ${i + 1}`)}</strong>` +
+                `${c.virality_score ? ` <span style="color:#571c86;font-weight:700;">(🔥 ${c.virality_score}/100)</span>` : ''}` +
+                `${c.duration ? ` · ${Math.round(c.duration)}s` : ''}</li>`
+        )
+        .join('');
+
+    return sendEmail({
+        to: toEmail,
+        subject: `🎬 Your ${count} Viral Clip${count === 1 ? '' : 's'} Are Ready — Crevo AI`,
+        html: wrapEmailHtml({
+            title: `Your ${count} Viral Clip${count === 1 ? '' : 's'} Are Ready! 🎬`,
+            preheader: `All ${count} Full HD 1080p clips from "${originalTitle || 'your video'}" are ready to watch and download.`,
+            bodyHtml: `
+                <p>${greeting}</p>
+                <p>Your Full HD 1080p clips${originalTitle ? ` from <strong>${escapeHtml(originalTitle)}</strong>` : ''} finished processing and are saved safely in your <strong>My Library</strong>:</p>
+                ${clipListHtml ? `<ul style="padding-left:20px;margin:14px 0;">${clipListHtml}</ul>` : ''}
+                <p style="font-size:13px;color:#6b7280;">Clips stay in your cloud library for 7 days — download them anytime or send any clip straight to Thumbnail Studio.</p>
+            `,
+            ctaLabel: 'Watch & Download My Clips →',
+            ctaUrl: `${SITE_URL()}/library`,
+        }),
+    });
+}

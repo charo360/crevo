@@ -19,7 +19,8 @@ import {
     RepurposeMetadata 
 } from '../../../types/repurpose';
 import { analyzeVideoForViralMoments } from '../../../core/algorithms/content-analysis/viral-detection';
-import { processVideoClip, getVideoMetadata, generateThumbnail, clearCachedVideoInput } from '../../../core/processors/video';
+import { processVideoClip, getVideoMetadata, generateThumbnail, clearCachedVideoInput, ensureServerVideoUpload } from '../../../core/processors/video';
+import { getAuthToken } from '../../../lib/api';
 import { saveRepurposedVideo, saveViralClips, saveMLAnalysis } from './repurposeDatabase';
 import { saveVideoClipToLibrary } from '../../../services/libraryService';
 import { extractFramesFromVideo } from '../../../shared/utils/video-utils';
@@ -485,5 +486,258 @@ function detectSourcePlatform(url: string): RepurposeMetadata['source_platform']
     } else {
         return 'direct_upload';
     }
+}
+
+const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+
+function attachTokenToLibraryClipUrls(clips: any[]): ViralClip[] {
+    const token = getAuthToken();
+    return (clips || []).map((c) => {
+        let clipUrl = String(c.clip_url || '');
+        if (clipUrl.startsWith('/api/library/file/') && token && !clipUrl.includes('token=')) {
+            clipUrl = `${API_BASE}${clipUrl}?token=${encodeURIComponent(token)}`;
+        }
+        return {
+            ...c,
+            clip_url: clipUrl,
+        };
+    });
+}
+
+export interface BackgroundJobSubmission {
+    jobId: string;
+    status: 'queued' | 'processing' | 'completed' | 'failed';
+    queuePosition: number;
+    notifyEmail: string;
+    originalTitle: string;
+    clipCount: number;
+}
+
+export interface BackgroundJobStatus {
+    id: string;
+    status: 'queued' | 'processing' | 'completed' | 'failed';
+    queue_position: number;
+    progress: number;
+    status_text: string;
+    original_title?: string;
+    user_email?: string;
+    notify_email?: boolean;
+    email_sent?: boolean;
+    clips: ViralClip[];
+    error_message?: string;
+    created_at?: string;
+    completed_at?: string;
+}
+
+/**
+ * Analyze video for viral moments, upload once, and submit a server-side background encoding job.
+ * Users can safely close their browser tab — clips are saved to My Library and an email is sent when done!
+ */
+export async function submitBackgroundRepurposeJob(
+    ai: GoogleGenAI,
+    videoFile: File | Blob,
+    videoUrl: string,
+    userId: string,
+    options: Partial<ClipGenerationOptions> = {},
+    originalTitle?: string,
+    notifyByEmail: boolean = true,
+    onProgress?: (current: number, total: number, statusText?: string) => void,
+    preloaded?: {
+        duration: number;
+        width: number;
+        height: number;
+        frames: string[];
+        fileSize?: number;
+    }
+): Promise<BackgroundJobSubmission> {
+    const token = getAuthToken();
+    if (!token) {
+        throw new Error('Please sign in to repurpose videos.');
+    }
+
+    const finalOptions = { ...DEFAULT_OPTIONS, ...options };
+
+    // 1. Metadata & preview frames
+    onProgress?.(5, 100, 'Reading video metadata...');
+    const metadata = preloaded
+        ? { duration: preloaded.duration, width: preloaded.width, height: preloaded.height }
+        : await getVideoMetadata(videoFile);
+
+    onProgress?.(12, 100, 'Extracting preview frames...');
+    const targetFrames = Math.min(14, Math.max(6, Math.ceil(metadata.duration / 10)));
+    const frames =
+        preloaded && Array.isArray(preloaded.frames) && preloaded.frames.length > 0
+            ? preloaded.frames
+            : await extractFramesFromVideo(videoUrl, 0, metadata.duration, targetFrames, videoFile);
+
+    // 2. YouTube transcript if applicable
+    let videoTranscript: string | null = null;
+    if (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be')) {
+        try {
+            videoTranscript = await fetchTranscript(videoUrl);
+        } catch {
+            // optional
+        }
+    }
+
+    // 3. AI viral moment detection + human titles & hashtags
+    onProgress?.(22, 100, 'AI finding top viral moments & writing titles...');
+    const mlAnalysis = await analyzeVideoForViralMoments(
+        ai,
+        videoUrl,
+        metadata.duration,
+        videoTranscript,
+        frames,
+        `repurpose_${Date.now()}_${userId}`,
+        originalTitle
+    );
+
+    const filteredMoments = mlAnalysis.viral_moments
+        .filter((m) => m.virality_score >= finalOptions.virality_threshold)
+        .slice(0, finalOptions.target_clip_count);
+
+    if (filteredMoments.length === 0) {
+        filteredMoments.push(
+            ...mlAnalysis.viral_moments
+                .sort((a, b) => b.virality_score - a.virality_score)
+                .slice(0, finalOptions.target_clip_count)
+        );
+    }
+
+    // Group platforms by aspect ratio so identical 9:16 platforms only encode ONCE
+    const aspectGroups = new Map<string, string[]>();
+    for (const p of finalOptions.platforms) {
+        const aspect = getPlatformSettings(p).aspectRatio;
+        const list = aspectGroups.get(aspect) || [];
+        list.push(p);
+        aspectGroups.set(aspect, list);
+    }
+    if (aspectGroups.size === 0) {
+        aspectGroups.set('9:16', ['youtube_shorts']);
+    }
+
+    const selectedRanges: Array<{ start: number; end: number }> = [];
+    const clipSpecs: Array<any> = [];
+
+    for (const moment of filteredMoments) {
+        if (finalOptions.overlap_prevention) {
+            const overlaps = selectedRanges.some(
+                (r) =>
+                    (moment.start_time >= r.start && moment.start_time <= r.end) ||
+                    (moment.end_time >= r.start && moment.end_time <= r.end) ||
+                    (moment.start_time <= r.start && moment.end_time >= r.end)
+            );
+            if (overlaps) continue;
+        }
+        selectedRanges.push({ start: moment.start_time, end: moment.end_time });
+
+        const suggestion = moment.clip_suggestions?.[0] || {
+            start_time: moment.start_time,
+            end_time: moment.end_time,
+            optimal_duration: moment.duration,
+        };
+        const clipDuration = Math.min(
+            finalOptions.max_duration,
+            Math.max(finalOptions.min_duration, suggestion.optimal_duration)
+        );
+        const startTime = suggestion.start_time;
+        const endTime = Math.min(startTime + clipDuration, moment.end_time);
+
+        for (const [aspectRatio, groupPlatforms] of aspectGroups.entries()) {
+            const primaryPlatform = groupPlatforms[0];
+            clipSpecs.push({
+                startTime,
+                endTime,
+                aspectRatio,
+                platform: primaryPlatform,
+                targetPlatforms: groupPlatforms,
+                viralityScore: moment.virality_score,
+                hookTitle: moment.hook_title || `Don't Miss This Moment (${Math.round(startTime)}s)`,
+                socialCaption: moment.social_caption || '',
+                hashtags: Array.isArray(moment.hashtags) ? moment.hashtags : ['#shorts', '#viral'],
+            });
+        }
+    }
+
+    // 4. Upload video to server once (instant 100% if already imported via YouTube URL!)
+    onProgress?.(35, 100, 'Uploading video to server (0%)...');
+    const uploadId = await ensureServerVideoUpload(videoFile, (pct) => {
+        onProgress?.(35 + Math.round(pct * 0.25), 100, `Uploading video (${pct}%)...`);
+    });
+    if (!uploadId) {
+        throw new Error('Could not upload video to server for background processing.');
+    }
+
+    // 5. Submit background job to server queue
+    onProgress?.(62, 100, 'Adding video to 1080p HD encoding queue...');
+    const res = await fetch(`${API_BASE}/api/repurpose/jobs`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            uploadId,
+            originalTitle: originalTitle || (videoFile instanceof File ? videoFile.name : 'Video Repurpose'),
+            clipSpecs,
+            includeCaptions: Boolean(finalOptions.include_captions),
+            captionStyle: finalOptions.caption_style || 'hormozi',
+            captionPosition: finalOptions.caption_position || 'bottom',
+            cropMode: finalOptions.crop_mode || 'center',
+            includeTransitions: finalOptions.include_transitions !== false,
+            notifyByEmail,
+        }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        throw new Error(data?.error || `Failed to queue repurpose job (${res.status})`);
+    }
+
+    return {
+        jobId: data.jobId,
+        status: data.status || 'queued',
+        queuePosition: Number(data.queuePosition || 0),
+        notifyEmail: data.notifyEmail || '',
+        originalTitle: originalTitle || 'Your Video',
+        clipCount: clipSpecs.length,
+    };
+}
+
+export async function pollRepurposeJob(jobId: string): Promise<{
+    job: BackgroundJobStatus;
+    queue: { active: number; queued: number; maxConcurrent: number };
+} | null> {
+    const token = getAuthToken();
+    if (!token) return null;
+    const res = await fetch(`${API_BASE}/api/repurpose/jobs/${encodeURIComponent(jobId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data?.job) {
+        data.job.clips = attachTokenToLibraryClipUrls(data.job.clips || []);
+    }
+    return data;
+}
+
+export async function fetchActiveRepurposeJobs(): Promise<{
+    jobs: BackgroundJobStatus[];
+    queue: { active: number; queued: number; maxConcurrent: number };
+} | null> {
+    const token = getAuthToken();
+    if (!token) return null;
+    const res = await fetch(`${API_BASE}/api/repurpose/jobs`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (Array.isArray(data?.jobs)) {
+        data.jobs = data.jobs.map((j: any) => ({
+            ...j,
+            clips: attachTokenToLibraryClipUrls(j.clips || []),
+        }));
+    }
+    return data;
 }
 

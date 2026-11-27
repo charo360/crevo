@@ -186,13 +186,22 @@ const repurposeJobSchema = new mongoose.Schema(
     {
         id: { type: String, required: true, unique: true, index: true },
         user_id: { type: String, required: true, index: true },
+        user_email: { type: String, default: '' },
+        original_title: { type: String, default: '' },
+        upload_id: { type: String, default: '' },
         video_url: { type: String },
-        status: { type: String, default: 'pending' },
+        status: { type: String, default: 'queued' }, // queued | processing | completed | failed
+        queue_position: { type: Number, default: 0 },
         progress: { type: Number, default: 0 },
+        status_text: { type: String, default: 'Queued for processing...' },
+        notify_email: { type: Boolean, default: true },
+        email_sent: { type: Boolean, default: false },
+        clips: { type: mongoose.Schema.Types.Mixed, default: [] },
         error_message: { type: String },
         repurposed_video_id: { type: String },
         created_at: { type: String },
         updated_at: { type: String },
+        completed_at: { type: String },
     },
     { versionKey: false }
 );

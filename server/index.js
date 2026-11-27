@@ -41,6 +41,7 @@ import {
     sendAdminSubscriptionCancelledAlert,
     sendBonusCreditsEmail,
     sendNewsletterWelcomeEmail,
+    sendClipsReadyEmail,
 } from './emailService.js';
 import {
     listMailMessages,
@@ -2297,6 +2298,471 @@ app.delete('/api/video/upload/:uploadId', requireAuth, (req, res) => {
         }
     }
     return res.json({ ok: true });
+});
+
+// ==================== BACKGROUND QUEUED REPURPOSE JOBS + EMAIL NOTIFICATIONS ====================
+
+async function renderClipToLibraryFile({
+    inputPath,
+    outputPath,
+    startTime,
+    endTime,
+    aspectRatio = '9:16',
+    fps = 30,
+    includeAudio = true,
+    includeTransitions = false,
+    includeCaptions = false,
+    captionStyle = 'hormozi',
+    captionPosition = 'bottom',
+    cropMode = 'center',
+}) {
+    const start = Math.max(0, Number(startTime) || 0);
+    const end = Math.max(start + 1, Number(endTime) || start + 15);
+    const duration = Math.max(1, end - start);
+
+    let outputWidth = 1080;
+    let outputHeight = 1920;
+    if (aspectRatio === '16:9') {
+        outputWidth = 1920;
+        outputHeight = 1080;
+    } else if (aspectRatio === '1:1') {
+        outputWidth = 1080;
+        outputHeight = 1080;
+    } else if (aspectRatio === '4:5') {
+        outputWidth = 1080;
+        outputHeight = 1350;
+    }
+
+    const targetFps = Math.min(60, Math.max(15, Number(fps) || 30));
+    let assPath = null;
+
+    try {
+        const audioAvailable = includeAudio !== false ? await hasAudioStream(inputPath) : false;
+
+        if (includeCaptions && audioAvailable) {
+            assPath = await generateClipCaptionsAss(
+                inputPath,
+                start,
+                duration,
+                outputWidth,
+                outputHeight,
+                captionStyle,
+                captionPosition
+            );
+        }
+
+        const postFilters = [];
+        if (assPath && fs.existsSync(assPath)) {
+            const escapedAss = assPath.replace(/\\/g, '/').replace(/:/g, '\\:');
+            postFilters.push(`ass='${escapedAss}'`);
+        }
+
+        if (includeTransitions && duration >= 1.5) {
+            const fadeDur = 0.4;
+            const fadeOutStart = Math.max(0, duration - fadeDur).toFixed(3);
+            postFilters.push(`fade=t=out:st=${fadeOutStart}:d=${fadeDur}`);
+        }
+
+        const postChain = postFilters.length > 0 ? `,${postFilters.join(',')}` : '';
+        const normalizedCrop = String(cropMode || 'center').toLowerCase();
+        const filterParts = [];
+
+        if (normalizedCrop === 'split_podcast' && outputHeight > outputWidth) {
+            const halfH = Math.floor(outputHeight / 2);
+            filterParts.push(`[0:v]split=2[left_raw][right_raw]`);
+            filterParts.push(
+                `[left_raw]crop=iw/2:ih:0:0,scale=${outputWidth}:${halfH}:force_original_aspect_ratio=increase:flags=lanczos,crop=${outputWidth}:${halfH}[top_v]`
+            );
+            filterParts.push(
+                `[right_raw]crop=iw/2:ih:iw/2:0,scale=${outputWidth}:${halfH}:force_original_aspect_ratio=increase:flags=lanczos,crop=${outputWidth}:${halfH}[bot_v]`
+            );
+            filterParts.push(`[top_v][bot_v]vstack=inputs=2${postChain}[v]`);
+        } else {
+            let cropExpr = `crop=${outputWidth}:${outputHeight}`;
+            if (normalizedCrop === 'left') {
+                cropExpr = `crop=${outputWidth}:${outputHeight}:0:(ih-${outputHeight})/2`;
+            } else if (normalizedCrop === 'right') {
+                cropExpr = `crop=${outputWidth}:${outputHeight}:iw-${outputWidth}:(ih-${outputHeight})/2`;
+            }
+            const baseFilters = [
+                `scale=${outputWidth}:${outputHeight}:force_original_aspect_ratio=increase:flags=lanczos`,
+                cropExpr,
+                ...postFilters,
+            ];
+            filterParts.push(`[0:v]${baseFilters.join(',')}[v]`);
+        }
+
+        let useAudioFilter = false;
+        if (audioAvailable && includeTransitions && duration >= 1.5) {
+            const aFadeDur = 0.35;
+            const aFadeOutStart = Math.max(0, duration - aFadeDur).toFixed(3);
+            filterParts.push(`[0:a]afade=t=out:st=${aFadeOutStart}:d=${aFadeDur}[a]`);
+            useAudioFilter = true;
+        }
+
+        const args = [
+            '-y',
+            '-threads', String(FFMPEG_THREADS_PER_JOB),
+            '-ss', start.toFixed(3),
+            '-i', inputPath,
+            '-t', duration.toFixed(3),
+            '-filter_complex', filterParts.join(';'),
+            '-map', '[v]',
+            '-c:v', 'libx264',
+            '-preset', 'veryfast',
+            '-crf', '18',
+            '-pix_fmt', 'yuv420p',
+            '-r', String(targetFps),
+            '-movflags', '+faststart',
+        ];
+
+        if (audioAvailable) {
+            args.push('-map', useAudioFilter ? '[a]' : '0:a', '-c:a', 'aac', '-b:a', '192k');
+        } else {
+            args.push('-an');
+        }
+        args.push(outputPath);
+
+        await execFileAsync('ffmpeg', args, { maxBuffer: 10 * 1024 * 1024 });
+
+        // Extract a crisp bright poster frame at 35% of the clip (avoids fade-in/out)
+        let thumbnailDataUrl = '';
+        const posterPath = path.join(VIDEO_TMP_DIR, `poster_${crypto.randomUUID()}.jpg`);
+        try {
+            const posterTs = Math.min(Math.max(0.5, duration * 0.35), Math.max(0.5, duration - 0.5));
+            await execFileAsync('ffmpeg', [
+                '-y',
+                '-ss', posterTs.toFixed(3),
+                '-i', outputPath,
+                '-frames:v', '1',
+                '-vf', "scale='min(540,iw)':-2",
+                '-q:v', '3',
+                posterPath,
+            ], { timeout: 20000 });
+            if (fs.existsSync(posterPath)) {
+                thumbnailDataUrl = `data:image/jpeg;base64,${fs.readFileSync(posterPath).toString('base64')}`;
+            }
+        } catch {
+            // optional poster
+        } finally {
+            try {
+                if (fs.existsSync(posterPath)) fs.unlinkSync(posterPath);
+            } catch {
+                // ignore
+            }
+        }
+
+        const stat = fs.statSync(outputPath);
+        return {
+            width: outputWidth,
+            height: outputHeight,
+            size: stat.size,
+            duration,
+            captionsApplied: Boolean(assPath),
+            thumbnailDataUrl,
+        };
+    } finally {
+        try {
+            if (assPath && fs.existsSync(assPath)) fs.unlinkSync(assPath);
+        } catch {
+            // ignore
+        }
+    }
+}
+
+app.get('/api/repurpose/queue-status', requireAuth, (_req, res) => {
+    return res.json({
+        active: activeVideoJobs,
+        queued: videoJobQueue.length,
+        maxConcurrent: MAX_CONCURRENT_VIDEO_JOBS,
+    });
+});
+
+app.get('/api/repurpose/jobs', requireAuth, async (req, res) => {
+    try {
+        const jobs = await RepurposeJob.find({ user_id: req.user.id })
+            .sort({ created_at: -1 })
+            .limit(8)
+            .lean();
+        return res.json({
+            jobs,
+            queue: {
+                active: activeVideoJobs,
+                queued: videoJobQueue.length,
+                maxConcurrent: MAX_CONCURRENT_VIDEO_JOBS,
+            },
+        });
+    } catch (err) {
+        console.error('List repurpose jobs error:', err);
+        return res.status(500).json({ error: 'Failed to load repurpose jobs' });
+    }
+});
+
+app.get('/api/repurpose/jobs/:jobId', requireAuth, async (req, res) => {
+    try {
+        const job = await RepurposeJob.findOne({ id: req.params.jobId, user_id: req.user.id }).lean();
+        if (!job) {
+            return res.status(404).json({ error: 'Job not found' });
+        }
+        return res.json({
+            job,
+            queue: {
+                active: activeVideoJobs,
+                queued: videoJobQueue.length,
+                maxConcurrent: MAX_CONCURRENT_VIDEO_JOBS,
+            },
+        });
+    } catch (err) {
+        console.error('Get repurpose job error:', err);
+        return res.status(500).json({ error: 'Failed to check job status' });
+    }
+});
+
+app.post('/api/repurpose/jobs', requireAuth, async (req, res) => {
+    try {
+        const {
+            uploadId,
+            originalTitle = 'Video Repurpose',
+            clipSpecs = [],
+            includeCaptions = false,
+            captionStyle = 'hormozi',
+            captionPosition = 'bottom',
+            cropMode = 'center',
+            includeTransitions = true,
+            notifyByEmail = true,
+        } = req.body || {};
+
+        if (!isValidUploadId(uploadId)) {
+            return res.status(400).json({ error: 'Invalid uploadId' });
+        }
+
+        const inputPath = path.join(VIDEO_TMP_DIR, `${uploadId}.mp4`);
+        if (!fs.existsSync(inputPath)) {
+            return res.status(404).json({ error: 'Uploaded video expired or not found. Please upload again.' });
+        }
+
+        if (!Array.isArray(clipSpecs) || clipSpecs.length === 0) {
+            return res.status(400).json({ error: 'No clip specifications provided' });
+        }
+
+        const safeSpecs = clipSpecs.slice(0, 12);
+        const creditCost = safeSpecs.length >= 6 ? 5 : 3;
+
+        // Pre-check credits on the server so closing the tab can never leak credits
+        const userCredits = await UserCredits.findOne({ user_id: req.user.id }).lean();
+        if (!userCredits || Number(userCredits.credits || 0) < creditCost) {
+            return res.status(402).json({
+                error: `Insufficient credits. You need ${creditCost} credits to generate ${safeSpecs.length} clips.`,
+            });
+        }
+
+        const userDoc = await User.findById(req.user.id).select('email full_name').lean();
+        const userEmail = userDoc?.email || req.user.email || '';
+        const userName = userDoc?.full_name || '';
+
+        const jobId = `job_${crypto.randomUUID()}`;
+        const estimatedQueuePos = activeVideoJobs >= MAX_CONCURRENT_VIDEO_JOBS ? videoJobQueue.length + 1 : 0;
+        const nowIso = new Date().toISOString();
+
+        await RepurposeJob.create({
+            id: jobId,
+            user_id: req.user.id,
+            user_email: userEmail,
+            original_title: String(originalTitle || 'Video Repurpose').slice(0, 140),
+            upload_id: uploadId,
+            status: estimatedQueuePos > 0 ? 'queued' : 'processing',
+            queue_position: estimatedQueuePos,
+            progress: estimatedQueuePos > 0 ? 5 : 10,
+            status_text:
+                estimatedQueuePos > 0
+                    ? `In queue (position #${estimatedQueuePos}) — safe to close tab, we'll email you when ready!`
+                    : `Starting 1080p HD encoding for ${safeSpecs.length} clip${safeSpecs.length === 1 ? '' : 's'}...`,
+            notify_email: notifyByEmail !== false,
+            email_sent: false,
+            clips: [],
+            created_at: nowIso,
+            updated_at: nowIso,
+        });
+
+        // Fire-and-forget background worker inside the concurrency queue
+        runWithVideoQueue(async () => {
+            ensureLibraryDir();
+            const finishedClips = [];
+
+            await RepurposeJob.updateOne(
+                { id: jobId },
+                {
+                    $set: {
+                        status: 'processing',
+                        queue_position: 0,
+                        progress: 12,
+                        status_text: `Encoding clip 1 of ${safeSpecs.length} in Full HD 1080p...`,
+                        updated_at: new Date().toISOString(),
+                    },
+                }
+            );
+
+            for (let i = 0; i < safeSpecs.length; i++) {
+                const spec = safeSpecs[i];
+                const fileName = `${crypto.randomUUID()}.mp4`;
+                const outputPath = path.join(LIBRARY_DIR, fileName);
+
+                await RepurposeJob.updateOne(
+                    { id: jobId },
+                    {
+                        $set: {
+                            progress: Math.min(92, Math.round(15 + (i / safeSpecs.length) * 75)),
+                            status_text: `Encoding clip ${i + 1} of ${safeSpecs.length} in Full HD 1080p${includeCaptions ? ' + AI Captions' : ''}...`,
+                            updated_at: new Date().toISOString(),
+                        },
+                    }
+                );
+
+                const rendered = await renderClipToLibraryFile({
+                    inputPath,
+                    outputPath,
+                    startTime: spec.startTime,
+                    endTime: spec.endTime,
+                    aspectRatio: spec.aspectRatio || '9:16',
+                    fps: 30,
+                    includeAudio: true,
+                    includeTransitions,
+                    includeCaptions,
+                    captionStyle,
+                    captionPosition,
+                    cropMode,
+                });
+
+                const hookTitle = String(spec.hookTitle || spec.title || `Viral Clip ${i + 1}`).slice(0, 120);
+                const workDoc = await UserWork.create({
+                    user_id: req.user.id,
+                    type: 'clip',
+                    title: hookTitle,
+                    platform: String(spec.platform || 'youtube_shorts').replace('_', ' '),
+                    aspect_ratio: String(spec.aspectRatio || '9:16'),
+                    mime_type: 'video/mp4',
+                    file_name: fileName,
+                    file_size: rendered.size,
+                    expires_at: new Date(Date.now() + LIBRARY_TTL_MS),
+                });
+
+                finishedClips.push({
+                    id: `clip_${workDoc._id.toString()}`,
+                    library_work_id: workDoc._id.toString(),
+                    repurposed_video_id: jobId,
+                    clip_url: `/api/library/file/${workDoc._id.toString()}`,
+                    clip_storage_path: fileName,
+                    start_time: Number(spec.startTime) || 0,
+                    end_time: Number(spec.endTime) || 15,
+                    duration: rendered.duration,
+                    virality_score: Number(spec.viralityScore) || 85,
+                    engagement_score: Math.min(99, Number(spec.viralityScore) || 85),
+                    title: hookTitle,
+                    hook_title: hookTitle,
+                    description: String(spec.socialCaption || ''),
+                    hashtags: Array.isArray(spec.hashtags) ? spec.hashtags : ['#shorts', '#viral'],
+                    thumbnail_url: rendered.thumbnailDataUrl || '',
+                    transcript_snippet: String(spec.socialCaption || ''),
+                    platform_format: spec.platform || 'youtube_shorts',
+                    aspect_ratio: spec.aspectRatio || '9:16',
+                    created_at: new Date().toISOString(),
+                    metadata: {
+                        frame_count: Math.ceil(rendered.duration * 30),
+                        fps: 30,
+                        resolution: `${rendered.width}x${rendered.height}`,
+                        file_size: rendered.size,
+                        audio_enabled: true,
+                        captions_enabled: rendered.captionsApplied,
+                        target_platforms: Array.isArray(spec.targetPlatforms) ? spec.targetPlatforms : [spec.platform || 'youtube_shorts'],
+                    },
+                });
+            }
+
+            // Deduct credits atomically on the server after clips succeed
+            const actualCost = finishedClips.length >= 6 ? 5 : 3;
+            const updatedCreds = await UserCredits.findOneAndUpdate(
+                { user_id: req.user.id, credits: { $gte: actualCost } },
+                { $inc: { credits: -actualCost, total_credits_used: actualCost } },
+                { returnDocument: 'after' }
+            );
+            if (updatedCreds) {
+                await CreditTransaction.create({
+                    user_id: req.user.id,
+                    type: 'usage',
+                    amount: -actualCost,
+                    balance_after: updatedCreds.credits,
+                    description: `Content Repurpose (${finishedClips.length} clips)`,
+                });
+                await CreditUsage.create({
+                    user_id: req.user.id,
+                    action: 'Content Repurpose',
+                    credits_used: actualCost,
+                    metadata: { feature: 'content_repurpose', clipCount: finishedClips.length, jobId },
+                });
+            }
+
+            let emailSent = false;
+            if (notifyByEmail !== false && userEmail) {
+                try {
+                    const emailRes = await sendClipsReadyEmail({
+                        toEmail: userEmail,
+                        fullName: userName,
+                        originalTitle: String(originalTitle || ''),
+                        clips: finishedClips,
+                    });
+                    emailSent = Boolean(emailRes?.sent);
+                } catch (mailErr) {
+                    console.warn('Clips ready email failed:', mailErr?.message || mailErr);
+                }
+            }
+
+            await RepurposeJob.updateOne(
+                { id: jobId },
+                {
+                    $set: {
+                        status: 'completed',
+                        queue_position: 0,
+                        progress: 100,
+                        status_text: `All ${finishedClips.length} Full HD clips are ready!`,
+                        clips: finishedClips,
+                        email_sent: emailSent,
+                        completed_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString(),
+                    },
+                }
+            );
+        }).catch(async (jobErr) => {
+            console.error(`Background repurpose job ${jobId} failed:`, jobErr?.message || jobErr);
+            try {
+                await RepurposeJob.updateOne(
+                    { id: jobId },
+                    {
+                        $set: {
+                            status: 'failed',
+                            queue_position: 0,
+                            status_text: 'Processing failed',
+                            error_message: jobErr?.message || 'Failed to generate clips',
+                            updated_at: new Date().toISOString(),
+                        },
+                    }
+                );
+            } catch {
+                // ignore
+            }
+        });
+
+        return res.status(202).json({
+            jobId,
+            status: estimatedQueuePos > 0 ? 'queued' : 'processing',
+            queuePosition: estimatedQueuePos,
+            activeJobs: activeVideoJobs,
+            queuedJobs: videoJobQueue.length,
+            notifyEmail: notifyByEmail !== false ? userEmail : '',
+        });
+    } catch (err) {
+        console.error('Create repurpose job error:', err);
+        return res.status(500).json({ error: err?.message || 'Failed to start repurpose job' });
+    }
 });
 
 // ==================== PUBLIC FREE TRIAL AI RESIZE (PER-DEVICE + OFFICE IP CEILING) ====================

@@ -27,6 +27,24 @@ let serverFFmpegAvailable = true;
 let serverUploadedFile: File | Blob | null = null;
 let serverUploadId: string | null = null;
 
+
+export async function ensureServerVideoUpload(
+    videoFile: File | Blob,
+    onUploadProgress?: (percent: number) => void
+): Promise<string | null> {
+    if (!serverFFmpegAvailable) return null;
+    const token = getAuthToken();
+    if (!token) return null;
+    if (serverUploadedFile === videoFile && serverUploadId) {
+        onUploadProgress?.(100);
+        return serverUploadId;
+    }
+    const uploaded = await uploadVideoWithProgress(videoFile, token, onUploadProgress);
+    serverUploadId = uploaded.uploadId;
+    serverUploadedFile = videoFile;
+    return serverUploadId;
+}
+
 export function setServerUploadCache(fileMarker: File | Blob, uploadId: string): void {
     serverUploadedFile = fileMarker;
     serverUploadId = uploadId;

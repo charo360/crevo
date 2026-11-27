@@ -4,11 +4,18 @@
  * Main component for content repurposing functionality
  */
 
-import React, { FC, useState, useRef } from 'react';
+import React, { FC, useState, useRef, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { GoogleGenAI } from "@google/genai";
 import { createAiClient } from '../../../core/services/ai-providers/openrouterClient';
-import { repurposeVideo, recutViralClip } from '../services/repurposeService';
+import {
+    repurposeVideo,
+    recutViralClip,
+    submitBackgroundRepurposeJob,
+    pollRepurposeJob,
+    fetchActiveRepurposeJobs,
+    BackgroundJobStatus,
+} from '../services/repurposeService';
 import { setServerUploadCache } from '../../../core/processors/video';
 import { pickBestThumbnailShotsFromFrames } from '../../../core/services/ai-providers/gemini/adapters/analysisService';
 import { getAuthToken } from '../../../lib/api';
@@ -46,6 +53,9 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated, 
     const [isProcessing, setIsProcessing] = useState(false);
     const [progress, setProgress] = useState(0);
     const [progressStatus, setProgressStatus] = useState('Starting...');
+    const [notifyByEmail, setNotifyByEmail] = useState(true);
+    const [activeJob, setActiveJob] = useState<BackgroundJobStatus | null>(null);
+    const [queueInfo, setQueueInfo] = useState<{ active: number; queued: number; maxConcurrent: number } | null>(null);
     const [results, setResults] = useState<RepurposeResult | null>(null);
     const [recuttingClipId, setRecuttingClipId] = useState<string | null>(null);
     const [recutCounts, setRecutCounts] = useState<Record<string, number>>({});
@@ -131,6 +141,113 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated, 
     };
 
     const ai = useRef<GoogleGenAI>(createAiClient());
+
+    // Helper to convert a completed server background job into RepurposeResult
+    const hydrateCompletedJob = (job: BackgroundJobStatus) => {
+        const clips = Array.isArray(job.clips) ? job.clips : [];
+        const avgScore =
+            clips.length > 0
+                ? clips.reduce((acc, c) => acc + (Number(c.virality_score) || 80), 0) / clips.length
+                : 0;
+        const startMs = job.created_at ? new Date(job.created_at).getTime() : Date.now();
+        const endMs = job.completed_at ? new Date(job.completed_at).getTime() : Date.now();
+        const elapsedSec = Math.max(1, (endMs - startMs) / 1000);
+        const built: RepurposeResult = {
+            repurposed_video: {
+                id: job.id,
+                user_id: user?.id || '',
+                original_video_id: job.id,
+                original_video_url: '',
+                original_video_title: job.original_title || 'Video Repurpose',
+                original_video_duration: clips.reduce((acc, c) => acc + (Number(c.duration) || 0), 0),
+                status: 'completed',
+                created_at: job.created_at || new Date().toISOString(),
+                updated_at: job.completed_at || new Date().toISOString(),
+            },
+            clips,
+            ml_analysis: {
+                id: `ml_${job.id}`,
+                repurposed_video_id: job.id,
+                analysis_version: '2.0',
+                scene_segments: [],
+                viral_moments: [],
+                processing_time_ms: elapsedSec * 1000,
+                created_at: job.created_at || new Date().toISOString(),
+            },
+            statistics: {
+                total_clips_generated: clips.length,
+                average_virality_score: avgScore,
+                processing_time_seconds: elapsedSec,
+                storage_used_mb: clips.reduce((acc, c) => acc + ((c.metadata?.file_size || 0) / (1024 * 1024)), 0),
+            },
+        };
+        setResults(built);
+        onResultsGenerated?.(built);
+    };
+
+    // On mount, check if user has an active queued/processing background job (e.g. after closing & reopening tab)
+    useEffect(() => {
+        if (!user) return;
+        let cancelled = false;
+        fetchActiveRepurposeJobs()
+            .then((data) => {
+                if (cancelled || !data) return;
+                if (data.queue) setQueueInfo(data.queue);
+                const running = (data.jobs || []).find((j) => j.status === 'queued' || j.status === 'processing');
+                if (running) {
+                    setActiveJob(running);
+                    setIsProcessing(true);
+                    setProgress(running.progress || 10);
+                    setProgressStatus(running.status_text || 'Processing in background...');
+                }
+            })
+            .catch(() => {});
+        return () => {
+            cancelled = true;
+        };
+    }, [user]);
+
+    // Poll active background job every 2.5 seconds while user keeps the page open
+    useEffect(() => {
+        if (!activeJob || (activeJob.status !== 'queued' && activeJob.status !== 'processing')) return;
+        const jobId = activeJob.id;
+        let stopped = false;
+
+        const timer = window.setInterval(async () => {
+            if (stopped) return;
+            try {
+                const polled = await pollRepurposeJob(jobId);
+                if (stopped || !polled?.job) return;
+                if (polled.queue) setQueueInfo(polled.queue);
+                const updated = polled.job;
+                setActiveJob(updated);
+                setProgress(updated.progress || 15);
+                setProgressStatus(updated.status_text || 'Encoding clips...');
+
+                if (updated.status === 'completed') {
+                    window.clearInterval(timer);
+                    setIsProcessing(false);
+                    setProgress(100);
+                    hydrateCompletedJob(updated);
+                    await refreshCredits();
+                    toast.success(
+                        `🎬 ${updated.clips.length} Full HD clips are ready & saved to My Library!`
+                    );
+                } else if (updated.status === 'failed') {
+                    window.clearInterval(timer);
+                    setIsProcessing(false);
+                    toast.error(updated.error_message || 'Background clip processing failed.');
+                }
+            } catch {
+                // keep polling on brief network hiccup
+            }
+        }, 2500);
+
+        return () => {
+            stopped = true;
+            window.clearInterval(timer);
+        };
+    }, [activeJob?.id, activeJob?.status]);
 
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -358,16 +475,16 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated, 
                 }
             };
 
-            // Run repurpose
+            // Submit to server-side background queue (safe to close tab + email notification when ready!)
             try {
-                const result = await repurposeVideo(
+                const submission = await submitBackgroundRepurposeJob(
                     ai.current,
                     videoBlob,
-                    validVideoUrl, // Use the blob URL or YouTube URL
+                    validVideoUrl,
                     user.id,
                     options,
-                    importedMeta?.title, // originalTitle
-                    undefined, // transcript
+                    importedMeta?.title || videoFile?.name,
+                    notifyByEmail,
                     progressCallback,
                     importedMeta
                         ? {
@@ -380,22 +497,33 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated, 
                         : undefined
                 );
 
-                setProgress(100);
-                setResults(result);
-                onResultsGenerated?.(result);
-                
-                // Deduct credits after successful repurpose (based on actual clips generated)
-                const { deductCredits, CREDIT_COSTS: POST_COSTS } = await import('../../../services/payments/creditService');
-                const actualCreditCost = result.clips.length >= 6 ? POST_COSTS.REPURPOSE_LARGE : POST_COSTS.REPURPOSE_BASE;
-                await deductCredits(user.id, 'Content Repurpose', actualCreditCost, { 
-                    feature: 'content_repurpose', 
-                    clipCount: result.clips.length 
+                setActiveJob({
+                    id: submission.jobId,
+                    status: submission.status,
+                    queue_position: submission.queuePosition,
+                    progress: submission.status === 'queued' ? 65 : 70,
+                    status_text:
+                        submission.queuePosition > 0
+                            ? `In queue (position #${submission.queuePosition}) — safe to close this tab, we'll email you when ready!`
+                            : `Encoding ${submission.clipCount} Full HD 1080p clip${submission.clipCount === 1 ? '' : 's'}...`,
+                    original_title: submission.originalTitle,
+                    user_email: submission.notifyEmail || user.email,
+                    notify_email: notifyByEmail,
+                    clips: [],
                 });
-                await refreshCredits();
-                
-                toast.success(`Successfully generated ${result.clips.length} viral clips!`);
+
+                if (submission.queuePosition > 0) {
+                    toast.info(
+                        `Your video is in queue (#${submission.queuePosition}). You can close this tab — we'll email ${submission.notifyEmail || user.email} when ready!`
+                    );
+                } else {
+                    toast.info(
+                        notifyByEmail
+                            ? `Encoding in background! Safe to close this tab — we'll email ${submission.notifyEmail || user.email} when ready.`
+                            : 'Encoding your clips in Full HD 1080p...'
+                    );
+                }
             } finally {
-                // Clean up blob URL only after processing is complete
                 if (shouldRevokeBlobUrl) {
                     URL.revokeObjectURL(validVideoUrl);
                 }
@@ -403,7 +531,6 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated, 
         } catch (error: any) {
             console.error('Error repurposing video:', error);
             toast.error(`Failed to repurpose video: ${error.message || 'Unknown error'}`);
-        } finally {
             setIsProcessing(false);
             setProgress(0);
         }
@@ -848,6 +975,36 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated, 
                 )}
             </div>
 
+            {/* Email Notification Option */}
+            <div
+                style={{
+                    marginTop: '12px',
+                    padding: '10px 14px',
+                    borderRadius: '10px',
+                    background: '#f8f5ff',
+                    border: '1px solid #e4dcf2',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '10px',
+                    flexWrap: 'wrap',
+                }}
+            >
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600, color: '#374151' }}>
+                    <input
+                        type="checkbox"
+                        checked={notifyByEmail}
+                        onChange={(e) => setNotifyByEmail(e.target.checked)}
+                    />
+                    <span>📧 Email me when clips are ready (safe to close this tab)</span>
+                </label>
+                {queueInfo && queueInfo.queued > 0 && (
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#b45309', background: '#fef3c7', padding: '3px 9px', borderRadius: '999px' }}>
+                        ⏳ High demand · {queueInfo.queued} video{queueInfo.queued === 1 ? '' : 's'} in queue
+                    </span>
+                )}
+            </div>
+
             {/* Process Button */}
             <div className="repurpose-actions" style={{ flexDirection: 'column', gap: '12px' }}>
                 <button 
@@ -864,6 +1021,43 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated, 
                         'Generate Viral Clips'
                     )}
                 </button>
+                {isProcessing && activeJob && (activeJob.status === 'queued' || activeJob.status === 'processing') && (
+                    <div
+                        style={{
+                            width: '100%',
+                            maxWidth: '560px',
+                            margin: '0 auto',
+                            padding: '14px 16px',
+                            borderRadius: '12px',
+                            background: activeJob.status === 'queued' ? '#fffbeb' : '#faf7ff',
+                            border: activeJob.status === 'queued' ? '1px solid #fcd34d' : '1px solid #d8ccf0',
+                            textAlign: 'left',
+                        }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', marginBottom: '6px' }}>
+                            <strong style={{ fontSize: '14px', color: activeJob.status === 'queued' ? '#92400e' : '#571c86' }}>
+                                {activeJob.status === 'queued'
+                                    ? `⏳ Your video is in queue${activeJob.queue_position > 0 ? ` (Position #${activeJob.queue_position})` : ''}`
+                                    : '⚡ Processing your clips in Full HD 1080p'}
+                            </strong>
+                            <span style={{ fontSize: '12px', fontWeight: 700, color: '#571c86' }}>{progress}%</span>
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#374151', marginBottom: '6px' }}>
+                            {progressStatus}
+                        </div>
+                        <div style={{ fontSize: '12.5px', color: '#4b5563', lineHeight: 1.45 }}>
+                            ✅ <strong>You can safely close this tab or keep working.</strong> Your finished clips will be saved in{' '}
+                            <strong>My Library</strong>
+                            {notifyByEmail && (activeJob.user_email || user?.email) ? (
+                                <>
+                                    {' '}and we&apos;ll send an email notification to <strong>{activeJob.user_email || user?.email}</strong> the moment they&apos;re ready.
+                                </>
+                            ) : (
+                                '.'
+                            )}
+                        </div>
+                    </div>
+                )}
                 {isProcessing && (
                     <div style={{ width: '100%', maxWidth: '480px', margin: '0 auto' }}>
                         <div
