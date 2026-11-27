@@ -153,6 +153,7 @@ export const Navbar: FC = () => {
                         </div>
                     </div>
                     <Link to="/pricing" className="navbar-link" onClick={() => setMobileMenuOpen(false)}>Pricing</Link>
+                    <Link to="/affiliates" className="navbar-link" onClick={() => setMobileMenuOpen(false)}>Affiliates</Link>
                     
                     {user ? (
                         <>

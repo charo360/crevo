@@ -506,6 +506,37 @@ export const Header: FC<HeaderProps> = ({ platform, onPlatformChange, onSidebarT
                                         </svg>
                                         <span>Credits & Billing</span>
                                     </Link>
+
+                                    <Link
+                                        to="/affiliates"
+                                        className="user-menu-item-link"
+                                        onClick={() => setUserMenuOpen(false)}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '12px',
+                                            width: '100%',
+                                            padding: '12px 16px',
+                                            background: 'transparent',
+                                            border: 'none',
+                                            color: '#571c86',
+                                            fontSize: '0.9rem',
+                                            fontWeight: 700,
+                                            textAlign: 'left',
+                                            cursor: 'pointer',
+                                            textDecoration: 'none',
+                                            transition: 'all 0.15s',
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.backgroundColor = 'var(--surface-2)';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.backgroundColor = 'transparent';
+                                        }}
+                                    >
+                                        <span style={{ fontSize: '18px', width: '20px', textAlign: 'center', flexShrink: 0 }}>🤝</span>
+                                        <span>Affiliates (Earn 30%)</span>
+                                    </Link>
                                     
                                     <Link
                                         to="/profile"
