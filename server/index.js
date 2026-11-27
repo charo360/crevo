@@ -1827,6 +1827,112 @@ app.get('/api/video/stream/:uploadId', (req, res, next) => {
     return res.sendFile(filePath);
 });
 
+// Convert incompatible mobile phone codecs (HEVC/H.265, 10-bit HDR, MOV) to universal H.264 MP4 for Studio preview
+app.post('/api/video/transcode-preview', requireAuth, (req, res) => {
+    cleanupOldTempVideos();
+    ensureVideoTmpDir();
+
+    const MAX_PREVIEW_BYTES = 250 * 1024 * 1024; // 250 MB
+    const rawId = crypto.randomUUID();
+    const outId = crypto.randomUUID();
+    const srcPath = path.join(VIDEO_TMP_DIR, `${rawId}_src.bin`);
+    const outPath = path.join(VIDEO_TMP_DIR, `${outId}.mp4`);
+    const writeStream = fs.createWriteStream(srcPath);
+    let totalBytes = 0;
+    let aborted = false;
+
+    const cleanupSrc = () => {
+        try {
+            if (fs.existsSync(srcPath)) fs.unlinkSync(srcPath);
+        } catch {
+            // ignore
+        }
+    };
+    const cleanupOut = () => {
+        try {
+            if (fs.existsSync(outPath)) fs.unlinkSync(outPath);
+        } catch {
+            // ignore
+        }
+    };
+
+    req.on('data', (chunk) => {
+        if (aborted) return;
+        totalBytes += chunk.length;
+        if (totalBytes > MAX_PREVIEW_BYTES) {
+            aborted = true;
+            writeStream.destroy();
+            cleanupSrc();
+            if (!res.headersSent) {
+                res.status(413).json({ error: 'Video exceeds 250 MB preview conversion limit' });
+            }
+            req.destroy();
+        }
+    });
+
+    req.on('error', (err) => {
+        aborted = true;
+        writeStream.destroy();
+        cleanupSrc();
+        if (!res.headersSent) {
+            res.status(500).json({ error: `Upload stream error: ${err.message}` });
+        }
+    });
+
+    writeStream.on('error', (err) => {
+        aborted = true;
+        cleanupSrc();
+        if (!res.headersSent) {
+            res.status(500).json({ error: `Disk write error: ${err.message}` });
+        }
+    });
+
+    writeStream.on('finish', async () => {
+        if (aborted || res.headersSent) return;
+        if (totalBytes === 0) {
+            cleanupSrc();
+            return res.status(400).json({ error: 'Empty video upload' });
+        }
+        try {
+            await execFileAsync(
+                'ffmpeg',
+                [
+                    '-y',
+                    '-i',
+                    srcPath,
+                    '-c:v',
+                    'libx264',
+                    '-preset',
+                    'ultrafast',
+                    '-crf',
+                    '24',
+                    '-pix_fmt',
+                    'yuv420p',
+                    '-vf',
+                    "scale='min(1280,iw)':-2",
+                    '-c:a',
+                    'aac',
+                    '-b:a',
+                    '128k',
+                    '-movflags',
+                    '+faststart',
+                    outPath,
+                ],
+                { timeout: 120000, maxBuffer: 10 * 1024 * 1024 }
+            );
+            cleanupSrc();
+            return res.json({ uploadId: outId });
+        } catch (err) {
+            cleanupSrc();
+            cleanupOut();
+            console.error('Preview transcode failed:', err?.stderr || err?.message || err);
+            return res.status(422).json({ error: 'Could not convert this video format for preview.' });
+        }
+    });
+
+    req.pipe(writeStream);
+});
+
 app.post('/api/video/import-url', requireAuth, async (req, res) => {
     cleanupOldTempVideos();
     ensureVideoTmpDir();

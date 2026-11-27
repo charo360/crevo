@@ -3,22 +3,93 @@ import React, { FC, useRef, useState, useEffect } from 'react';
 interface VideoTrimmerProps {
     videoUrl: string;
     onVideoLoad: (duration: number) => void;
+    onVideoError?: () => void;
+    isConverting?: boolean;
+    conversionError?: string | null;
     trimTimes: { start: number; end: number };
     onTrimTimesChange: (t: { start: number; end: number }) => void;
     videoDuration: number;
 }
 
-export const VideoTrimmer: FC<VideoTrimmerProps> = ({ videoUrl, onVideoLoad, trimTimes, onTrimTimesChange, videoDuration }) => {
+export const VideoTrimmer: FC<VideoTrimmerProps> = ({
+    videoUrl,
+    onVideoLoad,
+    onVideoError,
+    isConverting = false,
+    conversionError = null,
+    trimTimes,
+    onTrimTimesChange,
+    videoDuration,
+}) => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const timelineRef = useRef<HTMLDivElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [isMuted, setIsMuted] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
     const draggingHandle = useRef<'start' | 'end' | null>(null);
+    const loadedForUrlRef = useRef<string | null>(null);
+    const errorTriggeredForUrlRef = useRef<string | null>(null);
+
+    // Force mobile browsers to load metadata & detect stalled HEVC/unsupported codecs
+    useEffect(() => {
+        loadedForUrlRef.current = null;
+        errorTriggeredForUrlRef.current = null;
+        setIsPlaying(false);
+        setCurrentTime(0);
+
+        const video = videoRef.current;
+        if (video) {
+            try {
+                video.load();
+            } catch {
+                // ignore
+            }
+        }
+
+        if (!videoUrl || isConverting) return;
+
+        const stallTimer = window.setTimeout(() => {
+            const v = videoRef.current;
+            if (
+                loadedForUrlRef.current !== videoUrl &&
+                errorTriggeredForUrlRef.current !== videoUrl &&
+                (!v || !v.duration || !isFinite(v.duration) || v.videoWidth === 0)
+            ) {
+                errorTriggeredForUrlRef.current = videoUrl;
+                onVideoError?.();
+            }
+        }, 3500);
+
+        return () => window.clearTimeout(stallTimer);
+    }, [videoUrl, isConverting]);
 
     const handleLoadedMetadata = () => {
-        if (videoRef.current) {
-            onVideoLoad(videoRef.current.duration);
+        const video = videoRef.current;
+        if (!video) return;
+        const dur = video.duration;
+        if (!dur || !isFinite(dur) || dur <= 0 || video.videoWidth === 0) {
+            if (errorTriggeredForUrlRef.current !== videoUrl) {
+                errorTriggeredForUrlRef.current = videoUrl;
+                onVideoError?.();
+            }
+            return;
+        }
+        loadedForUrlRef.current = videoUrl;
+        onVideoLoad(dur);
+        // Nudge mobile browsers off 0.00 so the first visible video frame paints immediately instead of a black screen
+        try {
+            if (video.currentTime === 0) {
+                video.currentTime = Math.min(0.15, dur * 0.05);
+            }
+        } catch {
+            // ignore
+        }
+    };
+
+    const handleVideoElementError = () => {
+        if (errorTriggeredForUrlRef.current !== videoUrl) {
+            errorTriggeredForUrlRef.current = videoUrl;
+            onVideoError?.();
         }
     };
     
@@ -128,6 +199,7 @@ export const VideoTrimmer: FC<VideoTrimmerProps> = ({ videoUrl, onVideoLoad, tri
             <div
                 className="trimmer-video-wrapper"
                 style={{
+                    position: 'relative',
                     width: '100%',
                     aspectRatio: '16 / 9',
                     maxHeight: '200px',
@@ -143,8 +215,9 @@ export const VideoTrimmer: FC<VideoTrimmerProps> = ({ videoUrl, onVideoLoad, tri
                     ref={videoRef}
                     src={videoUrl}
                     onLoadedMetadata={handleLoadedMetadata}
+                    onError={handleVideoElementError}
                     className="trimmer-video"
-                    preload="metadata"
+                    preload="auto"
                     style={{
                         width: '100%',
                         height: '100%',
@@ -154,6 +227,50 @@ export const VideoTrimmer: FC<VideoTrimmerProps> = ({ videoUrl, onVideoLoad, tri
                     muted={isMuted}
                     playsInline
                 />
+                {isConverting && (
+                    <div
+                        style={{
+                            position: 'absolute',
+                            inset: 0,
+                            background: 'rgba(15, 13, 20, 0.86)',
+                            color: '#ffffff',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px',
+                            padding: '14px',
+                            textAlign: 'center',
+                            fontSize: '12.5px',
+                            fontWeight: 600,
+                        }}
+                    >
+                        <div className="spinner" style={{ width: '24px', height: '24px', borderWidth: '3px' }}></div>
+                        <span>Optimizing phone video format (H.264)...</span>
+                    </div>
+                )}
+                {!isConverting && conversionError && (
+                    <div
+                        style={{
+                            position: 'absolute',
+                            inset: 0,
+                            background: 'rgba(15, 13, 20, 0.9)',
+                            color: '#f3e8ff',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            padding: '16px',
+                            textAlign: 'center',
+                            fontSize: '12px',
+                            lineHeight: 1.45,
+                        }}
+                    >
+                        <strong style={{ color: '#facc15', fontSize: '13px' }}>Unsupported phone video codec</strong>
+                        <span>{conversionError}</span>
+                    </div>
+                )}
             </div>
             <div className="trimmer-controls">
                 <button type="button" className="trimmer-play-btn" onClick={togglePlay} title={isPlaying ? 'Pause' : 'Play'}>

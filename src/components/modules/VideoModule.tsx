@@ -5,6 +5,9 @@ import { Module } from './Module';
 import { ICONS } from '../../constants';
 import { VideoTrimmer } from './VideoTrimmer';
 import { isSupportedVideoFile } from '../../shared/utils/video-utils';
+import { getAuthToken } from '../../lib/api';
+
+const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 
 interface VideoModuleProps {
   videoAsset: VideoAsset | null;
@@ -28,6 +31,9 @@ export const VideoModule: FC<VideoModuleProps> = (props) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [videoDuration, setVideoDuration] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [isConvertingVideo, setIsConvertingVideo] = useState(false);
+  const [conversionError, setConversionError] = useState<string | null>(null);
+  const convertedVideoIdRef = useRef<string | null>(null);
 
   const loadVideoFile = (file: File) => {
     try {
@@ -43,12 +49,78 @@ export const VideoModule: FC<VideoModuleProps> = (props) => {
       if (props.videoAsset?.url?.startsWith('blob:')) {
         URL.revokeObjectURL(props.videoAsset.url);
       }
+      setVideoDuration(0);
+      setIsConvertingVideo(false);
+      setConversionError(null);
+      convertedVideoIdRef.current = null;
       const url = URL.createObjectURL(file);
       props.onVideoAssetChange({ id: `vid_${Date.now()}`, file, url });
       props.onAnalysisResultChange(null);
       toast.success('Video uploaded! Trim the clip or click Analyze Style / Generate.');
     } catch (error: any) {
       toast.error(`Failed to upload video: ${error.message || 'Unknown error'}`);
+    }
+  };
+
+  const handleVideoPlaybackError = async () => {
+    const asset = props.videoAsset;
+    if (!asset?.file || isConvertingVideo || convertedVideoIdRef.current === asset.id) return;
+
+    const MAX_AUTO_CONVERT_BYTES = 250 * 1024 * 1024;
+    if (asset.file.size > MAX_AUTO_CONVERT_BYTES) {
+      setConversionError('This phone video uses an HEVC/HDR codec larger than 250 MB. Please export as standard H.264 MP4 and try again.');
+      return;
+    }
+
+    const token = getAuthToken();
+    if (!token) {
+      setConversionError('This video codec (HEVC/HDR) is not supported by your browser. Try a standard MP4 (H.264) video.');
+      return;
+    }
+
+    convertedVideoIdRef.current = asset.id;
+    setIsConvertingVideo(true);
+    setConversionError(null);
+    toast.info('Optimizing phone video format for playback...');
+
+    try {
+      const resp = await fetch(`${API_BASE}/api/video/transcode-preview`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': asset.file.type || 'application/octet-stream',
+        },
+        body: asset.file,
+      });
+
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || !data?.uploadId) {
+        throw new Error(data?.error || 'Could not convert this video format.');
+      }
+
+      const streamResp = await fetch(`${API_BASE}/api/video/stream/${data.uploadId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!streamResp.ok) {
+        throw new Error('Could not load converted video preview.');
+      }
+      const mp4Blob = await streamResp.blob();
+      const baseName = (asset.file.name || 'video').replace(/\.[^.]+$/, '');
+      const convertedFile = new File([mp4Blob], `${baseName}.mp4`, { type: 'video/mp4' });
+      const convertedUrl = URL.createObjectURL(convertedFile);
+      const nextId = `vid_h264_${Date.now()}`;
+      convertedVideoIdRef.current = nextId;
+
+      if (asset.url?.startsWith('blob:')) {
+        URL.revokeObjectURL(asset.url);
+      }
+      props.onVideoAssetChange({ id: nextId, file: convertedFile, url: convertedUrl });
+      toast.success('Video converted to H.264 and ready!');
+    } catch (err: any) {
+      console.error('Auto H.264 preview conversion failed:', err);
+      setConversionError(err?.message || 'This phone video codec (HEVC/HDR) could not be played. Try a standard MP4 (H.264) video.');
+    } finally {
+      setIsConvertingVideo(false);
     }
   };
 
@@ -93,6 +165,9 @@ export const VideoModule: FC<VideoModuleProps> = (props) => {
     }
     props.onVideoAssetChange(null);
     setVideoDuration(0);
+    setIsConvertingVideo(false);
+    setConversionError(null);
+    convertedVideoIdRef.current = null;
     props.onAnalysisResultChange(null);
   };
 
@@ -109,6 +184,9 @@ export const VideoModule: FC<VideoModuleProps> = (props) => {
             <VideoTrimmer
               videoUrl={props.videoAsset.url}
               onVideoLoad={handleVideoLoad}
+              onVideoError={handleVideoPlaybackError}
+              isConverting={isConvertingVideo}
+              conversionError={conversionError}
               trimTimes={props.trimTimes}
               onTrimTimesChange={props.onTrimTimesChange}
               videoDuration={videoDuration}
