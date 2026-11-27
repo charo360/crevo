@@ -5,6 +5,7 @@ const DEFAULT_MODELS = {
     IMAGE_FALLBACK: 'google/gemini-3.1-flash-image',
     TEXT_PRIMARY: 'google/gemini-2.5-flash',
     TEXT_FALLBACK: 'google/gemini-2.5-flash-lite',
+    TEXT_NON_GOOGLE_FALLBACK: 'openai/gpt-4o-mini',
 };
 
 function resolveOpenRouterModel(requestedModel, isImageRequest) {
@@ -237,23 +238,61 @@ export async function generateWithOpenRouter({ model, contents, config = {} }) {
         payload.temperature = config.temperature;
     }
 
-    const response = await fetch(OPENROUTER_API_URL, {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-            'HTTP-Referer': process.env.APP_URL || 'http://localhost:3000',
-            'X-Title': 'Revo3.ai',
-        },
-        body: JSON.stringify(payload),
-    });
+    const sendOpenRouterRequest = async (targetModel) => {
+        const reqPayload = { ...payload, model: targetModel };
+        const resp = await fetch(OPENROUTER_API_URL, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+                'HTTP-Referer': process.env.APP_URL || 'https://crevo.app',
+                'X-Title': 'Crevo AI',
+            },
+            body: JSON.stringify(reqPayload),
+        });
+        const raw = await resp.text();
+        let parsed = null;
+        try {
+            parsed = JSON.parse(raw);
+        } catch {
+            parsed = null;
+        }
+        return { resp, raw, parsed };
+    };
 
-    const rawText = await response.text();
-    let data;
-    try {
-        data = JSON.parse(rawText);
-    } catch {
-        data = null;
+    const isProviderBlockOrTransient = (resp, parsed, raw) => {
+        if (!resp.ok) {
+            const msg = String(parsed?.error?.message || parsed?.message || raw || '').toLowerCase();
+            return (
+                msg.includes('blocked') ||
+                msg.includes('other') ||
+                msg.includes('safety') ||
+                msg.includes('prohibited') ||
+                msg.includes('recitation') ||
+                msg.includes('content_filter') ||
+                resp.status === 429 ||
+                resp.status >= 500
+            );
+        }
+        const finishReason = String(parsed?.choices?.[0]?.finish_reason || parsed?.choices?.[0]?.native_finish_reason || '').toLowerCase();
+        if (finishReason.includes('content_filter') || finishReason.includes('safety') || finishReason === 'other' || finishReason.includes('prohibited')) {
+            return true;
+        }
+        return false;
+    };
+
+    let activeModel = resolvedModel;
+    let { resp: response, raw: rawText, parsed: data } = await sendOpenRouterRequest(activeModel);
+
+    // If a Google Gemini vision/text request is false-positive blocked (e.g. "Gemini blocked the request: OTHER"),
+    // transparently fall back to a non-Google vision/JSON model (openai/gpt-4o-mini) so Analyze Style & Clips keep working.
+    if (!isImageRequest && isProviderBlockOrTransient(response, data, rawText)) {
+        const nonGoogleFallback = process.env.OPENROUTER_TEXT_ALT_FALLBACK_MODEL || DEFAULT_MODELS.TEXT_NON_GOOGLE_FALLBACK;
+        if (activeModel !== nonGoogleFallback) {
+            console.warn(`OpenRouter ${activeModel} blocked/failed (${data?.error?.message || response.status}); retrying with ${nonGoogleFallback}...`);
+            activeModel = nonGoogleFallback;
+            ({ resp: response, raw: rawText, parsed: data } = await sendOpenRouterRequest(activeModel));
+        }
     }
 
     if (!response.ok) {
@@ -271,7 +310,7 @@ export async function generateWithOpenRouter({ model, contents, config = {} }) {
 
     return {
         text,
-        model: resolvedModel,
+        model: activeModel,
         candidates: [
             {
                 content: {
