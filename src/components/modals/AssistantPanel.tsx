@@ -81,9 +81,9 @@ const HELP_TOPICS: HelpTopic[] = [
         ],
         answer:
             'How Crevo credits work:\n' +
-            '• Starter Pack: $9 one-time (50 credits)\n' +
-            '• Creator Plan: $29/month (250 credits)\n' +
-            '• Pro Plan: $99/month (1,000 credits)\n\n' +
+            '• Pay As You Go: $9 one-time (35 credits — never expire)\n' +
+            '• Pro Plan: $29/month (200 credits/mo)\n' +
+            '• Enterprise Plan: $99/month (1,000 credits/mo)\n\n' +
             'You can check your balance or top up anytime under Account / Pricing, or right from the upgrade popup when your balance runs low.'
     },
     {

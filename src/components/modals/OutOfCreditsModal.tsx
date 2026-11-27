@@ -22,9 +22,9 @@ const PLANS = [
         name: 'Pay As You Go',
         price: '$9',
         period: 'one-time',
-        credits: '50 credits',
+        credits: '35 credits',
         priceId: 'price_1UfkBAELJu3kIHjxxWOcwsh0',
-        perks: ['Never expires', '~25 thumbnails or 16 clip runs', 'Instant access'],
+        perks: ['Never expires', '~17 thumbnails or 11 clip runs', 'Instant access'],
         popular: false,
     },
     {

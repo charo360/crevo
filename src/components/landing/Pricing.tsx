@@ -64,16 +64,16 @@ export const Pricing: FC = () => {
             name: 'Pay As You Go',
             price: '$9',
             period: ' one-time',
-            credits: 50,
+            credits: 35,
             description: 'Pay once, no subscription — credits never expire',
             features: [
-                '50 credits (one-time)',
+                '35 credits (one-time)',
                 'All AI thumbnail & resize tools',
                 '5GB video-to-Shorts repurposing',
                 'AI auto-captions & transitions',
                 '7-day cloud work library',
             ],
-            cta: 'Buy 50 Credits',
+            cta: 'Buy 35 Credits',
             popular: false
         },
         {

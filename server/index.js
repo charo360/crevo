@@ -3995,7 +3995,7 @@ async function start() {
             {
                 stripe_price_id: process.env.STRIPE_PRICE_PAYG || 'price_1UfkBAELJu3kIHjxxWOcwsh0',
                 name: 'Pay As You Go',
-                credits: 50,
+                credits: 35,
                 price_cents: 900,
                 active: true,
             },
