@@ -2,12 +2,9 @@
 
 Saved for review when ready to upgrade `https://crevo.app` to full Series-A / top-tier SaaS presentation.
 
-## 1. Real Before & After Examples (Biggest Conversion Upgrade)
+## 1. Real Before & After Examples (DONE!)
 - **Where:** `src/components/landing/BeforeAfterShowcase.tsx`
-- **What to provide:**
-  - **3–4 real image pairs:** original raw video frame or old thumbnail → finished Crevo AI thumbnail
-  - **1 sample 1080p vertical clip** generated in Crevo (with burned-in captions)
-- **What we'll build:** Interactive Before/After comparison sliders + a muted auto-playing vertical clip preview directly on the homepage.
+- **Status:** Live interactive drag-to-compare Before/After slider (Tech Review + Podcast Studio) + real Crevo 9:16 vertical Shorts covers in `public/showcase/`.
 
 ## 2. 20–30 Second Product Demo Video
 - **Where:** Right below the Hero CTA on the homepage
