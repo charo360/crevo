@@ -3,34 +3,59 @@ import { Link } from 'react-router-dom';
 
 interface ShowcasePair {
     id: string;
+    mode: 'slider' | 'resize';
     label: string;
     niche: string;
     beforeImg: string;
     afterImg: string;
-    beforeCtr: string;
-    afterCtr: string;
+    beforeBadge: string;
+    afterBadge: string;
     summary: string;
 }
 
 const SHOWCASE_PAIRS: ShowcasePair[] = [
     {
+        id: 'improve',
+        mode: 'slider',
+        label: 'Improve Thumbnail',
+        niche: 'Real Crevo AI Output · Improve Thumbnail (16:9)',
+        beforeImg: '/showcase/before-improve-real.jpg',
+        afterImg: '/showcase/after-improve-real.jpg',
+        beforeBadge: 'BEFORE · Original',
+        afterBadge: 'AFTER · Crevo AI',
+        summary: 'Uploaded directly to Crevo Improve Thumbnail — upgraded contrast, added a glowing diagonal split, cinematic background depth, and bold viral hook text.',
+    },
+    {
+        id: 'resize',
+        mode: 'resize',
+        label: 'Smart Resize (16:9 → 1:1)',
+        niche: 'Real Crevo AI Output · AI Smart Resize (Zero Cropping)',
+        beforeImg: '/showcase/resize-16x9.jpg',
+        afterImg: '/showcase/resize-1x1.jpg',
+        beforeBadge: 'ORIGINAL · 16:9 YouTube',
+        afterBadge: 'AI EXPANDED · 1:1 Square',
+        summary: 'Crevo AI naturally extends the room, ceiling, and window above the subjects to fit 1:1 Square / Podcast format without cropping a single face or letter.',
+    },
+    {
         id: 'tech',
+        mode: 'slider',
         label: 'Tech Review',
         niche: 'YouTube 16:9 · Raw Webcam → Studio Thumbnail',
         beforeImg: '/showcase/before-tech.jpg',
         afterImg: '/showcase/after-tech.jpg',
-        beforeCtr: '3.1% CTR',
-        afterCtr: '9.4% CTR',
+        beforeBadge: 'BEFORE · 3.1% CTR',
+        afterBadge: 'AFTER · 9.4% CTR',
         summary: 'Same real face & phone — upgraded with purple/cyan rim lighting, bokeh background, and bold hook text in ~25 seconds.',
     },
     {
         id: 'podcast',
+        mode: 'slider',
         label: 'Podcast Studio',
         niche: 'YouTube 16:9 · Flat Office Frame → Cinematic Cover',
         beforeImg: '/showcase/before-podcast.jpg',
         afterImg: '/showcase/after-podcast.jpg',
-        beforeCtr: '2.8% CTR',
-        afterCtr: '8.7% CTR',
+        beforeBadge: 'BEFORE · 2.8% CTR',
+        afterBadge: 'AFTER · 8.7% CTR',
         summary: 'Locks exact host identity and mic framing while replacing flat walls with warm studio glow and high-contrast typography.',
     },
 ];
@@ -61,10 +86,10 @@ export const BeforeAfterShowcase: FC = () => {
                         DRAG TO COMPARE · REAL BEFORE &amp; AFTER
                     </span>
                     <h2 style={{ margin: '0 0 12px', fontSize: 'clamp(1.75rem, 3.4vw, 2.5rem)', fontWeight: 800, color: '#111827', lineHeight: 1.18 }}>
-                        Turn Raw Video Frames Into Click-Magnet Thumbnails
+                        Turn Raw Frames Into Click-Magnet Thumbnails &amp; Resizes
                     </h2>
                     <p style={{ margin: 0, fontSize: '1.02rem', color: '#4b5563', lineHeight: 1.6 }}>
-                        Keep your real face 100% recognizable while Crevo AI upgrades lighting, expression pop, background depth, and scroll-stopping typography.
+                        Keep your real faces 100% recognizable while Crevo AI upgrades lighting, viral hook typography, and aspect ratios for every platform.
                     </p>
                 </div>
 
@@ -81,12 +106,12 @@ export const BeforeAfterShowcase: FC = () => {
                                     setSliderPos(48);
                                 }}
                                 style={{
-                                    padding: '9px 18px',
+                                    padding: '9px 16px',
                                     borderRadius: '999px',
                                     border: isActive ? '1.5px solid #571c86' : '1px solid #dfd5f0',
                                     background: isActive ? 'linear-gradient(135deg, #571c86, #7e22ce)' : '#faf7ff',
                                     color: isActive ? '#ffffff' : '#3b2d52',
-                                    fontSize: '13.5px',
+                                    fontSize: '13px',
                                     fontWeight: 700,
                                     cursor: 'pointer',
                                     transition: 'all 0.15s ease',
@@ -98,7 +123,7 @@ export const BeforeAfterShowcase: FC = () => {
                     })}
                 </div>
 
-                {/* Main Showcase Grid: Interactive 16:9 Slider + Real 9:16 Shorts Covers */}
+                {/* Main Showcase Grid: Interactive Showcase + Real 9:16 Shorts Covers */}
                 <div
                     style={{
                         display: 'grid',
@@ -107,10 +132,9 @@ export const BeforeAfterShowcase: FC = () => {
                         alignItems: 'stretch',
                     }}
                 >
-                    {/* Left/Main: Interactive Before & After Slider */}
+                    {/* Left/Main: Interactive Before & After Slider OR Smart Resize Side-by-Side */}
                     <div
                         style={{
-                            gridColumn: 'span 1',
                             borderRadius: '20px',
                             border: '1px solid #e5ddf4',
                             background: '#faf8fd',
@@ -122,154 +146,213 @@ export const BeforeAfterShowcase: FC = () => {
                         }}
                     >
                         <div>
-                            <div
-                                style={{
-                                    position: 'relative',
-                                    width: '100%',
-                                    aspectRatio: '16 / 9',
-                                    borderRadius: '14px',
-                                    overflow: 'hidden',
-                                    background: '#0f0d14',
-                                    userSelect: 'none',
-                                    touchAction: 'pan-y',
-                                }}
-                            >
-                                {/* AFTER image (full base layer) */}
-                                <img
-                                    src={activePair.afterImg}
-                                    alt={`${activePair.label} — After Crevo AI`}
-                                    style={{
-                                        position: 'absolute',
-                                        inset: 0,
-                                        width: '100%',
-                                        height: '100%',
-                                        objectFit: 'cover',
-                                        display: 'block',
-                                        pointerEvents: 'none',
-                                    }}
-                                />
-
-                                {/* BEFORE image (clipped dynamically from right) */}
-                                <img
-                                    src={activePair.beforeImg}
-                                    alt={`${activePair.label} — Before raw video frame`}
-                                    style={{
-                                        position: 'absolute',
-                                        inset: 0,
-                                        width: '100%',
-                                        height: '100%',
-                                        objectFit: 'cover',
-                                        display: 'block',
-                                        clipPath: `inset(0 ${100 - sliderPos}% 0 0)`,
-                                        pointerEvents: 'none',
-                                    }}
-                                />
-
-                                {/* Divider Line & Drag Knob */}
+                            {activePair.mode === 'resize' ? (
                                 <div
                                     style={{
-                                        position: 'absolute',
-                                        top: 0,
-                                        bottom: 0,
-                                        left: `${sliderPos}%`,
-                                        width: '3px',
-                                        background: '#ffffff',
-                                        boxShadow: '0 0 12px rgba(0,0,0,0.45)',
-                                        transform: 'translateX(-50%)',
-                                        pointerEvents: 'none',
-                                        zIndex: 3,
+                                        display: 'grid',
+                                        gridTemplateColumns: '1.15fr 0.85fr',
+                                        gap: '12px',
+                                        alignItems: 'center',
+                                        background: '#130d1e',
+                                        borderRadius: '14px',
+                                        padding: '14px',
                                     }}
                                 >
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        <span
+                                            style={{
+                                                alignSelf: 'flex-start',
+                                                padding: '3px 9px',
+                                                borderRadius: '999px',
+                                                background: 'rgba(255,255,255,0.14)',
+                                                color: '#f3f4f6',
+                                                fontSize: '10.5px',
+                                                fontWeight: 800,
+                                            }}
+                                        >
+                                            {activePair.beforeBadge}
+                                        </span>
+                                        <div style={{ borderRadius: '10px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.18)', aspectRatio: '16 / 9' }}>
+                                            <img
+                                                src={activePair.beforeImg}
+                                                alt="Original 16:9 YouTube thumbnail"
+                                                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        <span
+                                            style={{
+                                                alignSelf: 'flex-start',
+                                                padding: '3px 9px',
+                                                borderRadius: '999px',
+                                                background: 'linear-gradient(135deg, #571c86, #9333ea)',
+                                                color: '#ffffff',
+                                                fontSize: '10.5px',
+                                                fontWeight: 800,
+                                            }}
+                                        >
+                                            {activePair.afterBadge}
+                                        </span>
+                                        <div style={{ borderRadius: '10px', overflow: 'hidden', border: '1.5px solid #a855f7', aspectRatio: '1 / 1' }}>
+                                            <img
+                                                src={activePair.afterImg}
+                                                alt="AI Smart Resized 1:1 square design"
+                                                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div
+                                    style={{
+                                        position: 'relative',
+                                        width: '100%',
+                                        aspectRatio: '16 / 9',
+                                        borderRadius: '14px',
+                                        overflow: 'hidden',
+                                        background: '#0f0d14',
+                                        userSelect: 'none',
+                                        touchAction: 'pan-y',
+                                    }}
+                                >
+                                    {/* AFTER image (full base layer) */}
+                                    <img
+                                        src={activePair.afterImg}
+                                        alt={`${activePair.label} — After Crevo AI`}
+                                        style={{
+                                            position: 'absolute',
+                                            inset: 0,
+                                            width: '100%',
+                                            height: '100%',
+                                            objectFit: 'cover',
+                                            display: 'block',
+                                            pointerEvents: 'none',
+                                        }}
+                                    />
+
+                                    {/* BEFORE image (clipped dynamically from right) */}
+                                    <img
+                                        src={activePair.beforeImg}
+                                        alt={`${activePair.label} — Before`}
+                                        style={{
+                                            position: 'absolute',
+                                            inset: 0,
+                                            width: '100%',
+                                            height: '100%',
+                                            objectFit: 'cover',
+                                            display: 'block',
+                                            clipPath: `inset(0 ${100 - sliderPos}% 0 0)`,
+                                            pointerEvents: 'none',
+                                        }}
+                                    />
+
+                                    {/* Divider Line & Drag Knob */}
                                     <div
                                         style={{
                                             position: 'absolute',
-                                            top: '50%',
-                                            left: '50%',
-                                            transform: 'translate(-50%, -50%)',
-                                            width: '40px',
-                                            height: '40px',
-                                            borderRadius: '50%',
+                                            top: 0,
+                                            bottom: 0,
+                                            left: `${sliderPos}%`,
+                                            width: '3px',
                                             background: '#ffffff',
-                                            color: '#571c86',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            fontWeight: 900,
-                                            fontSize: '15px',
-                                            boxShadow: '0 4px 14px rgba(0,0,0,0.35)',
-                                            border: '2px solid #571c86',
+                                            boxShadow: '0 0 12px rgba(0,0,0,0.45)',
+                                            transform: 'translateX(-50%)',
+                                            pointerEvents: 'none',
+                                            zIndex: 3,
                                         }}
                                     >
-                                        ⇄
+                                        <div
+                                            style={{
+                                                position: 'absolute',
+                                                top: '50%',
+                                                left: '50%',
+                                                transform: 'translate(-50%, -50%)',
+                                                width: '40px',
+                                                height: '40px',
+                                                borderRadius: '50%',
+                                                background: '#ffffff',
+                                                color: '#571c86',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                fontWeight: 900,
+                                                fontSize: '15px',
+                                                boxShadow: '0 4px 14px rgba(0,0,0,0.35)',
+                                                border: '2px solid #571c86',
+                                            }}
+                                        >
+                                            ⇄
+                                        </div>
                                     </div>
+
+                                    {/* Corner Badges */}
+                                    <span
+                                        style={{
+                                            position: 'absolute',
+                                            top: '12px',
+                                            left: '12px',
+                                            padding: '4px 10px',
+                                            borderRadius: '999px',
+                                            background: 'rgba(15, 13, 20, 0.78)',
+                                            color: '#f3f4f6',
+                                            fontSize: '11px',
+                                            fontWeight: 800,
+                                            letterSpacing: '0.04em',
+                                            pointerEvents: 'none',
+                                            zIndex: 2,
+                                        }}
+                                    >
+                                        {activePair.beforeBadge}
+                                    </span>
+                                    <span
+                                        style={{
+                                            position: 'absolute',
+                                            top: '12px',
+                                            right: '12px',
+                                            padding: '4px 10px',
+                                            borderRadius: '999px',
+                                            background: 'linear-gradient(135deg, #571c86, #9333ea)',
+                                            color: '#ffffff',
+                                            fontSize: '11px',
+                                            fontWeight: 800,
+                                            letterSpacing: '0.04em',
+                                            boxShadow: '0 2px 10px rgba(87,28,134,0.4)',
+                                            pointerEvents: 'none',
+                                            zIndex: 2,
+                                        }}
+                                    >
+                                        {activePair.afterBadge}
+                                    </span>
+
+                                    {/* Full-area accessible range input for effortless mouse + touch drag */}
+                                    <input
+                                        type="range"
+                                        min={5}
+                                        max={95}
+                                        value={sliderPos}
+                                        onChange={(e) => setSliderPos(Number(e.target.value))}
+                                        aria-label={`Compare before and after ${activePair.label}`}
+                                        style={{
+                                            position: 'absolute',
+                                            inset: 0,
+                                            width: '100%',
+                                            height: '100%',
+                                            opacity: 0,
+                                            cursor: 'ew-resize',
+                                            margin: 0,
+                                            zIndex: 5,
+                                        }}
+                                    />
                                 </div>
-
-                                {/* Corner Badges */}
-                                <span
-                                    style={{
-                                        position: 'absolute',
-                                        top: '12px',
-                                        left: '12px',
-                                        padding: '4px 10px',
-                                        borderRadius: '999px',
-                                        background: 'rgba(15, 13, 20, 0.78)',
-                                        color: '#f3f4f6',
-                                        fontSize: '11px',
-                                        fontWeight: 800,
-                                        letterSpacing: '0.04em',
-                                        pointerEvents: 'none',
-                                        zIndex: 2,
-                                    }}
-                                >
-                                    BEFORE · {activePair.beforeCtr}
-                                </span>
-                                <span
-                                    style={{
-                                        position: 'absolute',
-                                        top: '12px',
-                                        right: '12px',
-                                        padding: '4px 10px',
-                                        borderRadius: '999px',
-                                        background: 'linear-gradient(135deg, #571c86, #9333ea)',
-                                        color: '#ffffff',
-                                        fontSize: '11px',
-                                        fontWeight: 800,
-                                        letterSpacing: '0.04em',
-                                        boxShadow: '0 2px 10px rgba(87,28,134,0.4)',
-                                        pointerEvents: 'none',
-                                        zIndex: 2,
-                                    }}
-                                >
-                                    AFTER · {activePair.afterCtr}
-                                </span>
-
-                                {/* Full-area accessible range input for effortless mouse + touch drag */}
-                                <input
-                                    type="range"
-                                    min={5}
-                                    max={95}
-                                    value={sliderPos}
-                                    onChange={(e) => setSliderPos(Number(e.target.value))}
-                                    aria-label={`Compare before and after ${activePair.label} thumbnail`}
-                                    style={{
-                                        position: 'absolute',
-                                        inset: 0,
-                                        width: '100%',
-                                        height: '100%',
-                                        opacity: 0,
-                                        cursor: 'ew-resize',
-                                        margin: 0,
-                                        zIndex: 5,
-                                    }}
-                                />
-                            </div>
+                            )}
 
                             <div style={{ marginTop: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
                                 <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#571c86' }}>
                                     {activePair.niche}
                                 </span>
                                 <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>
-                                    ← Drag slider to compare →
+                                    {activePair.mode === 'resize' ? 'Zero cropping · AI background expand' : '← Drag slider to compare →'}
                                 </span>
                             </div>
                             <p style={{ margin: '8px 0 0', fontSize: '13.5px', color: '#4b5563', lineHeight: 1.55 }}>
