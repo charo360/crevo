@@ -3382,3 +3382,23 @@ input[type="color"]::-moz-color-swatch {
     box-shadow: 0 8px 24px rgba(87, 28, 134, 0.28);
   }
 }
+
+@media (max-width: 768px) {
+  .design-card-actions {
+    position: relative !important;
+  }
+
+  .adapt-btn-container {
+    position: static !important;
+  }
+
+  .adapt-popover {
+    left: 0 !important;
+    right: 0 !important;
+    width: auto !important;
+    max-width: 100% !important;
+    z-index: 60 !important;
+    background-color: #ffffff !important;
+    box-shadow: 0 12px 28px rgba(17, 12, 34, 0.22) !important;
+  }
+}
