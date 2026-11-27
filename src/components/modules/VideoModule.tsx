@@ -35,14 +35,14 @@ export const VideoModule: FC<VideoModuleProps> = (props) => {
   const [conversionError, setConversionError] = useState<string | null>(null);
   const convertedVideoIdRef = useRef<string | null>(null);
 
-  const loadVideoFile = (file: File) => {
+  const loadVideoFile = async (rawFile: File) => {
     try {
       // Video is processed locally in the browser to extract frames (never uploaded in full)
-      if (file.size > 10 * 1024 * 1024 * 1024) {
+      if (rawFile.size > 10 * 1024 * 1024 * 1024) {
         toast.error('Video file size must be less than 10GB');
         return;
       }
-      if (!isSupportedVideoFile(file)) {
+      if (!isSupportedVideoFile(rawFile)) {
         toast.error('Please upload a valid video file (MP4, MOV, WebM, M4V, 3GP)');
         return;
       }
@@ -53,6 +53,24 @@ export const VideoModule: FC<VideoModuleProps> = (props) => {
       setIsConvertingVideo(false);
       setConversionError(null);
       convertedVideoIdRef.current = null;
+
+      // On Android Chrome, WhatsApp/Gallery picker returns a temporary content:// handle
+      // that can fail to play or upload after a few seconds. Copying <= 120 MB videos into
+      // an in-memory File immediately makes playback and H.264 fallback rock-solid.
+      let file = rawFile;
+      if (rawFile.size > 0 && rawFile.size <= 120 * 1024 * 1024) {
+        try {
+          const buf = await rawFile.arrayBuffer();
+          file = new File([buf], rawFile.name || 'video.mp4', {
+            type: rawFile.type || 'video/mp4',
+            lastModified: rawFile.lastModified || Date.now(),
+          });
+        } catch {
+          // Fallback to original handle if memory copy fails
+          file = rawFile;
+        }
+      }
+
       const url = URL.createObjectURL(file);
       props.onVideoAssetChange({ id: `vid_${Date.now()}`, file, url });
       props.onAnalysisResultChange(null);
@@ -60,6 +78,65 @@ export const VideoModule: FC<VideoModuleProps> = (props) => {
     } catch (error: any) {
       toast.error(`Failed to upload video: ${error.message || 'Unknown error'}`);
     }
+  };
+
+  const transcodePreviewViaXhr = (file: File, token: string): Promise<{ uploadId: string }> => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${API_BASE}/api/video/transcode-preview`, true);
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+      xhr.timeout = 180000;
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const parsed = JSON.parse(xhr.responseText);
+            if (parsed?.uploadId) {
+              resolve(parsed);
+              return;
+            }
+          } catch {
+            // fall through
+          }
+          reject(new Error('Invalid response from video converter.'));
+        } else {
+          let errMsg = `Video conversion failed (${xhr.status})`;
+          try {
+            const parsed = JSON.parse(xhr.responseText);
+            if (parsed?.error) errMsg = parsed.error;
+          } catch {
+            // ignore
+          }
+          reject(new Error(errMsg));
+        }
+      };
+
+      xhr.onerror = () => reject(new Error('Network error while optimizing phone video. Please try again.'));
+      xhr.ontimeout = () => reject(new Error('Video optimization timed out. Try a shorter clip.'));
+      xhr.send(file);
+    });
+  };
+
+  const downloadBlobViaXhr = (url: string, token: string): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', url, true);
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      xhr.responseType = 'blob';
+      xhr.timeout = 120000;
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300 && xhr.response instanceof Blob) {
+          resolve(xhr.response);
+        } else {
+          reject(new Error(`Could not load converted video (${xhr.status})`));
+        }
+      };
+      xhr.onerror = () => reject(new Error('Network error while loading converted video.'));
+      xhr.ontimeout = () => reject(new Error('Timed out loading converted video.'));
+      xhr.send();
+    });
   };
 
   const handleVideoPlaybackError = async () => {
@@ -81,30 +158,19 @@ export const VideoModule: FC<VideoModuleProps> = (props) => {
     convertedVideoIdRef.current = asset.id;
     setIsConvertingVideo(true);
     setConversionError(null);
-    toast.info('Optimizing phone video format for playback...');
+    toast.info('Optimizing phone video format (H.264)...');
 
     try {
-      const resp = await fetch(`${API_BASE}/api/video/transcode-preview`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': asset.file.type || 'application/octet-stream',
-        },
-        body: asset.file,
-      });
-
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok || !data?.uploadId) {
-        throw new Error(data?.error || 'Could not convert this video format.');
+      let data: { uploadId: string };
+      try {
+        data = await transcodePreviewViaXhr(asset.file, token);
+      } catch (firstErr) {
+        // Retry once for flaky mobile connections
+        await new Promise((r) => setTimeout(r, 700));
+        data = await transcodePreviewViaXhr(asset.file, token);
       }
 
-      const streamResp = await fetch(`${API_BASE}/api/video/stream/${data.uploadId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!streamResp.ok) {
-        throw new Error('Could not load converted video preview.');
-      }
-      const mp4Blob = await streamResp.blob();
+      const mp4Blob = await downloadBlobViaXhr(`${API_BASE}/api/video/stream/${data.uploadId}`, token);
       const baseName = (asset.file.name || 'video').replace(/\.[^.]+$/, '');
       const convertedFile = new File([mp4Blob], `${baseName}.mp4`, { type: 'video/mp4' });
       const convertedUrl = URL.createObjectURL(convertedFile);
@@ -115,10 +181,10 @@ export const VideoModule: FC<VideoModuleProps> = (props) => {
         URL.revokeObjectURL(asset.url);
       }
       props.onVideoAssetChange({ id: nextId, file: convertedFile, url: convertedUrl });
-      toast.success('Video converted to H.264 and ready!');
+      toast.success('Video optimized and ready!');
     } catch (err: any) {
       console.error('Auto H.264 preview conversion failed:', err);
-      setConversionError(err?.message || 'This phone video codec (HEVC/HDR) could not be played. Try a standard MP4 (H.264) video.');
+      setConversionError(err?.message || 'This phone video codec could not be converted. Please try again.');
     } finally {
       setIsConvertingVideo(false);
     }
