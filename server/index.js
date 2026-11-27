@@ -43,6 +43,7 @@ import {
     sendAdminSubscriptionCancelledAlert,
     sendBonusCreditsEmail,
     sendNewsletterWelcomeEmail,
+    sendOpenRouterLowBalanceAlert,
     sendClipsReadyEmail,
     sendAffiliateCommissionEmail,
 } from './emailService.js';
@@ -4142,6 +4143,85 @@ async function start() {
     // Run 7-day temporary work cleanup on startup and every hour
     cleanupExpiredUserWork();
     setInterval(cleanupExpiredUserWork, 60 * 60 * 1000);
+
+    // Monitor OpenRouter balance on startup and every 15 minutes (alerts when < $2.00)
+    checkOpenRouterLowBalance();
+    setInterval(checkOpenRouterLowBalance, 15 * 60 * 1000);
 }
+
+const OPENROUTER_LOW_BALANCE_THRESHOLD_USD = Number(process.env.OPENROUTER_LOW_BALANCE_USD || 2);
+const OPENROUTER_ALERT_COOLDOWN_MS = 6 * 60 * 60 * 1000; // Repeat at most once every 6 hours while still low
+let lastOpenRouterLowAlertAt = 0;
+
+async function fetchOpenRouterBalance() {
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) {
+        return { configured: false, error: 'OPENROUTER_API_KEY is not configured' };
+    }
+    const headers = { Authorization: `Bearer ${apiKey}` };
+    const [creditsResp, keyResp] = await Promise.all([
+        fetch('https://openrouter.ai/api/v1/credits', { headers }),
+        fetch('https://openrouter.ai/api/v1/auth/key', { headers }).catch(() => null),
+    ]);
+    if (!creditsResp.ok) {
+        throw new Error(`OpenRouter credits API returned ${creditsResp.status}`);
+    }
+    const creditsJson = await creditsResp.json();
+    const totalCreditsUsd = Number(creditsJson?.data?.total_credits || 0);
+    const totalUsageUsd = Number(creditsJson?.data?.total_usage || 0);
+    const remainingUsd = Math.max(0, Number((totalCreditsUsd - totalUsageUsd).toFixed(4)));
+
+    let dailyUsageUsd = 0;
+    let keyTotalUsageUsd = 0;
+    if (keyResp && keyResp.ok) {
+        const keyJson = await keyResp.json().catch(() => ({}));
+        dailyUsageUsd = Number(keyJson?.data?.usage_daily || 0);
+        keyTotalUsageUsd = Number(keyJson?.data?.usage || 0);
+    }
+
+    return {
+        configured: true,
+        remainingUsd,
+        totalCreditsUsd,
+        totalUsageUsd,
+        dailyUsageUsd,
+        keyTotalUsageUsd,
+        thresholdUsd: OPENROUTER_LOW_BALANCE_THRESHOLD_USD,
+        isLow: remainingUsd < OPENROUTER_LOW_BALANCE_THRESHOLD_USD,
+        checkedAt: new Date().toISOString(),
+    };
+}
+
+async function checkOpenRouterLowBalance() {
+    try {
+        const info = await fetchOpenRouterBalance();
+        if (!info.configured) return;
+
+        if (info.remainingUsd < info.thresholdUsd) {
+            const now = Date.now();
+            if (now - lastOpenRouterLowAlertAt >= OPENROUTER_ALERT_COOLDOWN_MS) {
+                lastOpenRouterLowAlertAt = now;
+                console.warn(
+                    `⚠️ OpenRouter balance low: $${info.remainingUsd.toFixed(2)} (threshold $${info.thresholdUsd.toFixed(2)}). Sending alert email...`
+                );
+                await sendOpenRouterLowBalanceAlert(info);
+            }
+        } else {
+            // Reset cooldown once topped up above threshold
+            lastOpenRouterLowAlertAt = 0;
+        }
+    } catch (err) {
+        console.warn('OpenRouter balance check failed:', err?.message || err);
+    }
+}
+
+app.get('/api/admin/openrouter-balance', requireAdmin, async (_req, res) => {
+    try {
+        const info = await fetchOpenRouterBalance();
+        return res.json(info);
+    } catch (err) {
+        return res.status(500).json({ error: err?.message || 'Failed to check OpenRouter balance' });
+    }
+});
 
 start();

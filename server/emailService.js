@@ -343,3 +343,52 @@ export function sendAffiliateCommissionEmail({ toEmail, planName, saleAmountCent
         }),
     });
 }
+
+export async function sendOpenRouterLowBalanceAlert({
+    remainingUsd,
+    totalCreditsUsd,
+    totalUsageUsd,
+    dailyUsageUsd,
+    thresholdUsd = 2,
+}) {
+    const remaining = `$${Number(remainingUsd || 0).toFixed(2)}`;
+    const totalCredits = `$${Number(totalCreditsUsd || 0).toFixed(2)}`;
+    const totalUsage = `$${Number(totalUsageUsd || 0).toFixed(2)}`;
+    const dailyUsage = `$${Number(dailyUsageUsd || 0).toFixed(2)}`;
+    const threshold = `$${Number(thresholdUsd || 2).toFixed(2)}`;
+
+    const recipients = Array.from(
+        new Set([ADMIN_EMAIL(), 'sarcharo@gmail.com'].filter(Boolean).map((e) => e.trim().toLowerCase()))
+    );
+
+    const html = wrapEmailHtml({
+        title: `⚠️ Low OpenRouter Balance: ${remaining}`,
+        preheader: `Crevo AI OpenRouter balance dropped below ${threshold}. Add credits soon so AI generations keep running.`,
+        bodyHtml: `
+            <p>Your <strong>OpenRouter API balance</strong> powering <strong>Crevo AI</strong> has dropped below your <strong>${threshold}</strong> alert threshold.</p>
+            <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:16px;margin:16px 0;">
+                <div style="font-size:13px;color:#991b1b;font-weight:700;">Remaining OpenRouter Balance</div>
+                <div style="font-size:28px;font-weight:900;color:#dc2626;margin:4px 0 10px;">${remaining}</div>
+                <div style="font-size:13px;color:#4b5563;line-height:1.6;">
+                    Today's Crevo AI spend: <strong>${dailyUsage}</strong><br />
+                    Total credits purchased: <strong>${totalCredits}</strong> · Total used: <strong>${totalUsage}</strong>
+                </div>
+            </div>
+            <p style="font-size:13px;color:#6b7280;">Top up your OpenRouter account so Thumbnail Studio, Smart Resize, and Viral Clips never pause for your users.</p>
+        `,
+        ctaLabel: 'Add OpenRouter Credits →',
+        ctaUrl: 'https://openrouter.ai/settings/credits',
+    });
+
+    const results = [];
+    for (const to of recipients) {
+        results.push(
+            await sendEmail({
+                to,
+                subject: `⚠️ Crevo AI Alert: OpenRouter balance is ${remaining} (below ${threshold})`,
+                html,
+            })
+        );
+    }
+    return results;
+}
