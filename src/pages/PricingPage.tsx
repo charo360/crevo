@@ -73,27 +73,27 @@ export const PricingPage: FC = () => {
     const pricingFaqs = [
         {
             question: 'How do credits work?',
-            answer: 'Credits are used to generate designs and use premium features. Each thumbnail costs 1 credit, content repurposing costs 5 credits, and video generation costs 10 credits. Credits never expire, so you can use them at your own pace.'
+            answer: 'Credits power all AI features in Crevo Studio: generating a thumbnail costs 2 credits, Smart Resize or Face Extraction costs 1 credit, and Viral 1080p Clips cost 1 credit per clip (e.g., 3 clips = 3 credits). One-time Pay As You Go credits never expire.'
         },
         {
             question: 'Do credits expire?',
-            answer: 'No! Credits never expire. Buy them once and use them whenever you need. There\'s no rush or pressure to use them within a certain timeframe.'
+            answer: 'One-time Pay As You Go credits never expire — buy them once and use them whenever you need. Monthly Pro and Enterprise plans refresh your balance with new credits every billing cycle, and you can cancel anytime in one click.'
         },
         {
             question: 'What happens when I run out of credits?',
-            answer: 'You can purchase additional credit packs anytime. We\'ll notify you when your balance is low so you can top up before running out.'
+            answer: 'You can top up with a $9 Pay As You Go pack or upgrade to Pro/Enterprise anytime directly from your dashboard or the out-of-credits popup.'
         },
         {
             question: 'Are there any hidden fees?',
-            answer: 'No hidden fees. The price you see is what you pay. One-time purchase, no subscriptions, no monthly charges.'
+            answer: 'No hidden fees. Pay As You Go ($9) is a one-time purchase with no recurring charges, and Pro ($29/mo) / Enterprise ($99/mo) can be cancelled anytime in 1 click from your billing portal.'
         },
         {
             question: 'Can I get a refund?',
-            answer: 'Yes! We offer a 30-day money-back guarantee on all credit pack purchases. If you\'re not satisfied, contact us for a full refund.'
+            answer: 'Yes! We offer a 14-day money-back guarantee on unused credit purchases. If you run into any issue, email sam@crevo.app and our team will help right away.'
         },
         {
             question: 'Can I use designs commercially?',
-            answer: 'Absolutely! All designs generated with Crevo can be used commercially. No additional licenses needed.'
+            answer: 'Absolutely! All thumbnails, resized images, and clips generated with Crevo can be used commercially on YouTube, TikTok, Instagram, and client channels with no watermarks.'
         }
     ];
 
@@ -104,7 +104,7 @@ export const PricingPage: FC = () => {
                 <section className="pricing-hero">
                     <div className="pricing-hero-container">
                         <h1>The Perfect Plan for Every Creator</h1>
-                        <p>Buy credits once, use them anytime. No subscriptions, no monthly fees. Start free, scale as you grow.</p>
+                        <p>Start free with 6 credits. Buy one-time credit packs that never expire, or subscribe monthly for the lowest cost per credit.</p>
                     </div>
                 </section>
 
@@ -117,23 +117,23 @@ export const PricingPage: FC = () => {
                             <div className="comparison-header">
                                 <div className="comparison-feature">Features</div>
                                 <div className="comparison-plan">Free Starter</div>
-                                <div className="comparison-plan">Starter Pack</div>
-                                <div className="comparison-plan">Pro Pack</div>
-                                <div className="comparison-plan">Enterprise Pack</div>
+                                <div className="comparison-plan">Pay As You Go</div>
+                                <div className="comparison-plan">Pro Plan</div>
+                                <div className="comparison-plan">Enterprise Plan</div>
                             </div>
                             <div className="comparison-row">
                                 <div className="comparison-feature">Credits</div>
-                                <div className="comparison-plan">10</div>
-                                <div className="comparison-plan">50</div>
-                                <div className="comparison-plan">200</div>
-                                <div className="comparison-plan">1000</div>
+                                <div className="comparison-plan">6</div>
+                                <div className="comparison-plan">35 (one-time)</div>
+                                <div className="comparison-plan">200 / mo</div>
+                                <div className="comparison-plan">1,000 / mo</div>
                             </div>
                             <div className="comparison-row">
                                 <div className="comparison-feature">Price</div>
                                 <div className="comparison-plan">Free</div>
-                                <div className="comparison-plan">$9</div>
-                                <div className="comparison-plan">$29</div>
-                                <div className="comparison-plan">$99</div>
+                                <div className="comparison-plan">$9 one-time</div>
+                                <div className="comparison-plan">$29 / mo</div>
+                                <div className="comparison-plan">$99 / mo</div>
                             </div>
                             <div className="comparison-row">
                                 <div className="comparison-feature">AI Magic Studio</div>

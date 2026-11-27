@@ -10,14 +10,19 @@ export const Navbar: FC = () => {
     const dropdownRef = useRef<HTMLDivElement>(null);
     const toolsDropdownRef = useRef<HTMLDivElement>(null);
 
-    // Close dropdown when clicking outside on mobile
+    // Close dropdowns when clicking outside on mobile
     useEffect(() => {
-        if (!platformsDropdownOpen) return;
+        if (!platformsDropdownOpen && !toolsDropdownOpen) return;
 
         const handleClickOutside = (event: MouseEvent | TouchEvent) => {
             const target = event.target as HTMLElement;
-            if (window.innerWidth < 769 && dropdownRef.current && !dropdownRef.current.contains(target)) {
-                setPlatformsDropdownOpen(false);
+            if (window.innerWidth < 769) {
+                if (platformsDropdownOpen && dropdownRef.current && !dropdownRef.current.contains(target)) {
+                    setPlatformsDropdownOpen(false);
+                }
+                if (toolsDropdownOpen && toolsDropdownRef.current && !toolsDropdownRef.current.contains(target)) {
+                    setToolsDropdownOpen(false);
+                }
             }
         };
 
@@ -31,7 +36,7 @@ export const Navbar: FC = () => {
             document.removeEventListener('mousedown', handleClickOutside);
             document.removeEventListener('touchstart', handleClickOutside);
         };
-    }, [platformsDropdownOpen]);
+    }, [platformsDropdownOpen, toolsDropdownOpen]);
 
     const handlePlatformsToggle = (e: React.MouseEvent) => {
         e.preventDefault();
@@ -183,6 +188,7 @@ export const Navbar: FC = () => {
                         setMobileMenuOpen(!mobileMenuOpen);
                         if (!mobileMenuOpen) {
                             setPlatformsDropdownOpen(false);
+                            setToolsDropdownOpen(false);
                         }
                     }}
                     aria-label="Toggle menu"

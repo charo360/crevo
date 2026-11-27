@@ -19,8 +19,8 @@ export const Features: FC = () => {
         },
         {
             icon: '📊',
-            title: 'Multiple Variations Instantly',
-            description: 'Generate 10+ thumbnail variations in seconds. Test different styles, colors, and layouts to find what works best.'
+            title: 'YouTube URL to 1080p Viral Clips',
+            description: 'Paste any YouTube link or upload a long video. AI finds peak viral moments, cuts 1080p vertical Shorts with burned-in captions, and generates matching cover thumbnails in 1 click.'
         },
         {
             icon: '🎨',

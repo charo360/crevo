@@ -40,7 +40,7 @@ export const PlatformShowcase: FC = () => {
             name: 'YouTube Thumbnails',
             icon: <YouTubeIcon />,
             description: 'Create thumbnails that drive clicks and boost CTR. Generate new thumbnails from your video or enhance existing ones with AI-powered optimization.',
-            features: ['Create thumbnails from scratch', 'Enhance existing thumbnails', 'Generate from video frames', '10+ variations instantly'],
+            features: ['Create thumbnails from scratch', 'Enhance existing thumbnails', 'Generate from video frames', 'AI CTR scoring & hook titles'],
             cta: 'Create YouTube Thumbnails',
             color: '#FF0000'
         },

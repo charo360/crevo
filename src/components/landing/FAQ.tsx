@@ -1,4 +1,5 @@
 import React, { FC, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 interface FAQItem {
     question: string;
@@ -11,35 +12,35 @@ export const FAQ: FC = () => {
     const faqs: FAQItem[] = [
         {
             question: "What platforms does Crevo support?",
-            answer: "Crevo supports YouTube (thumbnail improvement and generation), Podcast covers, TikTok/Social media verticals, Twitter cards, and content repurposing across multiple platforms. Each design is optimized for its specific platform format."
+            answer: "Crevo supports YouTube thumbnails (16:9), TikTok & YouTube Shorts (9:16), Podcast covers (1:1), Instagram Portrait (4:5), X/Twitter cards, and 1080p viral video clip repurposing directly from YouTube links or uploaded videos."
         },
         {
-            question: "Do I need design skills to use Crevo?",
-            answer: "Not at all! Crevo is built for creators of all skill levels. Simply describe what you want, or use our AI assistant to help guide you. The AI handles all the design work, from composition to color selection."
+            question: "Do I need design or video editing skills?",
+            answer: "Not at all! Crevo is built for creators of all skill levels. Upload a photo or paste a YouTube link, pick your style, and our AI handles composition, captions, CTR scoring, and resizing automatically — with a built-in Help Guide whenever you need a tip."
         },
         {
-            question: "Can I edit the generated designs?",
-            answer: "Yes! Every generated design opens in our full-featured editor where you can adjust text, colors, positions, add elements, and more. You can also use our AI Magic Studio to make further AI-powered edits."
+            question: "Can I edit and resize the generated designs?",
+            answer: "Yes! Every generated design includes 1-click Smart Resize (16:9, 9:16, 1:1, 4:5), AI Magic Studio editing to paint and refine details, HD Upscaling, and a full interactive editor."
         },
         {
-            question: "How many designs can I create per month?",
-            answer: "This depends on your plan. Starter plans include 50 designs/month, Pro plans include 200/month, and Enterprise plans have unlimited designs. Check our pricing page for detailed plan information."
+            question: "How do credits and plans work?",
+            answer: "Every new account starts with 6 free credits. You can top up anytime with a $9 Pay As You Go pack (35 credits that never expire), or subscribe to Pro ($29/mo for 200 credits) or Enterprise ($99/mo for 1,000 credits)."
         },
         {
-            question: "Can I use generated designs commercially?",
-            answer: "Yes! All designs generated with Crevo are yours to use for commercial purposes. There are no watermarks, and you have full rights to the designs you create."
+            question: "Can I use generated designs and clips commercially?",
+            answer: "Yes! All thumbnails, resized images, and 1080p video clips created with Crevo are 100% watermark-free and yours to use commercially on your own or client channels."
         },
         {
-            question: "What file formats are supported?",
-            answer: "You can export designs in PNG format at various resolutions. High-resolution exports are available for Pro and Enterprise plans. All designs are optimized for web and print use."
+            question: "What file formats and resolutions are supported?",
+            answer: "Thumbnails export as crisp high-resolution PNGs, and repurposed clips render in Full HD 1080p MP4 with burned-in social captions — ready to upload directly to YouTube, TikTok, and Instagram."
         },
         {
             question: "Is there a free trial?",
-            answer: "Yes! You can start creating for free. Our free tier includes limited designs so you can try all features before committing to a paid plan."
+            answer: "Yes! Sign up with 1-click Google Sign-In (no credit card required) to get 6 free starter credits — enough to test viral clips, thumbnails, and Smart Resize right away."
         },
         {
-            question: "How does the AI understand what makes a design good?",
-            answer: "Our AI is trained on millions of successful designs across all platforms. It understands platform-specific requirements, color theory, composition, typography, and what drives engagement on each platform."
+            question: "How does the 30% Affiliate Program work?",
+            answer: "Share your personal referral link from the Affiliates page and earn 30% recurring commission for 12 months on every paying creator you refer, with automatic end-of-month payouts via PayPal, Wise, or Bank Transfer."
         }
     ];
 
@@ -82,7 +83,7 @@ export const FAQ: FC = () => {
                 </div>
                 <div className="faq-cta">
                     <p>Still have questions? We're here to help.</p>
-                    <a href="/contact" className="cta-button secondary">Contact Support</a>
+                    <Link to="/contact" className="cta-button secondary">Contact Support</Link>
                 </div>
             </div>
         </section>

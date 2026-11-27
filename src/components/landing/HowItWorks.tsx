@@ -47,8 +47,8 @@ export const HowItWorks: FC = () => {
         },
         {
             number: '03',
-            title: 'Generate Thumbnail Variations',
-            description: 'Get 10+ thumbnail variations in seconds. Each optimized for clicks and engagement. Use our editor to fine-tune or generate more variations.',
+            title: 'Generate High-CTR Designs & Clips',
+            description: 'Get studio-grade thumbnail variations with CTR scorecards or 1080p vertical viral clips with captions in seconds. Fine-tune or resize for any platform in 1 click.',
             icon: <SparklesIcon />
         },
         {

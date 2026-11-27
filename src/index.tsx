@@ -78,6 +78,7 @@ root.render(
     <ErrorBoundary>
         <AppRouter />
         <ToastContainer
+            aria-label="Notifications"
             position="top-right"
             autoClose={5000}
             hideProgressBar={false}

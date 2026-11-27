@@ -55,13 +55,13 @@ export const ProductShowcase: FC = () => {
             link: '/features#enhance-thumbnails'
         },
         {
-            title: 'Thumbnail Variations',
-            subtitle: 'multiple options',
-            description: 'Generate 10+ thumbnail variations instantly. Test different styles, compositions, and colors to find what drives the most clicks.',
+            title: 'Viral 1080p Short Clips',
+            subtitle: 'YouTube URL or upload',
+            description: 'Paste any YouTube link or upload long videos to cut 1080p vertical Shorts, TikToks & Reels with burned-in captions — then generate a matching Cover Thumbnail in 1 click.',
             icon: <VariationsIcon />,
             color: '#ff6b6b',
-            cta: 'Explore Variations',
-            link: '/features#variations'
+            cta: 'Explore Clips',
+            link: '/platforms/repurpose'
         },
         {
             title: 'Platform Optimization',

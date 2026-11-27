@@ -40,10 +40,10 @@ export default defineConfig(({ mode }) => {
               'supabase-vendor': ['@supabase/supabase-js'],
               'ai-vendor': ['@google/genai'],
             },
-            // Optimize chunk size
-            chunkSizeWarningLimit: 1000,
           },
         },
+        // Optimize chunk size warning threshold
+        chunkSizeWarningLimit: 1000,
         // Enable source maps for production debugging (optional)
         sourcemap: false,
         // Optimize asset handling

@@ -26,8 +26,14 @@ const ROUTE_SEO: Record<string, SEOConfig> = {
     '/pricing': {
         title: 'Pricing — Flexible Credit Packs for Creators & Teams | Crevo',
         description:
-            'Simple, transparent Crevo pricing. Start free and pay only for the AI thumbnails and viral short clips you generate — no hidden fees.',
+            'Simple, transparent Crevo pricing. Start free with 6 credits, buy one-time packs that never expire, or subscribe monthly for maximum savings.',
         path: '/pricing',
+    },
+    '/affiliates': {
+        title: 'Affiliate Program — Earn 30% Recurring Commission | Crevo AI',
+        description:
+            'Join the Crevo AI Affiliate Program and earn 30% recurring commission for 12 months on every paying creator you refer. Automatic monthly payouts.',
+        path: '/affiliates',
     },
     '/business': {
         title: 'Crevo for Teams & Agencies — Scale Thumbnails & Short-Form Video',

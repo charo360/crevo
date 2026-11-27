@@ -1,7 +1,7 @@
 {
-  "name": "copy-of-empty",
+  "name": "crevo-ai",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "concurrently -n API,WEB -c cyan,green \"npm run server\" \"npm run dev:web\"",
