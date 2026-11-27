@@ -48,8 +48,10 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated, 
     const [progressStatus, setProgressStatus] = useState('Starting...');
     const [results, setResults] = useState<RepurposeResult | null>(null);
     const [recuttingClipId, setRecuttingClipId] = useState<string | null>(null);
+    const [recutCounts, setRecutCounts] = useState<Record<string, number>>({});
     const [analyzingThumbClipId, setAnalyzingThumbClipId] = useState<string | null>(null);
     const [clipTrims, setClipTrims] = useState<Record<string, { start: number; end: number }>>({});
+    const MAX_FREE_RECUTS_PER_CLIP = 3;
     
     const [options, setOptions] = useState<ClipGenerationOptions>({
         min_duration: 15,
@@ -87,9 +89,31 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated, 
             toast.error('Clip must be at least 2 seconds long.');
             return;
         }
+
+        const usedRecuts = recutCounts[clip.id] || 0;
+        const requiresCredit = usedRecuts >= MAX_FREE_RECUTS_PER_CLIP;
+        if (requiresCredit) {
+            if (!user) {
+                toast.error('Please sign in to continue re-cutting clips.');
+                return;
+            }
+            const { hasEnoughCredits } = await import('../../../services/payments/creditService');
+            const ok = await hasEnoughCredits(user.id, 1);
+            if (!ok) {
+                toast.error('You used all 3 free re-cuts for this clip. You need 1 credit for additional re-cuts.');
+                return;
+            }
+        }
+
         setRecuttingClipId(clip.id);
         try {
             const updated = await recutViralClip(videoFile, clip, trim.start, trim.end, options);
+            setRecutCounts((prev) => ({ ...prev, [clip.id]: (prev[clip.id] || 0) + 1 }));
+            if (requiresCredit && user) {
+                const { deductCredits } = await import('../../../services/payments/creditService');
+                await deductCredits(user.id, 'Clip Re-cut', 1, { feature: 'content_repurpose_recut' });
+                await refreshCredits();
+            }
             setResults((prev) =>
                 prev
                     ? {
@@ -190,8 +214,18 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated, 
         try {
             let pickedImages: string[] = [];
 
-            // 1. Scan 6 evenly spaced frames across the clip (skipping fade-in/out) & let AI pick the sharpest face/reaction shots
-            if (clip.clip_url) {
+            // 1. Only run AI best-shot vision scan if user has enough credits to generate a thumbnail (prevents 0-credit API abuse)
+            let canRunAiScan = false;
+            if (user) {
+                try {
+                    const { hasEnoughCredits, CREDIT_COSTS } = await import('../../../services/payments/creditService');
+                    canRunAiScan = await hasEnoughCredits(user.id, CREDIT_COSTS.DESIGN_PER_VARIATION);
+                } catch {
+                    canRunAiScan = false;
+                }
+            }
+
+            if (canRunAiScan && clip.clip_url) {
                 try {
                     const dur = Math.max(2, Number(clip.duration) || 15);
                     const safeStart = dur > 3 ? 1.0 : 0.2;
@@ -1025,7 +1059,11 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated, 
                                                                 opacity: busy ? 0.7 : 1,
                                                             }}
                                                         >
-                                                            {busy ? 'Re-cutting...' : '✂️ Apply Trim & Re-cut (Free)'}
+                                                            {busy
+                                                                ? 'Re-cutting...'
+                                                                : (recutCounts[clip.id] || 0) < MAX_FREE_RECUTS_PER_CLIP
+                                                                  ? `✂️ Apply Trim & Re-cut (Free · ${MAX_FREE_RECUTS_PER_CLIP - (recutCounts[clip.id] || 0)} left)`
+                                                                  : '✂️ Apply Trim & Re-cut (1 Credit)'}
                                                         </button>
                                                     </div>
                                                 );
