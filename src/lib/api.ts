@@ -42,22 +42,45 @@ export async function apiRequest<T = any>(
         headers.set('X-Client-FP', deviceFp);
     }
 
-    const response = await fetch(`${API_BASE}${path}`, {
-        ...options,
-        headers,
-    });
+    let response: Response;
+    let lastFetchErr: any = null;
+    const maxAttempts = path === '/api/ai/generate' || !options.method || options.method.toUpperCase() === 'GET' ? 3 : 2;
 
-    const contentType = response.headers.get('content-type') || '';
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            response = await fetch(`${API_BASE}${path}`, {
+                ...options,
+                headers,
+            });
+            lastFetchErr = null;
+            break;
+        } catch (fetchErr: any) {
+            lastFetchErr = fetchErr;
+            if (attempt < maxAttempts) {
+                await new Promise((r) => setTimeout(r, attempt * 900));
+                continue;
+            }
+        }
+    }
+
+    if (lastFetchErr) {
+        const err: ApiError = new Error(
+            'Network connection interrupted while reaching Crevo AI. Please check your signal and try again.'
+        );
+        throw err;
+    }
+
+    const contentType = response!.headers.get('content-type') || '';
     const isJson = contentType.includes('application/json');
-    const data = isJson ? await response.json().catch(() => null) : await response.text().catch(() => '');
+    const data = isJson ? await response!.json().catch(() => null) : await response!.text().catch(() => '');
 
-    if (!response.ok) {
+    if (!response!.ok) {
         const message =
             (data && typeof data === 'object' && (data.error || data.message)) ||
             (typeof data === 'string' && data) ||
-            `Request failed with status ${response.status}`;
+            `Request failed with status ${response!.status}`;
         const err: ApiError = new Error(message);
-        err.status = response.status;
+        err.status = response!.status;
         throw err;
     }
 

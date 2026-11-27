@@ -4,7 +4,13 @@ export const fileToBase64 = (file: File): Promise<{ base64: string, mimeType: st
         reader.readAsDataURL(file);
         reader.onload = () => {
             const result = reader.result as string;
-            resolve({ base64: result.split(',')[1], mimeType: file.type });
+            const match = result.match(/^data:([^;]+);base64,(.+)$/);
+            const detectedMime = (match?.[1] || file.type || 'image/jpeg').toLowerCase();
+            const safeMime =
+                detectedMime === 'image/png' || detectedMime === 'image/webp' || detectedMime === 'image/jpeg'
+                    ? detectedMime
+                    : 'image/jpeg';
+            resolve({ base64: match?.[2] || result.split(',')[1] || '', mimeType: safeMime });
         };
         reader.onerror = error => reject(error);
     });

@@ -689,7 +689,7 @@ ${weaknessesList}
                                 maxRetries: 2,
                                 initialDelayMs: 2000,
                                 retryableErrors: (error: any) =>
-                                    error.status === 429 || (error.status >= 500 && error.status < 600),
+                                    !error?.status || error.status === 429 || (error.status >= 500 && error.status < 600),
                             }
                         ),
                     () =>
@@ -704,7 +704,7 @@ ${weaknessesList}
                                 maxRetries: 2,
                                 initialDelayMs: 2000,
                                 retryableErrors: (error: any) =>
-                                    error.status === 429 || (error.status >= 500 && error.status < 600),
+                                    !error?.status || error.status === 429 || (error.status >= 500 && error.status < 600),
                             }
                         ),
                     'Failed to generate design variation'
