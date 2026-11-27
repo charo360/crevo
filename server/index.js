@@ -1065,17 +1065,6 @@ app.get('/api/repurpose/analyses/:videoId', requireAuth, async (req, res) => {
     }
 });
 
-app.post('/api/repurpose/jobs', requireAuth, async (req, res) => {
-    try {
-        const job = { ...req.body, user_id: req.user.id };
-        await RepurposeJob.create(job);
-        return res.status(201).json({ ok: true });
-    } catch (err) {
-        console.error('Create repurpose job error:', err);
-        return res.status(500).json({ error: err.message });
-    }
-});
-
 app.patch('/api/repurpose/jobs/:id', requireAuth, async (req, res) => {
     try {
         await RepurposeJob.findOneAndUpdate(
@@ -2584,7 +2573,7 @@ app.post('/api/repurpose/jobs', requireAuth, async (req, res) => {
 
         // Pre-check credits on the server so closing the tab can never leak credits
         const userCredits = await UserCredits.findOne({ user_id: req.user.id }).lean();
-        if (!userCredits || Number(userCredits.credits || 0) < creditCost) {
+        if (!userCredits || Number(userCredits.balance || 0) < creditCost) {
             return res.status(402).json({
                 error: `Insufficient credits. You need ${creditCost} credits to generate ${safeSpecs.length} clips.`,
             });
@@ -2715,21 +2704,21 @@ app.post('/api/repurpose/jobs', requireAuth, async (req, res) => {
             // Deduct credits atomically on the server after clips succeed
             const actualCost = finishedClips.length >= 6 ? 5 : 3;
             const updatedCreds = await UserCredits.findOneAndUpdate(
-                { user_id: req.user.id, credits: { $gte: actualCost } },
-                { $inc: { credits: -actualCost, total_credits_used: actualCost } },
+                { user_id: req.user.id, balance: { $gte: actualCost } },
+                { $inc: { balance: -actualCost, total_spent: actualCost } },
                 { returnDocument: 'after' }
             );
             if (updatedCreds) {
                 await CreditTransaction.create({
                     user_id: req.user.id,
-                    type: 'usage',
+                    transaction_type: 'usage',
                     amount: -actualCost,
-                    balance_after: updatedCreds.credits,
                     description: `Content Repurpose (${finishedClips.length} clips)`,
+                    reference_id: jobId,
                 });
                 await CreditUsage.create({
                     user_id: req.user.id,
-                    action: 'Content Repurpose',
+                    action_type: 'Content Repurpose',
                     credits_used: actualCost,
                     metadata: { feature: 'content_repurpose', clipCount: finishedClips.length, jobId },
                 });
