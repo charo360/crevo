@@ -2718,7 +2718,7 @@ app.post('/api/repurpose/jobs', requireAuth, async (req, res) => {
                 });
                 await CreditUsage.create({
                     user_id: req.user.id,
-                    action_type: 'Content Repurpose',
+                    feature_type: 'Content Repurpose',
                     credits_used: actualCost,
                     metadata: { feature: 'content_repurpose', clipCount: finishedClips.length, jobId },
                 });
