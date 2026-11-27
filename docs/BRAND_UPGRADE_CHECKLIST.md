@@ -14,6 +14,6 @@ Saved for review when ready to upgrade `https://crevo.app` to full Series-A / to
 - **Where:** `src/components/landing/Testimonials.tsx`
 - **Status:** Replaced placeholder Unsplash portraits with a live **"Crevo AI vs. OpusClip + Canva"** comparison section. Swap in 3–5 real creator quotes later once early users share feedback.
 
-## 4. Two Quick External Updates (2 Minutes)
-- **Stripe Dashboard → Products:** Update the `$9` Pay As You Go product (`price_1UfkBAELJu3kIHjxxWOcwsh0`) title/description from `"50 credits"` to **`"35 credits"`** so the Stripe Checkout screen matches the site.
-- **Official Social Links:** Once Crevo's official YouTube, TikTok, Instagram, or X accounts are ready, add their URLs to `src/components/landing/Footer.tsx`.
+## 4. Two Quick External Updates (DONE!)
+- **Stripe Dashboard → Products:** Updated `$9` Pay As You Go (`price_1UfkBAELJu3kIHjxxWOcwsh0`) description & metadata to `35 credits`.
+- **Official Social Links:** Added `https://www.youtube.com/@Crevo-AI` to `Footer.tsx` and `index.html` Organization JSON-LD (`sameAs`).
