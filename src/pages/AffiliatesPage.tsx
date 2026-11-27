@@ -272,10 +272,10 @@ export const AffiliatesPage: FC = () => {
                                     }}
                                 >
                                     <h3 style={{ margin: '0 0 6px', fontSize: '16px', fontWeight: 800, color: '#111827' }}>
-                                        Payout Settings ($25 Minimum Monthly Payout)
+                                        Automatic Monthly Payouts ($25 Minimum)
                                     </h3>
-                                    <p style={{ margin: '0 0 14px', fontSize: '13px', color: '#6b7280' }}>
-                                        Commissions clear after a 14-day refund hold and are sent automatically once your ready balance reaches $25.
+                                    <p style={{ margin: '0 0 14px', fontSize: '13px', color: '#6b7280', lineHeight: 1.5 }}>
+                                        <strong>No need to click withdraw.</strong> Simply save your PayPal or Wise email below — once your cleared balance reaches <strong>$25</strong> (after the 14-day refund hold), we automatically send your payout at the end of every month.
                                     </p>
                                     <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
                                         <select
@@ -462,7 +462,7 @@ export const AffiliatesPage: FC = () => {
                     {[
                         { title: '30% for 12 Months', desc: 'Earn 30% on every purchase and renewal a referred user makes during their first 12 months.' },
                         { title: '30-Day Cookie Window', desc: 'Anyone who clicks your link and signs up within 30 days is automatically attributed to you.' },
-                        { title: 'PayPal & Wise Payouts', desc: 'Commissions clear after a 14-day refund hold and pay out monthly at a $25 minimum.' },
+                        { title: 'Automatic End-of-Month Payouts', desc: 'No manual withdrawal needed — save your PayPal or Wise email and we pay out automatically at the end of every month once your cleared balance hits $25 (after a 14-day refund hold).' },
                     ].map((item) => (
                         <div
                             key={item.title}
