@@ -63,6 +63,17 @@ interface AdminRecentActivityRow {
     created_at: string;
 }
 
+interface OpenRouterBalanceInfo {
+    configured: boolean;
+    remainingUsd?: number;
+    totalCreditsUsd?: number;
+    totalUsageUsd?: number;
+    dailyUsageUsd?: number;
+    thresholdUsd?: number;
+    isLow?: boolean;
+    checkedAt?: string;
+}
+
 interface AdminOverviewData {
     summary: {
         total_users: number;
@@ -104,6 +115,7 @@ function formatMoney(cents: number): string {
 
 export const AdminPage: FC = () => {
     const [data, setData] = useState<AdminOverviewData | null>(null);
+    const [openRouterBalance, setOpenRouterBalance] = useState<OpenRouterBalanceInfo | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'users' | 'activity' | 'payments' | 'affiliates' | 'trials' | 'leads' | 'inbox'>('users');
@@ -119,8 +131,12 @@ export const AdminPage: FC = () => {
         setLoading(true);
         setError(null);
         try {
-            const res = await apiRequest<AdminOverviewData>('/api/admin/overview');
+            const [res, orRes] = await Promise.all([
+                apiRequest<AdminOverviewData>('/api/admin/overview'),
+                apiRequest<OpenRouterBalanceInfo>('/api/admin/openrouter-balance').catch(() => null),
+            ]);
             setData(res);
+            if (orRes) setOpenRouterBalance(orRes);
         } catch (err: any) {
             setError(err?.message || 'Unable to load admin dashboard');
         } finally {
@@ -303,6 +319,69 @@ export const AdminPage: FC = () => {
                                     <div style={{ fontSize: '12px', color: '#571c86', fontWeight: 500 }}>{card.sub}</div>
                                 </div>
                             ))}
+
+                            {/* Live OpenRouter API Balance Card */}
+                            {openRouterBalance?.configured && (
+                                <div
+                                    style={{
+                                        background: openRouterBalance.isLow ? '#fef2f2' : '#ffffff',
+                                        border: openRouterBalance.isLow ? '1.5px solid #f87171' : '1px solid #d8ccf0',
+                                        borderRadius: '14px',
+                                        padding: '18px',
+                                        boxShadow: '0 2px 10px rgba(87, 28, 134, 0.05)',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        justifyContent: 'space-between',
+                                    }}
+                                >
+                                    <div>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                                            <span style={{ fontSize: '12px', fontWeight: 700, color: openRouterBalance.isLow ? '#991b1b' : '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                OpenRouter API
+                                            </span>
+                                            <span
+                                                style={{
+                                                    padding: '2px 7px',
+                                                    borderRadius: '999px',
+                                                    fontSize: '10.5px',
+                                                    fontWeight: 800,
+                                                    background: openRouterBalance.isLow ? '#fee2e2' : '#ecfdf5',
+                                                    color: openRouterBalance.isLow ? '#dc2626' : '#059669',
+                                                }}
+                                            >
+                                                {openRouterBalance.isLow ? 'LOW' : 'HEALTHY'}
+                                            </span>
+                                        </div>
+                                        <div
+                                            style={{
+                                                fontSize: '28px',
+                                                fontWeight: 800,
+                                                color: openRouterBalance.isLow ? '#dc2626' : '#111827',
+                                                margin: '6px 0 4px',
+                                            }}
+                                        >
+                                            ${(openRouterBalance.remainingUsd ?? 0).toFixed(2)}
+                                        </div>
+                                        <div style={{ fontSize: '12px', color: '#571c86', fontWeight: 500 }}>
+                                            Today: ${(openRouterBalance.dailyUsageUsd ?? 0).toFixed(2)} · Alert &lt; ${(openRouterBalance.thresholdUsd ?? 2).toFixed(0)}
+                                        </div>
+                                    </div>
+                                    <a
+                                        href="https://openrouter.ai/settings/credits"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        style={{
+                                            marginTop: '8px',
+                                            fontSize: '12px',
+                                            fontWeight: 700,
+                                            color: openRouterBalance.isLow ? '#dc2626' : '#571c86',
+                                            textDecoration: 'none',
+                                        }}
+                                    >
+                                        Add OpenRouter Credits →
+                                    </a>
+                                </div>
+                            )}
                         </div>
 
                         {/* Tabs */}
