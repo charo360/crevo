@@ -5,6 +5,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { performanceMonitor } from './core/infrastructure/performance-monitoring';
 import { AppRoutes } from './routes/app_route';
 import { OutOfCreditsModal } from './components/modals/OutOfCreditsModal';
+import { MobileBottomNav } from './components/layout/MobileBottomNav';
 import { captureReferralFromUrl } from './lib/affiliate';
 
 export const AppRouter: FC = () => {
@@ -22,6 +23,7 @@ export const AppRouter: FC = () => {
             <AuthProvider>
                 <BrowserRouter>
                     <AppRoutes />
+                    <MobileBottomNav />
                     <OutOfCreditsModal />
                 </BrowserRouter>
             </AuthProvider>

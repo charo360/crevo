@@ -173,6 +173,14 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
 
     // Mobile Sidebar State
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [mobileStudioPane, setMobileStudioPane] = useState<'create' | 'results'>('create');
+
+    // Auto-switch to Results pane on mobile when generation starts or finishes
+    useEffect(() => {
+        if (isGenerating) {
+            setMobileStudioPane('results');
+        }
+    }, [isGenerating]);
 
     const ai = useRef<GoogleGenAI>(createAiClient());
     
@@ -829,7 +837,28 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                 </div>
             ) : (
                 /* Design Studio - generates thumbnails and images */
-                <main className="main-content">
+                <>
+                <div className="mobile-studio-switcher" role="tablist" aria-label="Studio view">
+                    <button
+                        type="button"
+                        role="tab"
+                        aria-selected={mobileStudioPane === 'create'}
+                        className={`mobile-studio-tab ${mobileStudioPane === 'create' ? 'active' : ''}`}
+                        onClick={() => setMobileStudioPane('create')}
+                    >
+                        ✏️ Create
+                    </button>
+                    <button
+                        type="button"
+                        role="tab"
+                        aria-selected={mobileStudioPane === 'results'}
+                        className={`mobile-studio-tab ${mobileStudioPane === 'results' ? 'active' : ''}`}
+                        onClick={() => setMobileStudioPane('results')}
+                    >
+                        ✨ Results {results.length > 0 ? `(${results.length})` : ''}
+                    </button>
+                </div>
+                <main className={`main-content ${mobileStudioPane === 'create' ? 'mobile-pane-create' : 'mobile-pane-results'}`}>
                     {/* Credit Management - shown after Twitter Card */}
                     {platform === 'twitter_card' && (
                         <div style={{ padding: '2rem 1rem', maxWidth: '1200px', margin: '0 auto' }}>
@@ -885,6 +914,7 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                         onAssistantToggle={() => setIsAssistantOpen(prev => !prev)}
                     />
                 </main>
+                </>
             )}
             {editorState && (
                 <Editor

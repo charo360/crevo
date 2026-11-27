@@ -3226,3 +3226,159 @@ input[type="color"]::-moz-color-swatch {
         display: none !important;
     }
 }
+/* ==================== MOBILE APP-LIKE EXPERIENCE (PHONES <= 768px ONLY) ==================== */
+
+.mobile-bottom-nav,
+.mobile-studio-switcher {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  /* Frosted-glass bottom app bar like CapCut / TikTok / Canva Mobile */
+  .mobile-bottom-nav {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 950;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-top: 1px solid #e4dcf2;
+    box-shadow: 0 -6px 24px rgba(87, 28, 134, 0.08);
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-around;
+    align-items: center;
+  }
+
+  .mobile-bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    flex: 1;
+    padding: 5px 4px;
+    border-radius: 10px;
+    text-decoration: none;
+    color: #6b7280;
+    font-weight: 600;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+
+  .mobile-bottom-nav-item.active {
+    color: #571c86;
+    background: #f5efff;
+    font-weight: 800;
+  }
+
+  .mobile-bottom-nav-icon {
+    font-size: 19px;
+    line-height: 1.1;
+  }
+
+  .mobile-bottom-nav-label {
+    font-size: 10.5px;
+    line-height: 1.15;
+    letter-spacing: 0.01em;
+  }
+
+  /* Add comfortable bottom clearance so content never hides behind bottom nav */
+  .app-container {
+    padding-bottom: calc(74px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .repurpose-module {
+    padding-bottom: 92px !important;
+  }
+
+  /* Studio Create / Results 2-tab pill bar */
+  .mobile-studio-switcher {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    padding: 8px 12px;
+    background: #ffffff;
+    border-bottom: 1px solid #e4dcf2;
+    position: sticky;
+    top: 0;
+    z-index: 40;
+  }
+
+  .mobile-studio-tab {
+    padding: 9px 12px;
+    border-radius: 10px;
+    border: 1px solid #e4dcf2;
+    background: #faf7ff;
+    color: #4b5563;
+    font-size: 13.5px;
+    font-weight: 700;
+    cursor: pointer;
+    text-align: center;
+  }
+
+  .mobile-studio-tab.active {
+    background: linear-gradient(135deg, #571c86, #7e22ce);
+    color: #ffffff;
+    border-color: transparent;
+    box-shadow: 0 4px 12px rgba(87, 28, 134, 0.22);
+  }
+
+  /* Show Create (Sidebar) full-width inline on mobile when Create tab is active */
+  .main-content.mobile-pane-create {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .main-content.mobile-pane-create .sidebar {
+    position: static !important;
+    transform: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    box-shadow: none !important;
+    border-right: none !important;
+    padding: 12px 12px 96px !important;
+    z-index: 1 !important;
+  }
+
+  .main-content.mobile-pane-create .sidebar-close-btn {
+    display: none !important;
+  }
+
+  .main-content.mobile-pane-create .canvas-area,
+  .main-content.mobile-pane-create .canvas {
+    display: none !important;
+  }
+
+  /* Show Results (Canvas) full-width on mobile when Results tab is active */
+  .main-content.mobile-pane-results {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .main-content.mobile-pane-results .sidebar {
+    display: none !important;
+  }
+
+  .main-content.mobile-pane-results .canvas-area,
+  .main-content.mobile-pane-results .canvas {
+    display: flex !important;
+    width: 100% !important;
+    min-height: calc(100vh - 200px) !important;
+    padding: 12px 12px 96px !important;
+  }
+
+  /* Sticky Generate CTA right above the bottom nav bar on phones */
+  .main-content.mobile-pane-create .generate-btn-wrapper,
+  .main-content.mobile-pane-create .generate-btn {
+    position: sticky;
+    bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+    z-index: 50;
+    box-shadow: 0 8px 24px rgba(87, 28, 134, 0.28);
+  }
+}
