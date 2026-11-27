@@ -6,9 +6,9 @@ Saved for review when ready to upgrade `https://crevo.app` to full Series-A / to
 - **Where:** `src/components/landing/BeforeAfterShowcase.tsx`
 - **Status:** Live interactive drag-to-compare Before/After slider (Tech Review + Podcast Studio) + real Crevo 9:16 vertical Shorts covers in `public/showcase/`.
 
-## 2. 20–30 Second Product Demo Video
-- **Where:** Right below the Hero CTA on the homepage
-- **What to record:** Paste a YouTube link → 1080p viral clips appear → click **Make Cover Thumbnail** → finished thumbnail appears.
+## 2. Product Demo Video (DONE!)
+- **Where:** `src/components/landing/ProductDemo.tsx` (directly below the Hero CTA)
+- **Status:** Embedded both live YouTube walkthroughs (`LEIiq84GFk4` and `jT35GKkwts0`) in a sleek browser mockup player with fast click-to-play facade.
 
 ## 3. Creator Social Proof / Comparison (DONE — Ready for Real Quotes Later)
 - **Where:** `src/components/landing/Testimonials.tsx`

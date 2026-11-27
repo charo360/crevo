@@ -3,6 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Navbar } from '../components/landing/Navbar';
 import { Hero } from '../components/landing/Hero';
+import { ProductDemo } from '../components/landing/ProductDemo';
 import { FreeToolsStrip } from '../components/landing/FreeToolsStrip';
 import { BeforeAfterShowcase } from '../components/landing/BeforeAfterShowcase';
 import { ProductShowcase } from '../components/landing/ProductShowcase';
@@ -29,6 +30,7 @@ export const LandingPage: FC = () => {
         <div className="landing-page">
             <Navbar />
             <Hero />
+            <ProductDemo />
             <FreeToolsStrip />
             <BeforeAfterShowcase />
             <ProductShowcase />
