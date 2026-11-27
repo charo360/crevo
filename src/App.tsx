@@ -117,7 +117,39 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
         }
     });
 
-    const savedLibraryIdsRef = useRef<Set<string>>(new Set());
+    const getLibraryResultKey = (item: DesignResult): string | null => {
+        if (!item.image?.url) return null;
+        return item.image.id || `${item.image.url.slice(0, 80)}_${item.image.url.length}`;
+    };
+
+    const savedLibraryIdsRef = useRef<Set<string>>(
+        (() => {
+            const keys = new Set<string>();
+            try {
+                const stored = sessionStorage.getItem('revo3.savedLibraryIds');
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    if (Array.isArray(parsed)) {
+                        parsed.forEach((k) => typeof k === 'string' && keys.add(k));
+                    }
+                }
+                // Also mark any results already restored from sessionStorage so remounting/tab-switching never re-saves them
+                const restored = sessionStorage.getItem('revo3.latestResults');
+                if (restored) {
+                    const parsedResults: DesignResult[] = JSON.parse(restored);
+                    if (Array.isArray(parsedResults)) {
+                        for (const item of parsedResults) {
+                            const key = item.image?.id || (item.image?.url ? `${item.image.url.slice(0, 80)}_${item.image.url.length}` : null);
+                            if (key) keys.add(key);
+                        }
+                    }
+                }
+            } catch {
+                // Ignore sessionStorage errors
+            }
+            return keys;
+        })()
+    );
 
     useEffect(() => {
         try {
@@ -127,10 +159,12 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
             if (finishedResults.length > 0) {
                 sessionStorage.setItem('revo3.latestResults', JSON.stringify(finishedResults));
                 if (user) {
+                    let addedAny = false;
                     for (const item of finishedResults) {
-                        const key = item.image?.id || item.image?.url?.slice(0, 80);
+                        const key = getLibraryResultKey(item);
                         if (key && item.image?.url?.startsWith('data:image/') && !savedLibraryIdsRef.current.has(key)) {
                             savedLibraryIdsRef.current.add(key);
+                            addedAny = true;
                             saveImageToLibrary({
                                 dataUrl: item.image.url,
                                 type: platform === 'resize' || item.resizedFrom ? 'resize' : 'thumbnail',
@@ -138,6 +172,14 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                                 platform,
                                 aspectRatio: item.resizeSpec?.aspectRatio || PLATFORM_CONFIGS[platform]?.aspectRatio || '',
                             });
+                        }
+                    }
+                    if (addedAny) {
+                        try {
+                            const recentKeys = Array.from(savedLibraryIdsRef.current).slice(-100);
+                            sessionStorage.setItem('revo3.savedLibraryIds', JSON.stringify(recentKeys));
+                        } catch {
+                            // Ignore quota errors
                         }
                     }
                 }
