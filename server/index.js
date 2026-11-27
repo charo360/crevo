@@ -407,7 +407,7 @@ app.post('/api/auth/signup', async (req, res) => {
                 : {}),
         });
 
-        const STARTER_FREE_CREDITS = 10;
+        const STARTER_FREE_CREDITS = 6;
         await UserCredits.create({
             user_id: user._id.toString(),
             balance: STARTER_FREE_CREDITS,
@@ -418,7 +418,7 @@ app.post('/api/auth/signup', async (req, res) => {
             user_id: user._id.toString(),
             amount: STARTER_FREE_CREDITS,
             transaction_type: 'bonus',
-            description: 'Welcome starter credits (10 free credits)',
+            description: 'Welcome starter credits (6 free credits)',
         }).catch(() => {});
 
         const token = signToken(user);
@@ -563,7 +563,7 @@ app.post('/api/auth/google', async (req, res) => {
                     : {}),
             });
 
-            const STARTER_FREE_CREDITS = 10;
+            const STARTER_FREE_CREDITS = 6;
             await UserCredits.create({
                 user_id: user._id.toString(),
                 balance: STARTER_FREE_CREDITS,
@@ -574,7 +574,7 @@ app.post('/api/auth/google', async (req, res) => {
                 user_id: user._id.toString(),
                 amount: STARTER_FREE_CREDITS,
                 transaction_type: 'bonus',
-                description: 'Welcome starter credits (10 free credits)',
+                description: 'Welcome starter credits (6 free credits)',
             }).catch(() => {});
 
             isNewUser = true;

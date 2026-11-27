@@ -61,7 +61,7 @@ export const Hero: FC = () => {
                         gap: '14px',
                     }}
                 >
-                    <span>✓ 10 free credits included</span>
+                    <span>✓ 6 free credits included</span>
                     <span>✓ 1-click Google Sign-In</span>
                     <span>✓ No credit card required</span>
                 </p>

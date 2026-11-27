@@ -30,7 +30,7 @@ const SEO_FAQS = [
     },
     {
         q: 'Can I start using Crevo AI for free?',
-        a: 'Yes! New accounts receive 10 free starter credits (with 1-click Google Sign-In and no credit card required), and our YouTube Transcript & HD Thumbnail Downloader plus 2 AI Smart Resizes are completely free to try with no signup.',
+        a: 'Yes! New accounts receive 6 free starter credits (with 1-click Google Sign-In and no credit card required), and our YouTube Transcript & HD Thumbnail Downloader plus 2 AI Smart Resizes are completely free to try with no signup.',
     },
 ];
 
@@ -403,7 +403,7 @@ export const FeaturesPage: FC = () => {
                                 Every thumbnail, smart resize, and viral video clip is automatically saved privately to your dashboard for 7 days so you never lose a generation.
                             </p>
                             <Link to="/signup" style={{ color: '#571c86', fontWeight: 700, fontSize: '14px', textDecoration: 'none' }}>
-                                Start Free with 10 Credits →
+                                Start Free with 6 Credits →
                             </Link>
                         </div>
                     </div>
@@ -440,7 +440,7 @@ export const FeaturesPage: FC = () => {
                 <section className="features-cta">
                     <div className="features-cta-container">
                         <h2>Ready to Multiply Your Clicks &amp; Views?</h2>
-                        <p>Start free with 10 credits, 1-click Google Sign-In, and no credit card required.</p>
+                        <p>Start free with 6 credits, 1-click Google Sign-In, and no credit card required.</p>
                         <div className="features-cta-buttons">
                             <Link to="/signup" className="cta-button primary">Start Free Now</Link>
                             <Link to="/pricing" className="cta-button secondary">View Pricing</Link>

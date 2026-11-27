@@ -47,10 +47,10 @@ export const Pricing: FC = () => {
             name: 'Free Starter',
             price: '$0',
             period: '',
-            credits: 10,
+            credits: 6,
             description: 'Perfect for trying out Crevo',
             features: [
-                '10 credits',
+                '6 free credits',
                 'All platform types',
                 'Basic AI editing',
                 'Standard resolution',

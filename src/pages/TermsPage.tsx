@@ -22,7 +22,7 @@ export const TermsPage: FC = () => {
                 <section style={{ marginBottom: '24px' }}>
                     <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#111827', marginBottom: '8px' }}>2. Credits, Subscriptions &amp; Billing</h2>
                     <ul style={{ paddingLeft: '20px' }}>
-                        <li>New accounts receive 10 free starter credits to evaluate Crevo AI.</li>
+                        <li>New accounts receive 6 free starter credits to evaluate Crevo AI.</li>
                         <li><strong>Pay As You Go</strong> credit packs are one-time purchases with no recurring charges.</li>
                         <li><strong>Pro</strong> and <strong>Enterprise</strong> plans are billed monthly via Stripe and renew automatically until cancelled.</li>
                         <li>You can manage payment methods or cancel your subscription anytime from <strong>Dashboard → Credits → Manage Subscription</strong>.</li>
