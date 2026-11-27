@@ -47,6 +47,9 @@ export const AffiliatesPage: FC = () => {
     const [payoutMethod, setPayoutMethod] = useState<'paypal' | 'wise'>('paypal');
     const [payoutEmail, setPayoutEmail] = useState('');
     const [payoutName, setPayoutName] = useState('');
+    const [customCode, setCustomCode] = useState('');
+    const [editingCode, setEditingCode] = useState(false);
+    const [savingCode, setSavingCode] = useState(false);
     const [savingPayout, setSavingPayout] = useState(false);
 
     useEffect(() => {
@@ -55,6 +58,7 @@ export const AffiliatesPage: FC = () => {
         apiRequest<AffiliateDashboardData>('/api/affiliates/me')
             .then((res) => {
                 setData(res);
+                setCustomCode(res.affiliateCode || '');
                 setPayoutMethod(res.payoutMethod || 'paypal');
                 setPayoutEmail(res.payoutEmail || user.email || '');
                 setPayoutName(res.payoutName || '');
@@ -72,6 +76,37 @@ export const AffiliatesPage: FC = () => {
             toast.success('Affiliate link copied! Share it anywhere to earn 30% recurring.');
         } catch {
             toast.info(data.referralLink);
+        }
+    };
+
+    const handleSaveCustomCode = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const cleaned = customCode.trim().toUpperCase();
+        if (!/^[A-Z0-9_-]{3,24}$/.test(cleaned)) {
+            toast.error('Use 3–24 letters, numbers, hyphens, or underscores (no spaces).');
+            return;
+        }
+        setSavingCode(true);
+        try {
+            const res = await apiRequest<{ ok: boolean; affiliateCode: string; referralLink: string }>(
+                '/api/affiliates/code',
+                {
+                    method: 'PATCH',
+                    body: JSON.stringify({ code: cleaned }),
+                }
+            );
+            setData((prev) =>
+                prev
+                    ? { ...prev, affiliateCode: res.affiliateCode, referralLink: res.referralLink }
+                    : prev
+            );
+            setCustomCode(res.affiliateCode);
+            setEditingCode(false);
+            toast.success(`Your referral link is now ${res.referralLink}!`);
+        } catch (err: any) {
+            toast.error(err?.message || 'Could not update referral code');
+        } finally {
+            setSavingCode(false);
         }
     };
 
@@ -195,8 +230,29 @@ export const AffiliatesPage: FC = () => {
                                         boxShadow: '0 4px 18px rgba(87, 28, 134, 0.05)',
                                     }}
                                 >
-                                    <div style={{ fontSize: '13px', fontWeight: 800, color: '#571c86', marginBottom: '8px', textTransform: 'uppercase' }}>
-                                        Your Unique Referral Link (30-Day Cookie)
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                                        <div style={{ fontSize: '13px', fontWeight: 800, color: '#571c86', textTransform: 'uppercase' }}>
+                                            Your Unique Referral Link (30-Day Cookie)
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setCustomCode(data.affiliateCode);
+                                                setEditingCode((v) => !v);
+                                            }}
+                                            style={{
+                                                background: 'transparent',
+                                                border: '1px solid #d8ccf0',
+                                                color: '#571c86',
+                                                borderRadius: '8px',
+                                                padding: '4px 10px',
+                                                fontSize: '12px',
+                                                fontWeight: 700,
+                                                cursor: 'pointer',
+                                            }}
+                                        >
+                                            {editingCode ? 'Cancel' : '✏️ Customize Code'}
+                                        </button>
                                     </div>
                                     <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                                         <input
@@ -231,6 +287,56 @@ export const AffiliatesPage: FC = () => {
                                             📋 Copy Link
                                         </button>
                                     </div>
+                                    {editingCode && (
+                                        <form
+                                            onSubmit={handleSaveCustomCode}
+                                            style={{
+                                                marginTop: '12px',
+                                                paddingTop: '12px',
+                                                borderTop: '1px dashed #e4dcf2',
+                                                display: 'flex',
+                                                gap: '8px',
+                                                flexWrap: 'wrap',
+                                                alignItems: 'center',
+                                            }}
+                                        >
+                                            <span style={{ fontSize: '13px', fontWeight: 700, color: '#6b7280' }}>
+                                                crevo.app/?ref=
+                                            </span>
+                                            <input
+                                                type="text"
+                                                value={customCode}
+                                                onChange={(e) => setCustomCode(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''))}
+                                                placeholder="YOURNAME"
+                                                maxLength={24}
+                                                style={{
+                                                    flex: '1 1 160px',
+                                                    padding: '8px 12px',
+                                                    borderRadius: '8px',
+                                                    border: '1px solid #571c86',
+                                                    fontWeight: 800,
+                                                    fontSize: '14px',
+                                                    textTransform: 'uppercase',
+                                                }}
+                                            />
+                                            <button
+                                                type="submit"
+                                                disabled={savingCode}
+                                                style={{
+                                                    padding: '8px 16px',
+                                                    borderRadius: '8px',
+                                                    border: 'none',
+                                                    background: '#571c86',
+                                                    color: '#ffffff',
+                                                    fontWeight: 700,
+                                                    fontSize: '13px',
+                                                    cursor: savingCode ? 'wait' : 'pointer',
+                                                }}
+                                            >
+                                                {savingCode ? 'Saving...' : 'Save Code'}
+                                            </button>
+                                        </form>
+                                    )}
                                 </div>
 
                                 {/* Stats Grid */}

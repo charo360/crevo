@@ -3690,6 +3690,38 @@ app.get('/api/affiliates/me', requireAuth, async (req, res) => {
     }
 });
 
+app.patch('/api/affiliates/code', requireAuth, async (req, res) => {
+    try {
+        const raw = String(req.body?.code || '').trim().toUpperCase();
+        if (!/^[A-Z0-9_-]{3,24}$/.test(raw)) {
+            return res.status(400).json({
+                error: 'Code must be 3–24 characters using only letters, numbers, hyphens, or underscores.',
+            });
+        }
+        const reserved = new Set(['ADMIN', 'SUPPORT', 'CREVO', 'BILLING', 'API', 'LOGIN', 'SIGNUP', 'AFFILIATES']);
+        if (reserved.has(raw)) {
+            return res.status(400).json({ error: 'That code is reserved. Please choose another name.' });
+        }
+        const existing = await User.findOne({ affiliate_code: raw, _id: { $ne: req.user.id } }).select('_id').lean();
+        if (existing) {
+            return res.status(409).json({ error: 'That referral code is already taken. Try adding a number or your channel name.' });
+        }
+        await User.findByIdAndUpdate(req.user.id, { $set: { affiliate_code: raw } });
+        const baseUrl = (process.env.FRONTEND_URL || 'https://crevo.app').replace(/\/$/, '');
+        return res.json({
+            ok: true,
+            affiliateCode: raw,
+            referralLink: `${baseUrl}/?ref=${raw}`,
+        });
+    } catch (err) {
+        if (err?.code === 11000) {
+            return res.status(409).json({ error: 'That referral code is already taken.' });
+        }
+        console.error('Update affiliate code error:', err);
+        return res.status(500).json({ error: 'Failed to update referral code' });
+    }
+});
+
 app.patch('/api/affiliates/payout-settings', requireAuth, async (req, res) => {
     try {
         const method = String(req.body?.payoutMethod || 'paypal').trim().toLowerCase();
