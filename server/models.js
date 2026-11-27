@@ -73,6 +73,11 @@ const userSchema = new mongoose.Schema(
             lowercase: true,
             default: '',
         },
+        affiliate_payout_name: {
+            type: String,
+            trim: true,
+            default: '',
+        },
     },
     {
         timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },

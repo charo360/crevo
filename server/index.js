@@ -3656,6 +3656,7 @@ app.get('/api/affiliates/me', requireAuth, async (req, res) => {
             minPayoutCents: AFFILIATE_MIN_PAYOUT_CENTS,
             payoutMethod: userDoc.affiliate_payout_method || 'paypal',
             payoutEmail: userDoc.affiliate_payout_email || '',
+            payoutName: userDoc.affiliate_payout_name || '',
             stats: {
                 clicks,
                 signups,
@@ -3693,6 +3694,7 @@ app.patch('/api/affiliates/payout-settings', requireAuth, async (req, res) => {
     try {
         const method = String(req.body?.payoutMethod || 'paypal').trim().toLowerCase();
         const payoutEmail = String(req.body?.payoutEmail || '').trim().toLowerCase();
+        const payoutName = String(req.body?.payoutName || '').trim().slice(0, 100);
         if (!['paypal', 'wise'].includes(method)) {
             return res.status(400).json({ error: 'Payout method must be PayPal or Wise' });
         }
@@ -3703,9 +3705,10 @@ app.patch('/api/affiliates/payout-settings', requireAuth, async (req, res) => {
             $set: {
                 affiliate_payout_method: method,
                 affiliate_payout_email: payoutEmail,
+                affiliate_payout_name: payoutName,
             },
         });
-        return res.json({ ok: true, payoutMethod: method, payoutEmail });
+        return res.json({ ok: true, payoutMethod: method, payoutEmail, payoutName });
     } catch (err) {
         console.error('Update affiliate payout settings error:', err);
         return res.status(500).json({ error: 'Failed to save payout settings' });
@@ -3717,7 +3720,7 @@ app.get('/api/admin/affiliates', requireAdmin, async (_req, res) => {
         const nowMs = Date.now();
         const [affiliates, allCommissions, clicksAgg, signupsAgg] = await Promise.all([
             User.find({ affiliate_code: { $exists: true, $ne: '' } })
-                .select('email affiliate_code affiliate_payout_method affiliate_payout_email created_at')
+                .select('email affiliate_code affiliate_payout_method affiliate_payout_email affiliate_payout_name created_at')
                 .lean(),
             AffiliateCommission.find().sort({ created_at: -1 }).limit(300).lean(),
             AffiliateClick.aggregate([{ $group: { _id: '$affiliate_user_id', clicks: { $sum: 1 } } }]),
@@ -3752,6 +3755,7 @@ app.get('/api/admin/affiliates', requireAdmin, async (_req, res) => {
                 return {
                     userId: uid,
                     email: u.email,
+                    payoutName: u.affiliate_payout_name || '',
                     affiliateCode: u.affiliate_code,
                     payoutMethod: u.affiliate_payout_method || 'paypal',
                     payoutEmail: u.affiliate_payout_email || '',

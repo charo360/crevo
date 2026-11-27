@@ -5,6 +5,7 @@ import { apiRequest } from '../../lib/api';
 interface AdminAffiliateRow {
     userId: string;
     email: string;
+    payoutName?: string;
     affiliateCode: string;
     payoutMethod: string;
     payoutEmail: string;
@@ -51,7 +52,8 @@ export const AdminAffiliatesPanel: FC = () => {
     }, []);
 
     const handleMarkPaid = async (row: AdminAffiliateRow) => {
-        if (!window.confirm(`Mark ${fmtUsd(row.payableCents)} as PAID for ${row.email} (${row.payoutMethod.toUpperCase()}: ${row.payoutEmail || 'not set'})?`)) {
+        const displayName = row.payoutName ? `${row.payoutName} (${row.email})` : row.email;
+        if (!window.confirm(`Mark ${fmtUsd(row.payableCents)} as PAID for ${displayName} (${row.payoutMethod.toUpperCase()}: ${row.payoutEmail || 'not set'})?`)) {
             return;
         }
         setPayingUserId(row.userId);
@@ -143,7 +145,16 @@ export const AdminAffiliatesPanel: FC = () => {
                                 const canPay = row.payableCents > 0;
                                 return (
                                     <tr key={row.userId} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                        <td style={{ padding: '10px', fontWeight: 600 }}>{row.email}</td>
+                                        <td style={{ padding: '10px' }}>
+                                            {row.payoutName ? (
+                                                <>
+                                                    <div style={{ fontWeight: 700, color: '#111827' }}>{row.payoutName}</div>
+                                                    <div style={{ fontSize: '11.5px', color: '#6b7280' }}>{row.email}</div>
+                                                </>
+                                            ) : (
+                                                <div style={{ fontWeight: 600 }}>{row.email}</div>
+                                            )}
+                                        </td>
                                         <td style={{ padding: '10px', fontFamily: 'monospace', fontWeight: 700, color: '#571c86' }}>{row.affiliateCode}</td>
                                         <td style={{ padding: '10px' }}>
                                             {row.clicks} / {row.signups} / <strong>{row.salesCount}</strong>

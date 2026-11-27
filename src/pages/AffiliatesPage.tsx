@@ -15,6 +15,7 @@ interface AffiliateDashboardData {
     minPayoutCents: number;
     payoutMethod: 'paypal' | 'wise';
     payoutEmail: string;
+    payoutName?: string;
     stats: {
         clicks: number;
         signups: number;
@@ -45,6 +46,7 @@ export const AffiliatesPage: FC = () => {
     const [loading, setLoading] = useState(false);
     const [payoutMethod, setPayoutMethod] = useState<'paypal' | 'wise'>('paypal');
     const [payoutEmail, setPayoutEmail] = useState('');
+    const [payoutName, setPayoutName] = useState('');
     const [savingPayout, setSavingPayout] = useState(false);
 
     useEffect(() => {
@@ -55,6 +57,7 @@ export const AffiliatesPage: FC = () => {
                 setData(res);
                 setPayoutMethod(res.payoutMethod || 'paypal');
                 setPayoutEmail(res.payoutEmail || user.email || '');
+                setPayoutName(res.payoutName || '');
             })
             .catch((err) => {
                 toast.error(err?.message || 'Could not load affiliate dashboard');
@@ -82,7 +85,11 @@ export const AffiliatesPage: FC = () => {
         try {
             await apiRequest('/api/affiliates/payout-settings', {
                 method: 'PATCH',
-                body: JSON.stringify({ payoutMethod, payoutEmail: payoutEmail.trim() }),
+                body: JSON.stringify({
+                    payoutMethod,
+                    payoutEmail: payoutEmail.trim(),
+                    payoutName: payoutName.trim(),
+                }),
             });
             toast.success('Payout settings saved!');
         } catch (err: any) {
@@ -278,6 +285,20 @@ export const AffiliatesPage: FC = () => {
                                         <strong>No need to click withdraw.</strong> Simply save your PayPal or Wise email below — once your cleared balance reaches <strong>$25</strong> (after the 14-day refund hold), we automatically send your payout at the end of every month.
                                     </p>
                                     <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                        <input
+                                            type="text"
+                                            value={payoutName}
+                                            onChange={(e) => setPayoutName(e.target.value)}
+                                            placeholder="Your full name"
+                                            required
+                                            style={{
+                                                flex: '1 1 190px',
+                                                padding: '10px 12px',
+                                                borderRadius: '9px',
+                                                border: '1px solid #d1d5db',
+                                                fontSize: '14px',
+                                            }}
+                                        />
                                         <select
                                             value={payoutMethod}
                                             onChange={(e) => setPayoutMethod(e.target.value as 'paypal' | 'wise')}
