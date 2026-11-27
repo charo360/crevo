@@ -258,6 +258,11 @@ app.get('/api/health', (_req, res) => {
     res.json({
         ok: mongoose.connection.readyState === 1,
         database: states[mongoose.connection.readyState] || 'unknown',
+        videoQueue: {
+            active: activeVideoJobs,
+            queued: videoJobQueue.length,
+            maxConcurrent: MAX_CONCURRENT_VIDEO_JOBS,
+        },
     });
 });
 
@@ -1429,6 +1434,47 @@ const VIDEO_TMP_DIR = path.join(os.tmpdir(), 'revo3-videos');
 const MAX_VIDEO_UPLOAD_BYTES = 5 * 1024 * 1024 * 1024; // 5 GB
 const VIDEO_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
+// Auto-scaling FFmpeg / yt-dlp concurrency queue so traffic spikes queue smoothly instead of overloading CPU
+const CPU_CORES = Math.max(1, (os.cpus() || []).length);
+const MAX_CONCURRENT_VIDEO_JOBS = Math.max(
+    2,
+    Math.min(8, Number(process.env.MAX_CONCURRENT_VIDEO_JOBS) || CPU_CORES)
+);
+const FFMPEG_THREADS_PER_JOB = Math.max(1, Math.min(4, Math.ceil(CPU_CORES / 2)));
+const MAX_QUEUED_VIDEO_JOBS = 25;
+let activeVideoJobs = 0;
+const videoJobQueue = [];
+
+function runWithVideoQueue(taskFn) {
+    return new Promise((resolve, reject) => {
+        if (activeVideoJobs >= MAX_CONCURRENT_VIDEO_JOBS && videoJobQueue.length >= MAX_QUEUED_VIDEO_JOBS) {
+            const busyErr = new Error('Video server is currently busy. Please retry in a few seconds.');
+            busyErr.status = 503;
+            return reject(busyErr);
+        }
+
+        const execute = async () => {
+            activeVideoJobs += 1;
+            try {
+                const result = await taskFn();
+                resolve(result);
+            } catch (err) {
+                reject(err);
+            } finally {
+                activeVideoJobs = Math.max(0, activeVideoJobs - 1);
+                const next = videoJobQueue.shift();
+                if (next) next();
+            }
+        };
+
+        if (activeVideoJobs < MAX_CONCURRENT_VIDEO_JOBS) {
+            execute();
+        } else {
+            videoJobQueue.push(execute);
+        }
+    });
+}
+
 function ensureVideoTmpDir() {
     if (!fs.existsSync(VIDEO_TMP_DIR)) {
         fs.mkdirSync(VIDEO_TMP_DIR, { recursive: true });
@@ -1818,10 +1864,12 @@ app.post('/api/video/import-url', requireAuth, async (req, res) => {
             parsedUrl.toString(),
         ];
 
-        const { stdout: ytOut } = await execFileAsync('yt-dlp', ytArgs, {
-            timeout: 180000,
-            maxBuffer: 10 * 1024 * 1024,
-        });
+        const { stdout: ytOut } = await runWithVideoQueue(() =>
+            execFileAsync('yt-dlp', ytArgs, {
+                timeout: 180000,
+                maxBuffer: 10 * 1024 * 1024,
+            })
+        );
 
         if (!fs.existsSync(filePath)) {
             throw new Error('Video could not be downloaded. It may exceed 500MB or be unavailable.');
@@ -2185,6 +2233,7 @@ app.post('/api/video/clip', requireAuth, async (req, res) => {
 
         const args = [
             '-y',
+            '-threads', String(FFMPEG_THREADS_PER_JOB),
             '-ss', start.toFixed(3),
             '-i', inputPath,
             '-t', duration.toFixed(3),
@@ -2206,7 +2255,7 @@ app.post('/api/video/clip', requireAuth, async (req, res) => {
 
         args.push(outputPath);
 
-        await execFileAsync('ffmpeg', args, { maxBuffer: 10 * 1024 * 1024 });
+        await runWithVideoQueue(() => execFileAsync('ffmpeg', args, { maxBuffer: 10 * 1024 * 1024 }));
         const stat = fs.statSync(outputPath);
         res.setHeader('Content-Type', 'video/mp4');
         res.setHeader('Content-Length', String(stat.size));
