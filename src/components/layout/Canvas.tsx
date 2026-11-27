@@ -14,7 +14,6 @@ interface CanvasProps {
     onPreview: (image: ImageAsset) => void;
     onAdapt: (image: ImageAsset, option: ResizeOption) => void;
     onClearCanvas?: () => void;
-    onAssistantToggle: () => void;
 }
 
 export const Canvas: FC<CanvasProps> = ({ 
@@ -27,8 +26,7 @@ export const Canvas: FC<CanvasProps> = ({
     onDownload, 
     onPreview, 
     onAdapt, 
-    onClearCanvas,
-    onAssistantToggle 
+    onClearCanvas
 }) => (
     <main className="canvas-area">
         {isGenerating ? (
@@ -81,8 +79,5 @@ export const Canvas: FC<CanvasProps> = ({
                 <p>Your generated designs will appear here. Configure your options in the sidebar and click "Generate".</p>
             </div>
         )}
-        <button className="assistant-fab" onClick={onAssistantToggle} title="AI Assistant">
-            {ICONS.ASSISTANT}
-        </button>
     </main>
 );

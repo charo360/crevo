@@ -5,14 +5,13 @@ import { createAiClient } from './core/services/ai-providers/openrouterClient';
 import { toast } from 'react-toastify';
 import {
     Platform, ImageAsset, VideoAsset, LogoState, TextState, ColorsState, 
-    PreferencesState, DesignResult, AnalysisResult, AssistantMessage, 
+    PreferencesState, DesignResult, AnalysisResult, 
     EditorState, EditableElement, ImagenAspectRatio, VeoAspectRatio, ResizeOption
 } from './types';
 import { VIBE_STYLES, PLATFORM_CONFIGS } from './constants';
 import { 
     generateDesign, resizeThumbnailForSize, generateImage, editImage, 
-    upscaleImage, analyzeVideoAndSuggestStyles, extractBestFacesFromVideoFrames, 
-    getAssistantResponse 
+    upscaleImage, analyzeVideoAndSuggestStyles, extractBestFacesFromVideoFrames
 } from './core/services/ai-providers/gemini';
 import { extractFramesFromVideo } from './shared/utils/video-utils';
 import { loadPreferences, savePreferences, loadEditorState, saveEditorState, clearEditorState } from './shared/utils/storage-utils';
@@ -164,12 +163,8 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
     const [editorState, setEditorState] = useState<EditorState | null>(null);
     const [previewingImage, setPreviewingImage] = useState<ImageAsset | null>(null);
 
-    // AI Assistant State
+    // Crevo Help Guide State
     const [isAssistantOpen, setIsAssistantOpen] = useState(false);
-    const [isAssistantProcessing, setIsAssistantProcessing] = useState(false);
-    const [assistantMessages, setAssistantMessages] = useState<AssistantMessage[]>([
-        { id: 1, sender: 'ai', text: "Hello! I'm your AI design assistant. How can I help you? You can ask me to change text, colors, or even suggest ideas." }
-    ]);
 
     // Mobile Sidebar State
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -684,92 +679,6 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
         document.body.removeChild(link);
     };
 
-    const handleAssistantSubmit = async (message: string) => {
-        const newUserMessage: AssistantMessage = { id: Date.now(), sender: 'user', text: message };
-        setAssistantMessages(prev => [...prev, newUserMessage]);
-        setIsAssistantProcessing(true);
-    
-        try {
-            const response = await getAssistantResponse(ai.current, message, { text, colors, preferences });
-            
-            let newColors = colors;
-            let shouldRecolor = false;
-    
-            // Apply state changes from AI response
-            if (response.action) {
-                switch (response.action) {
-                    case 'update_text':
-                        setText(prev => ({...prev, [response.payload.field]: response.payload.value}));
-                        break;
-                    case 'update_color':
-                        const updatedSingle = { ...colors, [response.payload.color]: response.payload.value };
-                        setColors(updatedSingle);
-                        newColors = updatedSingle;
-                        shouldRecolor = true;
-                        break;
-                    case 'suggest_colors':
-                        setColors(response.payload.colors);
-                        newColors = response.payload.colors;
-                        shouldRecolor = true;
-                        break;
-                    case 'update_preference':
-                        setPreferences(prev => ({...prev, [response.payload.field]: response.payload.value}));
-                        break;
-                }
-            }
-            
-            const newAiMessage: AssistantMessage = {
-                id: Date.now() + 1,
-                sender: 'ai',
-                text: response.responseMessage,
-                isActionableSuggestion: response.action?.startsWith('suggest_')
-            };
-            setAssistantMessages(prev => [...prev, newAiMessage]);
-    
-            // If a color change was requested and there are designs on screen, recolor them live.
-            if (shouldRecolor && results.length > 0) {
-                setResults(prev => prev.map(r => ({ ...r, isEditing: true })));
-    
-                const recolorPromises = results.map(result => {
-                    if (!result.image) return Promise.resolve(result);
-                    const prompt = `Recolor this entire image to match a new color palette. The new palette is: Primary: ${newColors.primary}, Secondary: ${newColors.secondary}, Accent: ${newColors.accent}, Background: ${newColors.background}. IMPORTANT: Do NOT change the content, subjects, or composition of the image. Only alter the existing colors to match the new palette harmoniously.`;
-                    
-                    return editImage(ai.current, result.image, prompt, null).then(recoloredImage => ({
-                        ...result,
-                        image: recoloredImage,
-                    })).catch(err => {
-                        console.error("Recoloring failed for one image:", err);
-                        toast.warning(`Failed to recolor one image: ${err.message || 'Unknown error'}`);
-                        return { ...result };
-                    });
-                });
-    
-                const newResults = await Promise.all(recolorPromises);
-                setResults(newResults.map(r => ({ ...r, isEditing: false })));
-                toast.success('Designs recolored successfully!');
-    
-                const completionMessage: AssistantMessage = {
-                    id: Date.now() + 2,
-                    sender: 'ai',
-                    text: "All done! How do the new colors look?"
-                };
-                setAssistantMessages(prev => [...prev, completionMessage]);
-            }
-    
-        } catch (e: any) {
-            console.error("Assistant Error:", e);
-            toast.error(`Assistant error: ${e.message || 'Unknown error'}`);
-            const errorAiMessage: AssistantMessage = {
-                id: Date.now() + 1,
-                sender: 'ai',
-                text: "Sorry, I encountered an error. Please try again."
-            };
-            setAssistantMessages(prev => [...prev, errorAiMessage]);
-        } finally {
-            setIsAssistantProcessing(false);
-        }
-    };
-
     return (
         <div className="app-container">
             <Header 
@@ -911,7 +820,6 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                         onPreview={(image) => setPreviewingImage(image)}
                         onAdapt={handleAdaptDesign}
                         onClearCanvas={() => setResults([])}
-                        onAssistantToggle={() => setIsAssistantOpen(prev => !prev)}
                     />
                 </main>
                 </>
@@ -936,11 +844,21 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                     onCancel={() => setPreviewingImage(null)}
                 />
             )}
+            <button
+                type="button"
+                className={`assistant-fab ${isAssistantOpen ? 'open' : ''}`}
+                onClick={() => setIsAssistantOpen(prev => !prev)}
+                title={isAssistantOpen ? 'Close Help Guide' : 'Crevo Help Guide'}
+                aria-label={isAssistantOpen ? 'Close Help Guide' : 'Open Crevo Help Guide'}
+            >
+                {isAssistantOpen ? (
+                    <span className="assistant-fab-glyph">&times;</span>
+                ) : (
+                    <span className="assistant-fab-glyph">?</span>
+                )}
+            </button>
             {isAssistantOpen && (
                 <AssistantPanel
-                    messages={assistantMessages}
-                    isProcessing={isAssistantProcessing}
-                    onSubmit={handleAssistantSubmit}
                     onClose={() => setIsAssistantOpen(false)}
                 />
             )}
