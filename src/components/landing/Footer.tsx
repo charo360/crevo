@@ -44,6 +44,7 @@ export const Footer: FC = () => {
                     <div className="footer-section">
                         <h5 className="footer-heading">Company &amp; Legal</h5>
                         <ul className="footer-links">
+                            <li><Link to="/affiliates">Affiliates (Earn 30%)</Link></li>
                             <li><Link to="/contact">Contact Us</Link></li>
                             <li><a href="/#faq">FAQ</a></li>
                             <li><Link to="/privacy">Privacy Policy</Link></li>

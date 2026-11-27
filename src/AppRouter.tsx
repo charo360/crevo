@@ -5,11 +5,13 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { performanceMonitor } from './core/infrastructure/performance-monitoring';
 import { AppRoutes } from './routes/app_route';
 import { OutOfCreditsModal } from './components/modals/OutOfCreditsModal';
+import { captureReferralFromUrl } from './lib/affiliate';
 
 export const AppRouter: FC = () => {
     React.useEffect(() => {
         // Track route navigation performance
         performanceMonitor.mark('route-render-start');
+        captureReferralFromUrl();
         return () => {
             performanceMonitor.measure('route-render', 'route-render-start');
         };

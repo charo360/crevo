@@ -26,6 +26,8 @@ import {
     NewsletterSubscriber,
     FreeTrialUsage,
     UserWork,
+    AffiliateClick,
+    AffiliateCommission,
 } from './models.js';
 import { signToken, requireAuth } from './authMiddleware.js';
 import jwt from 'jsonwebtoken';
@@ -42,6 +44,7 @@ import {
     sendBonusCreditsEmail,
     sendNewsletterWelcomeEmail,
     sendClipsReadyEmail,
+    sendAffiliateCommissionEmail,
 } from './emailService.js';
 import {
     listMailMessages,
@@ -138,6 +141,14 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
                 });
 
                 const customerEmail = session.customer_details?.email || session.customer_email;
+                if (userId && (session.amount_total || 0) > 0) {
+                    recordAffiliateCommissionForPayment({
+                        buyerUserId: userId,
+                        stripePaymentId: session.id,
+                        amountCents: session.amount_total || 0,
+                        planName,
+                    }).catch(() => {});
+                }
                 if (customerEmail) {
                     sendPaymentReceiptEmail({
                         toEmail: customerEmail,
@@ -196,6 +207,13 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
                         status: 'completed',
                         metadata: { pack_name: packName, mode: 'subscription_renewal' },
                     });
+
+                    recordAffiliateCommissionForPayment({
+                        buyerUserId: userId,
+                        stripePaymentId: invoice.id,
+                        amountCents,
+                        planName,
+                    }).catch(() => {});
 
                     sendPaymentReceiptEmail({
                         toEmail: user.email,
@@ -372,6 +390,7 @@ app.post('/api/auth/signup', async (req, res) => {
             }
         }
 
+        const referrer = await resolveValidReferrer(req.body?.referralCode, normalizedEmail, deviceFingerprint);
         const passwordHash = await bcrypt.hash(password, 10);
         const user = await User.create({
             email: normalizedEmail,
@@ -379,6 +398,13 @@ app.post('/api/auth/signup', async (req, res) => {
             signupIp,
             deviceFingerprint,
             passwordHash,
+            ...(referrer
+                ? {
+                      referred_by_code: referrer.affiliate_code,
+                      referred_by_user_id: referrer._id.toString(),
+                      referred_at: new Date(),
+                  }
+                : {}),
         });
 
         const STARTER_FREE_CREDITS = 10;
@@ -519,6 +545,7 @@ app.post('/api/auth/google', async (req, res) => {
                 }
             }
 
+            const referrer = await resolveValidReferrer(req.body?.referralCode, rawEmail, deviceFingerprint);
             const randomSecret = crypto.randomBytes(32).toString('hex');
             const passwordHash = await bcrypt.hash(randomSecret, 10);
             user = await User.create({
@@ -527,6 +554,13 @@ app.post('/api/auth/google', async (req, res) => {
                 signupIp,
                 deviceFingerprint,
                 passwordHash,
+                ...(referrer
+                    ? {
+                          referred_by_code: referrer.affiliate_code,
+                          referred_by_user_id: referrer._id.toString(),
+                          referred_at: new Date(),
+                      }
+                    : {}),
             });
 
             const STARTER_FREE_CREDITS = 10;
@@ -3440,6 +3474,334 @@ app.delete('/api/library/:id', requireAuth, async (req, res) => {
     } catch (err) {
         console.error('Library delete error:', err);
         return res.status(500).json({ error: 'Failed to delete item' });
+    }
+});
+
+// ==================== AFFILIATE PROGRAM (30% RECURRING FOR 12 MONTHS) ====================
+
+const AFFILIATE_COMMISSION_RATE = 0.3;
+const AFFILIATE_WINDOW_DAYS = 365; // 12-month recurring commission cap per referred customer
+const AFFILIATE_HOLD_DAYS = 14;    // 14-day refund hold before payout eligibility
+const AFFILIATE_MIN_PAYOUT_CENTS = 2500; // $25 minimum payout
+
+async function ensureUserAffiliateCode(userDoc) {
+    if (!userDoc) return '';
+    if (userDoc.affiliate_code) return userDoc.affiliate_code;
+    const prefix =
+        String(userDoc.email || 'CREVO')
+            .split('@')[0]
+            .replace(/[^a-zA-Z0-9]/g, '')
+            .toUpperCase()
+            .slice(0, 5) || 'CREVO';
+    for (let attempt = 0; attempt < 6; attempt++) {
+        const suffix = crypto.randomBytes(2).toString('hex').toUpperCase();
+        const candidate = `${prefix}${suffix}`;
+        try {
+            const updated = await User.findByIdAndUpdate(
+                userDoc._id,
+                { $set: { affiliate_code: candidate } },
+                { returnDocument: 'after' }
+            );
+            if (updated?.affiliate_code) return updated.affiliate_code;
+        } catch (err) {
+            if (err?.code !== 11000) throw err;
+        }
+    }
+    return '';
+}
+
+async function resolveValidReferrer(rawCode, buyerEmail, buyerFingerprint) {
+    const code = String(rawCode || '').trim().toUpperCase();
+    if (!code || code.length < 3 || code.length > 32) return null;
+    const affiliate = await User.findOne({ affiliate_code: code }).lean();
+    if (!affiliate) return null;
+
+    // Anti-self-referral checks: block same email, same canonical email, or same hardware device fingerprint
+    const buyerLower = String(buyerEmail || '').trim().toLowerCase();
+    const buyerCanon = canonicalizeEmail(buyerLower);
+    if (affiliate.email === buyerLower || (buyerCanon && affiliate.canonicalEmail === buyerCanon)) {
+        return null;
+    }
+    if (buyerFingerprint && affiliate.deviceFingerprint && affiliate.deviceFingerprint === buyerFingerprint) {
+        return null;
+    }
+    return affiliate;
+}
+
+async function recordAffiliateCommissionForPayment({ buyerUserId, stripePaymentId, amountCents, planName }) {
+    if (!buyerUserId || !stripePaymentId || !amountCents || amountCents <= 0) return null;
+    const buyer = await User.findById(buyerUserId).lean();
+    if (!buyer || !buyer.referred_by_user_id) return null;
+    if (buyer.referred_by_user_id === buyer._id.toString()) return null;
+
+    // Enforce strict 12-month recurring commission cap per referred customer
+    const refDate = buyer.referred_at ? new Date(buyer.referred_at).getTime() : new Date(buyer.created_at).getTime();
+    const maxWindowMs = AFFILIATE_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+    if (!Number.isFinite(refDate) || Date.now() - refDate > maxWindowMs) {
+        return null;
+    }
+
+    const affiliate = await User.findById(buyer.referred_by_user_id).lean();
+    if (!affiliate) return null;
+
+    const commissionCents = Math.round(Number(amountCents) * AFFILIATE_COMMISSION_RATE);
+    if (commissionCents <= 0) return null;
+
+    const eligibleAt = new Date(Date.now() + AFFILIATE_HOLD_DAYS * 24 * 60 * 60 * 1000);
+    try {
+        const doc = await AffiliateCommission.create({
+            affiliate_user_id: affiliate._id.toString(),
+            affiliate_code: affiliate.affiliate_code || buyer.referred_by_code || '',
+            referred_user_id: buyer._id.toString(),
+            referred_email: buyer.email,
+            stripe_payment_id: String(stripePaymentId),
+            plan_name: String(planName || 'Crevo AI Plan'),
+            sale_amount_cents: Number(amountCents),
+            commission_rate: AFFILIATE_COMMISSION_RATE,
+            commission_cents: commissionCents,
+            status: 'pending',
+            eligible_at: eligibleAt,
+        });
+
+        sendAffiliateCommissionEmail({
+            toEmail: affiliate.email,
+            planName: String(planName || 'Crevo AI Plan'),
+            saleAmountCents: Number(amountCents),
+            commissionCents,
+        }).catch(() => {});
+
+        return doc;
+    } catch (err) {
+        if (err?.code === 11000) return null; // duplicate webhook idempotency
+        console.error('Failed to record affiliate commission:', err?.message || err);
+        return null;
+    }
+}
+
+app.post('/api/affiliates/track-click', async (req, res) => {
+    try {
+        const code = String(req.body?.code || '').trim().toUpperCase();
+        if (!code || code.length < 3 || code.length > 32) {
+            return res.json({ tracked: false });
+        }
+        const affiliate = await User.findOne({ affiliate_code: code }).select('_id affiliate_code').lean();
+        if (!affiliate) {
+            return res.json({ tracked: false });
+        }
+        const ip = getClientIp(req);
+        const fingerprint = getClientFingerprint(req);
+        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const existing = await AffiliateClick.findOne({
+            code,
+            ip,
+            created_at: { $gte: oneDayAgo },
+        }).lean();
+        if (!existing) {
+            await AffiliateClick.create({
+                code,
+                affiliate_user_id: affiliate._id.toString(),
+                ip,
+                fingerprint,
+                landing_path: String(req.body?.landingPath || '/').slice(0, 120),
+            });
+        }
+        return res.json({ tracked: true, code });
+    } catch (err) {
+        console.warn('Affiliate click track error:', err?.message || err);
+        return res.json({ tracked: false });
+    }
+});
+
+app.get('/api/affiliates/me', requireAuth, async (req, res) => {
+    try {
+        const userDoc = await User.findById(req.user.id);
+        if (!userDoc) return res.status(404).json({ error: 'User not found' });
+
+        const affiliateCode = await ensureUserAffiliateCode(userDoc);
+        const userId = userDoc._id.toString();
+
+        const [clicks, signups, commissions] = await Promise.all([
+            AffiliateClick.countDocuments({ affiliate_user_id: userId }),
+            User.countDocuments({ referred_by_user_id: userId }),
+            AffiliateCommission.find({ affiliate_user_id: userId }).sort({ created_at: -1 }).limit(100).lean(),
+        ]);
+
+        const nowMs = Date.now();
+        let pendingHoldCents = 0;
+        let payableCents = 0;
+        let paidCents = 0;
+        let totalEarnedCents = 0;
+        const paidUsersSet = new Set();
+
+        for (const c of commissions) {
+            if (c.status === 'void') continue;
+            totalEarnedCents += Number(c.commission_cents || 0);
+            if (c.referred_user_id) paidUsersSet.add(c.referred_user_id);
+            if (c.status === 'paid') {
+                paidCents += Number(c.commission_cents || 0);
+            } else if (c.eligible_at && new Date(c.eligible_at).getTime() <= nowMs) {
+                payableCents += Number(c.commission_cents || 0);
+            } else {
+                pendingHoldCents += Number(c.commission_cents || 0);
+            }
+        }
+
+        const baseUrl = (process.env.FRONTEND_URL || 'https://crevo.app').replace(/\/$/, '');
+        return res.json({
+            affiliateCode,
+            referralLink: `${baseUrl}/?ref=${affiliateCode}`,
+            commissionRatePercent: Math.round(AFFILIATE_COMMISSION_RATE * 100),
+            recurringMonths: 12,
+            holdDays: AFFILIATE_HOLD_DAYS,
+            minPayoutCents: AFFILIATE_MIN_PAYOUT_CENTS,
+            payoutMethod: userDoc.affiliate_payout_method || 'paypal',
+            payoutEmail: userDoc.affiliate_payout_email || '',
+            stats: {
+                clicks,
+                signups,
+                paidConversions: paidUsersSet.size,
+                pendingHoldCents,
+                payableCents,
+                paidCents,
+                totalEarnedCents,
+            },
+            commissions: commissions.map((c) => ({
+                id: c._id.toString(),
+                planName: c.plan_name,
+                saleAmountCents: c.sale_amount_cents,
+                commissionCents: c.commission_cents,
+                status:
+                    c.status === 'paid'
+                        ? 'paid'
+                        : c.status === 'void'
+                          ? 'void'
+                          : c.eligible_at && new Date(c.eligible_at).getTime() <= nowMs
+                            ? 'payable'
+                            : 'pending_hold',
+                eligibleAt: c.eligible_at,
+                paidAt: c.paid_at,
+                createdAt: c.created_at,
+            })),
+        });
+    } catch (err) {
+        console.error('Get affiliate dashboard error:', err);
+        return res.status(500).json({ error: 'Failed to load affiliate dashboard' });
+    }
+});
+
+app.patch('/api/affiliates/payout-settings', requireAuth, async (req, res) => {
+    try {
+        const method = String(req.body?.payoutMethod || 'paypal').trim().toLowerCase();
+        const payoutEmail = String(req.body?.payoutEmail || '').trim().toLowerCase();
+        if (!['paypal', 'wise'].includes(method)) {
+            return res.status(400).json({ error: 'Payout method must be PayPal or Wise' });
+        }
+        if (!payoutEmail || !payoutEmail.includes('@')) {
+            return res.status(400).json({ error: 'Please enter a valid payout email address' });
+        }
+        await User.findByIdAndUpdate(req.user.id, {
+            $set: {
+                affiliate_payout_method: method,
+                affiliate_payout_email: payoutEmail,
+            },
+        });
+        return res.json({ ok: true, payoutMethod: method, payoutEmail });
+    } catch (err) {
+        console.error('Update affiliate payout settings error:', err);
+        return res.status(500).json({ error: 'Failed to save payout settings' });
+    }
+});
+
+app.get('/api/admin/affiliates', requireAdmin, async (_req, res) => {
+    try {
+        const nowMs = Date.now();
+        const [affiliates, allCommissions, clicksAgg, signupsAgg] = await Promise.all([
+            User.find({ affiliate_code: { $exists: true, $ne: '' } })
+                .select('email affiliate_code affiliate_payout_method affiliate_payout_email created_at')
+                .lean(),
+            AffiliateCommission.find().sort({ created_at: -1 }).limit(300).lean(),
+            AffiliateClick.aggregate([{ $group: { _id: '$affiliate_user_id', clicks: { $sum: 1 } } }]),
+            User.aggregate([
+                { $match: { referred_by_user_id: { $ne: '' } } },
+                { $group: { _id: '$referred_by_user_id', signups: { $sum: 1 } } },
+            ]),
+        ]);
+
+        const clickMap = new Map(clicksAgg.map((x) => [String(x._id), x.clicks]));
+        const signupMap = new Map(signupsAgg.map((x) => [String(x._id), x.signups]));
+        const commByAff = new Map();
+        for (const c of allCommissions) {
+            const list = commByAff.get(c.affiliate_user_id) || [];
+            list.push(c);
+            commByAff.set(c.affiliate_user_id, list);
+        }
+
+        const rows = affiliates
+            .map((u) => {
+                const uid = u._id.toString();
+                const list = commByAff.get(uid) || [];
+                let pendingHoldCents = 0;
+                let payableCents = 0;
+                let paidCents = 0;
+                for (const c of list) {
+                    if (c.status === 'void') continue;
+                    if (c.status === 'paid') paidCents += c.commission_cents;
+                    else if (c.eligible_at && new Date(c.eligible_at).getTime() <= nowMs) payableCents += c.commission_cents;
+                    else pendingHoldCents += c.commission_cents;
+                }
+                return {
+                    userId: uid,
+                    email: u.email,
+                    affiliateCode: u.affiliate_code,
+                    payoutMethod: u.affiliate_payout_method || 'paypal',
+                    payoutEmail: u.affiliate_payout_email || '',
+                    clicks: clickMap.get(uid) || 0,
+                    signups: signupMap.get(uid) || 0,
+                    salesCount: list.filter((c) => c.status !== 'void').length,
+                    pendingHoldCents,
+                    payableCents,
+                    paidCents,
+                    totalEarnedCents: pendingHoldCents + payableCents + paidCents,
+                };
+            })
+            .sort((a, b) => b.payableCents - a.payableCents || b.totalEarnedCents - a.totalEarnedCents || b.signups - a.signups);
+
+        return res.json({
+            affiliates: rows,
+            summary: {
+                totalAffiliates: rows.length,
+                totalPayableCents: rows.reduce((s, r) => s + r.payableCents, 0),
+                totalPendingHoldCents: rows.reduce((s, r) => s + r.pendingHoldCents, 0),
+                totalPaidCents: rows.reduce((s, r) => s + r.paidCents, 0),
+            },
+        });
+    } catch (err) {
+        console.error('Admin affiliates error:', err);
+        return res.status(500).json({ error: 'Failed to load affiliates overview' });
+    }
+});
+
+app.post('/api/admin/affiliates/:userId/mark-paid', requireAdmin, async (req, res) => {
+    try {
+        const targetUserId = String(req.params.userId || '').trim();
+        const note = String(req.body?.note || 'Monthly affiliate payout').slice(0, 140);
+        const includeHold = req.body?.includeHold === true;
+        const query = {
+            affiliate_user_id: targetUserId,
+            status: 'pending',
+            ...(includeHold ? {} : { eligible_at: { $lte: new Date() } }),
+        };
+        const result = await AffiliateCommission.updateMany(query, {
+            $set: {
+                status: 'paid',
+                paid_at: new Date(),
+                payout_note: note,
+            },
+        });
+        return res.json({ ok: true, markedPaidCount: result.modifiedCount || 0 });
+    } catch (err) {
+        console.error('Admin mark affiliate paid error:', err);
+        return res.status(500).json({ error: 'Failed to mark commissions as paid' });
     }
 });
 

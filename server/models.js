@@ -38,6 +38,41 @@ const userSchema = new mongoose.Schema(
             type: Date,
             default: null,
         },
+        affiliate_code: {
+            type: String,
+            unique: true,
+            sparse: true,
+            uppercase: true,
+            trim: true,
+            index: true,
+        },
+        referred_by_code: {
+            type: String,
+            uppercase: true,
+            trim: true,
+            default: '',
+            index: true,
+        },
+        referred_by_user_id: {
+            type: String,
+            default: '',
+            index: true,
+        },
+        referred_at: {
+            type: Date,
+            default: null,
+        },
+        affiliate_payout_method: {
+            type: String,
+            enum: ['paypal', 'wise', ''],
+            default: 'paypal',
+        },
+        affiliate_payout_email: {
+            type: String,
+            trim: true,
+            lowercase: true,
+            default: '',
+        },
     },
     {
         timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
@@ -252,6 +287,47 @@ const userWorkSchema = new mongoose.Schema(
 );
 userWorkSchema.index({ user_id: 1, created_at: -1 });
 
+const affiliateClickSchema = new mongoose.Schema(
+    {
+        code: { type: String, required: true, uppercase: true, trim: true, index: true },
+        affiliate_user_id: { type: String, required: true, index: true },
+        ip: { type: String, default: '' },
+        fingerprint: { type: String, default: '' },
+        landing_path: { type: String, default: '/' },
+    },
+    {
+        timestamps: { createdAt: 'created_at', updatedAt: false },
+    }
+);
+affiliateClickSchema.index({ code: 1, ip: 1, created_at: -1 });
+
+const affiliateCommissionSchema = new mongoose.Schema(
+    {
+        affiliate_user_id: { type: String, required: true, index: true },
+        affiliate_code: { type: String, required: true, uppercase: true, index: true },
+        referred_user_id: { type: String, required: true, index: true },
+        referred_email: { type: String, default: '' },
+        stripe_payment_id: { type: String, required: true, unique: true, index: true },
+        plan_name: { type: String, default: 'Crevo AI Plan' },
+        sale_amount_cents: { type: Number, required: true },
+        commission_rate: { type: Number, default: 0.3 },
+        commission_cents: { type: Number, required: true },
+        status: {
+            type: String,
+            enum: ['pending', 'paid', 'void'],
+            default: 'pending',
+            index: true,
+        },
+        eligible_at: { type: Date, required: true, index: true }, // +14-day refund hold
+        paid_at: { type: Date, default: null },
+        payout_note: { type: String, default: '' },
+    },
+    {
+        timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
+    }
+);
+affiliateCommissionSchema.index({ affiliate_user_id: 1, created_at: -1 });
+
 export const User = mongoose.models.User || mongoose.model('User', userSchema);
 export const UserCredits = mongoose.models.UserCredits || mongoose.model('UserCredits', userCreditsSchema);
 export const CreditTransaction =
@@ -270,3 +346,7 @@ export const FreeTrialUsage =
     mongoose.models.FreeTrialUsage || mongoose.model('FreeTrialUsage', freeTrialUsageSchema);
 export const UserWork =
     mongoose.models.UserWork || mongoose.model('UserWork', userWorkSchema);
+export const AffiliateClick =
+    mongoose.models.AffiliateClick || mongoose.model('AffiliateClick', affiliateClickSchema);
+export const AffiliateCommission =
+    mongoose.models.AffiliateCommission || mongoose.model('AffiliateCommission', affiliateCommissionSchema);

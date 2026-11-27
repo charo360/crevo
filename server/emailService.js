@@ -318,3 +318,28 @@ export function sendClipsReadyEmail({ toEmail, fullName, originalTitle, clips = 
         }),
     });
 }
+
+export function sendAffiliateCommissionEmail({ toEmail, planName, saleAmountCents, commissionCents }) {
+    const earned = formatMoney(commissionCents);
+    const sale = formatMoney(saleAmountCents);
+    return sendEmail({
+        to: toEmail,
+        subject: `🎉 You earned ${earned} commission on Crevo AI!`,
+        html: wrapEmailHtml({
+            title: `You Earned ${earned}! 🎉`,
+            preheader: `One of your Crevo AI referrals just purchased ${planName}.`,
+            bodyHtml: `
+                <p>Awesome news! Someone you referred to <strong>Crevo AI</strong> just made a payment.</p>
+                <div style="background:#faf7ff;border:1px solid #e4dcf2;border-radius:12px;padding:16px;margin:16px 0;">
+                    <div style="font-size:13px;color:#6b7280;">Plan Purchased</div>
+                    <div style="font-size:16px;font-weight:800;color:#111827;margin-bottom:8px;">${escapeHtml(planName)} (${sale})</div>
+                    <div style="font-size:13px;color:#6b7280;">Your 30% Commission</div>
+                    <div style="font-size:24px;font-weight:900;color:#571c86;">+${earned}</div>
+                </div>
+                <p style="font-size:13px;color:#6b7280;">Commissions clear after a 14-day refund hold and are paid out monthly once your balance reaches $25. Make sure your PayPal or Wise payout email is saved in your Affiliate Dashboard.</p>
+            `,
+            ctaLabel: 'Open Affiliate Dashboard →',
+            ctaUrl: `${SITE_URL()}/affiliates`,
+        }),
+    });
+}

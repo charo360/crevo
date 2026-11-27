@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { apiRequest } from '../lib/api';
 import { AdminInboxPanel } from '../components/admin/AdminInboxPanel';
+import { AdminAffiliatesPanel } from '../components/admin/AdminAffiliatesPanel';
 
 interface AdminUserRow {
     id: string;
@@ -105,7 +106,7 @@ export const AdminPage: FC = () => {
     const [data, setData] = useState<AdminOverviewData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<'users' | 'activity' | 'payments' | 'trials' | 'leads' | 'inbox'>('users');
+    const [activeTab, setActiveTab] = useState<'users' | 'activity' | 'payments' | 'affiliates' | 'trials' | 'leads' | 'inbox'>('users');
     const [search, setSearch] = useState('');
     const [activityFilter, setActivityFilter] = useState<string>('all');
     const [userFilter, setUserFilter] = useState<'all' | 'paid' | 'free'>('all');
@@ -310,6 +311,7 @@ export const AdminPage: FC = () => {
                                 { id: 'users', label: `Users (${data.users.length})` },
                                 { id: 'activity', label: `📊 Activity & Interest (${data.summary.total_activity_runs || 0})` },
                                 { id: 'payments', label: `Payments (${data.payments.length})` },
+                                { id: 'affiliates', label: '🤝 Affiliates & Payouts' },
                                 { id: 'inbox', label: '📬 Inbox (sam@crevo.app)' },
                                 { id: 'trials', label: `Free Trials (${data.free_trials.length})` },
                                 { id: 'leads', label: `Newsletter (${data.subscribers.length})` },
@@ -508,6 +510,9 @@ export const AdminPage: FC = () => {
 
                         {/* Inbox Tab (sam@crevo.app via Mailbux JMAP) */}
                         {activeTab === 'inbox' && <AdminInboxPanel />}
+
+                        {/* Affiliates & Payouts Tab */}
+                        {activeTab === 'affiliates' && <AdminAffiliatesPanel />}
 
                         {/* Free Trials Tab */}
                         {activeTab === 'trials' && (

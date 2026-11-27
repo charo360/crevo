@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, FC, useCallback } from 'react';
 import { apiRequest, getAuthToken, setAuthToken } from '../lib/api';
+import { getStoredReferralCode, clearStoredReferralCode } from '../lib/affiliate';
 import { getUserCredits, CreditBalance } from '../services/payments/creditService';
 
 export interface AuthUser {
@@ -119,10 +120,12 @@ export const AuthProvider: FC<{ children: React.ReactNode }> = ({ children }) =>
 
     const signUp = async (email: string, password: string) => {
         try {
+            const referralCode = getStoredReferralCode();
             const data = await apiRequest<{ user: AuthUser; token: string }>('/api/auth/signup', {
                 method: 'POST',
-                body: JSON.stringify({ email, password }),
+                body: JSON.stringify({ email, password, ...(referralCode ? { referralCode } : {}) }),
             });
+            clearStoredReferralCode();
 
             setAuthToken(data.token);
             const newSession: AuthSession = { access_token: data.token, user: data.user };
@@ -145,10 +148,12 @@ export const AuthProvider: FC<{ children: React.ReactNode }> = ({ children }) =>
 
     const signInWithGoogle = useCallback(async (credential: string) => {
         try {
+            const referralCode = getStoredReferralCode();
             const data = await apiRequest<{ user: AuthUser; token: string; isNewUser?: boolean }>('/api/auth/google', {
                 method: 'POST',
-                body: JSON.stringify({ credential }),
+                body: JSON.stringify({ credential, ...(referralCode ? { referralCode } : {}) }),
             });
+            if (data.isNewUser) clearStoredReferralCode();
 
             setAuthToken(data.token);
             const newSession: AuthSession = { access_token: data.token, user: data.user };
