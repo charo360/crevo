@@ -25,6 +25,7 @@ import { AssistantPanel } from './components/modals/AssistantPanel';
 import { Editor } from './components/modals/Editor';
 import { RepurposeModule } from './features/content-repurpose/components/RepurposeModule';
 import { YouTubeToolsView } from './components/modules/YouTubeToolsView';
+import { DailyPostView } from './components/modules/DailyPostView';
 import { CreditManagement } from './components/dashboard/CreditManagement';
 import { useAuth } from './contexts/AuthContext';
 import { apiRequest } from './lib/api';
@@ -940,6 +941,17 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                 <div style={{ flex: 1, overflow: 'auto' }}>
                     <YouTubeToolsView onSwitchPlatform={handlePlatformChange} />
                 </div>
+            ) : platform === 'daily_post' ? (
+                /* Daily Social Post Creator */
+                <DailyPostView
+                    ai={ai.current}
+                    savedCharacters={savedCharacters}
+                    logo={logo}
+                    colors={colors}
+                    preferences={preferences}
+                    onPreferencesChange={setPreferences}
+                    brandChannelName={brandChannelName}
+                />
             ) : (
                 /* Design Studio - generates thumbnails and images */
                 <>

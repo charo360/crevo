@@ -25,7 +25,7 @@ export const Header: FC<HeaderProps> = ({ platform, onPlatformChange, onSidebarT
     const navigate = useNavigate();
     const currentPlatform = PLATFORM_CONFIGS[platform];
 
-    const primaryPlatforms: Platform[] = ['youtube_improve', 'youtube', 'resize', 'youtube_tools', 'repurpose'];
+    const primaryPlatforms: Platform[] = ['youtube_improve', 'youtube', 'daily_post', 'resize', 'youtube_tools', 'repurpose'];
     const morePlatforms: Platform[] = PLATFORM_ORDER.filter((p) => !primaryPlatforms.includes(p));
     const isMoreActive = morePlatforms.includes(platform);
 

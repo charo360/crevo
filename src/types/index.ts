@@ -1,6 +1,6 @@
 // Type definitions for the AI Design Studio application
 
-export type Platform = 'youtube' | 'youtube_improve' | 'podcast' | 'tiktok' | 'repurpose' | 'twitter' | 'resize' | 'youtube_tools';
+export type Platform = 'youtube' | 'youtube_improve' | 'daily_post' | 'podcast' | 'tiktok' | 'repurpose' | 'twitter' | 'resize' | 'youtube_tools';
 export type ImagenAspectRatio = "16:9" | "1.91:1" | "9:16" | "1:1" | "4:3" | "3:4";
 export type VeoAspectRatio = "16:9" | "9:16";
 export type ElementType = 'text' | 'image' | 'shape' | 'emoji';

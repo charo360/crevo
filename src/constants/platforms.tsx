@@ -20,6 +20,12 @@ export const PLATFORM_CONFIGS: Record<Platform, {
         aspectRatio: "16:9",
         promptSnippet: "This is for a YouTube video. The design must be highly clickable and stand out on the YouTube platform."
     },
+    daily_post: {
+        title: "Daily Post",
+        icon: ICONS.DAILY_POST,
+        aspectRatio: "4:5",
+        promptSnippet: "This is a high-engagement daily social media post (Instagram, LinkedIn, X, Stories, or YouTube Community). Keep it clean, authentic, thumb-stopping, and tailored for social feeds."
+    },
     podcast: {
         title: "Podcast Cover",
         icon: ICONS.PODCAST,
@@ -58,4 +64,4 @@ export const PLATFORM_CONFIGS: Record<Platform, {
     }
 };
 
-export const PLATFORM_ORDER: Platform[] = ['youtube_improve', 'youtube', 'resize', 'youtube_tools', 'podcast', 'tiktok', 'repurpose', 'twitter'];
+export const PLATFORM_ORDER: Platform[] = ['youtube_improve', 'youtube', 'daily_post', 'resize', 'youtube_tools', 'podcast', 'tiktok', 'repurpose', 'twitter'];
