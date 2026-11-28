@@ -289,6 +289,7 @@ export const DailyPostView: FC<DailyPostViewProps> = ({
 
     const [isSuggesting, setIsSuggesting] = useState<boolean>(false);
     const [isGenerating, setIsGenerating] = useState<boolean>(false);
+    const [generationStage, setGenerationStage] = useState<string>('');
     const [isEditing, setIsEditing] = useState<boolean>(false);
     const [isUpscaling, setIsUpscaling] = useState<boolean>(false);
     const [showMagicEditModal, setShowMagicEditModal] = useState<boolean>(false);
@@ -551,6 +552,67 @@ CRITICAL: NEVER describe the reference person's face, gender, age, skin tone, ha
         return extractTextFromAiResponse(res);
     };
 
+    const auditGeneratedDailyPost = async (
+        candidate: ImageAsset,
+        subjectRefs: ImageAsset[],
+        opts: {
+            mode: 'create' | 'retouch';
+            requestedHeadline: string;
+            requestedOutfit: string;
+            sceneSummary: string;
+        }
+    ): Promise<{ passed: boolean; fixInstructions: string }> => {
+        try {
+            const parts: any[] = [];
+            const primaryRef = subjectRefs[0];
+            if (primaryRef?.base64 && primaryRef?.mimeType) {
+                parts.push({ text: 'IMAGE A — ORIGINAL REAL PERSON PHOTO (Ground Truth Identity):' });
+                parts.push({ inlineData: { data: primaryRef.base64, mimeType: primaryRef.mimeType } });
+            }
+            parts.push({ text: 'IMAGE B — GENERATED OUTPUT TO AUDIT BEFORE DELIVERY:' });
+            parts.push({ inlineData: { data: candidate.base64, mimeType: candidate.mimeType } });
+
+            const auditPrompt = `You are a strict Quality Assurance Photo Editor auditing IMAGE B before it is shown to a real user.
+Compare IMAGE B against ${primaryRef ? 'IMAGE A (the real person) and ' : ''}these exact user requirements:
+- Mode: ${opts.mode === 'retouch' ? 'Retouch My Photo (MUST preserve exact face, body, pose & expression from IMAGE A)' : 'Create New Shot'}
+- Requested Scene/Brief: ${opts.sceneSummary}
+- Requested Outfit: ${opts.requestedOutfit}
+- Requested Text on Image: ${opts.requestedHeadline ? `"${opts.requestedHeadline}" (must be spelled 100% accurately and NOT cover the face)` : 'STRICTLY ZERO TEXT (must have no stray words, watermarks, or gibberish)'}
+
+Check these 4 critical integrity gates:
+1. Face & Body Match${primaryRef ? ' (does IMAGE B unmistakably look like the exact same real person from IMAGE A — face, eyes, skin tone, hair, gender, body build?)' : ' (natural human anatomy?)'}
+2. Real-Camera Integrity (looks like a real photograph — no waxy AI skin, warped hands/fingers, extra limbs, or distorted eyes)
+3. Outfit & Scene Compliance (follows the requested outfit and scene/location)
+4. Text Accuracy (exact spelling & clean placement if requested, OR zero stray text if blank)
+
+Only fail (passed: false) if there is a clear, noticeable defect in one of the 4 gates above.
+Return STRICT JSON only (no markdown fences):
+{"passed":true,"fixInstructions":""}
+or if failed:
+{"passed":false,"fixInstructions":"1-2 concise, concrete sentences telling the image generator exactly what to fix"}`;
+
+            parts.push({ text: auditPrompt });
+
+            const res = await apiRequest<any>('/api/ai/generate', {
+                method: 'POST',
+                body: JSON.stringify({
+                    model: 'google/gemini-2.5-flash',
+                    contents: { parts },
+                }),
+            });
+            const raw = extractTextFromAiResponse(res);
+            const cleaned = raw.replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
+            const parsed = JSON.parse(cleaned);
+            return {
+                passed: parsed?.passed !== false,
+                fixInstructions: typeof parsed?.fixInstructions === 'string' ? parsed.fixInstructions.trim() : '',
+            };
+        } catch (err) {
+            console.warn('Pre-delivery vision audit skipped:', err);
+            return { passed: true, fixInstructions: '' };
+        }
+    };
+
     const handleGenerateDailyPost = async () => {
         if (isGenerating) return;
         const cleanTopic = topic.trim();
@@ -585,6 +647,13 @@ CRITICAL: NEVER describe the reference person's face, gender, age, skin tone, ha
 
         setIsGenerating(true);
         setShowOriginalBefore(false);
+        setGenerationStage(
+            dailyMode === 'retouch'
+                ? 'Retouching your photo with pro lighting...'
+                : referencePost
+                  ? 'Analyzing reference shot sheet & creating your photo...'
+                  : `Designing your ${selectedTarget.shortLabel} post...`
+        );
         try {
             let imagesForGen: ImageAsset[] = [];
             let bodyPrompt = '';
@@ -700,7 +769,54 @@ CRITICAL: NEVER describe the reference person's face, gender, age, skin tone, ha
             if (!first?.image?.url) {
                 throw new Error('No image was returned. Please try again.');
             }
-            setGeneratedImage(first.image);
+
+            // Pre-delivery Vision Quality Audit (works for both Create & Retouch, max 1 silent auto-fix retry)
+            let finalImage: ImageAsset = first.image;
+            setGenerationStage('Auditing face likeness, outfit & photo quality...');
+            const requestedOutfitSummary =
+                preferences.outfitMode === 'custom' && preferences.customOutfit?.trim()
+                    ? `Custom: ${preferences.customOutfit.trim()}`
+                    : preferences.outfitMode === 'ai_auto'
+                      ? 'Fresh AI-designed outfit different from reference photo'
+                      : 'Keep outfit from user’s own photo';
+
+            const audit = await auditGeneratedDailyPost(finalImage, imagesForGen, {
+                mode: dailyMode,
+                requestedHeadline: cleanHeadline,
+                requestedOutfit: requestedOutfitSummary,
+                sceneSummary: captionContext,
+            });
+
+            if (!audit.passed && audit.fixInstructions) {
+                setGenerationStage('Refining details to pass quality check...');
+                try {
+                    const retryTextState: TextState = {
+                        ...postTextState,
+                        body: `${postTextState.body}\n\n[MANDATORY QUALITY AUDIT FIX — CORRECT THESE ISSUES]: ${audit.fixInstructions}`,
+                    };
+                    const retryResults = await generateDesign(
+                        ai,
+                        imagesForGen,
+                        effectiveLogo,
+                        effectiveColors,
+                        dailyPrefs,
+                        'daily_post',
+                        null,
+                        '',
+                        retryTextState,
+                        'improve',
+                        null,
+                        selectedTarget.aspectRatio
+                    );
+                    if (retryResults?.[0]?.image?.url) {
+                        finalImage = retryResults[0].image;
+                    }
+                } catch (retryErr) {
+                    console.warn('Quality audit auto-retry skipped, keeping initial image:', retryErr);
+                }
+            }
+
+            setGeneratedImage(finalImage);
 
             if (user) {
                 const actionTitle =
@@ -715,7 +831,7 @@ CRITICAL: NEVER describe the reference person's face, gender, age, skin tone, ha
                 });
                 await refreshCredits();
                 saveImageToLibrary({
-                    dataUrl: first.image.url,
+                    dataUrl: finalImage.url,
                     type: 'thumbnail',
                     platform: 'daily_post',
                     title: cleanHeadline || captionContext.slice(0, 60) || actionTitle,
@@ -725,13 +841,14 @@ CRITICAL: NEVER describe the reference person's face, gender, age, skin tone, ha
 
             toast.success(
                 dailyMode === 'retouch'
-                    ? 'Photo retouched! Toggle Before/After or download & copy your caption.'
-                    : 'Daily Post ready! Download the image & copy your caption.'
+                    ? 'Photo retouched & quality-checked! Compare Before/After or download.'
+                    : 'Daily Post verified & ready! Download the image & copy your caption.'
             );
         } catch (err: any) {
             toast.error(err?.message || 'Failed to generate Daily Post.');
         } finally {
             setIsGenerating(false);
+            setGenerationStage('');
         }
     };
 
@@ -1816,9 +1933,11 @@ CRITICAL: NEVER describe the reference person's face, gender, age, skin tone, ha
                                 }}
                             >
                                 <div className="spinner" style={{ marginBottom: '12px' }} />
-                                <strong style={{ fontSize: '15px' }}>Designing your {selectedTarget.shortLabel} post...</strong>
+                                <strong style={{ fontSize: '15px' }}>
+                                    {generationStage || `Designing your ${selectedTarget.shortLabel} post...`}
+                                </strong>
                                 <span style={{ fontSize: '12.5px', color: '#6b7280', marginTop: '4px' }}>
-                                    Generating visual + writing your platform caption &amp; hashtags
+                                    Creating visual, auditing face &amp; quality, and writing your caption
                                 </span>
                             </div>
                         ) : generatedImageUrl ? (
