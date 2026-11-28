@@ -308,9 +308,12 @@ export const generateDesign = async (
 
             const allImageParts: Part[] = [];
 
-            // Optimize images before sending to API
+            // Optimize images before sending to API (skip re-compressing saved Brand Kit character photos to preserve crisp facial & body details)
             const optimizedImages = await Promise.all(
                 userImages.map(async (img) => {
+                    if (img.characterId) {
+                        return img;
+                    }
                     try {
                         const optimized = await optimizeImageForAI(img.base64, img.mimeType);
                         return { ...img, base64: optimized.base64, mimeType: optimized.mimeType };
@@ -379,10 +382,10 @@ export const generateDesign = async (
                 charGroupIdx += 1;
                 const countText =
                     photos.length > 1
-                        ? `The following ${photos.length} reference photos ALL show the SAME exact real person ("${name}") from different angles/expressions. Study ALL ${photos.length} photos together to lock 100% of "${name}"'s exact face shape, eyes, nose, jawline, hair, skin tone, and likeness`
-                        : `This reference photo shows the exact real person named "${name}". Preserve 100% of "${name}"'s exact face, hair, skin tone, and identity`;
+                        ? `The following ${photos.length} reference photos ALL show the SAME exact real person ("${name}") from different angles/framing. Study ALL ${photos.length} photos together to lock 100% of "${name}"'s exact facial geometry (eyes, eyelids, eyebrows, nose bridge/tip, lips, teeth, jawline, cheeks, ears, hairline, hairstyle, facial hair, glasses, age, exact skin tone and natural pores/texture) AND their exact real body build (neck, shoulder width, torso proportions, arms, and posture)`
+                        : `This reference photo shows the exact real person named "${name}". Preserve 100% of "${name}"'s exact facial geometry, skin texture, hair, and real body proportions`;
                 allImageParts.push({
-                    text: `NAMED CHARACTER #${charGroupIdx} — "${name}": ${countText}. Whenever "${name}" appears in the thumbnail, you MUST depict THIS exact person and never invent a generic face or blend them with anyone else:`,
+                    text: `NAMED CHARACTER #${charGroupIdx} — "${name}": ${countText}. Whenever "${name}" appears in the thumbnail, they MUST look 100% identical to a real unretouched photograph of THIS exact person — NEVER alter their face, NEVER change their body size/shape, NEVER beautify or airbrush them, and NEVER blend them with anyone else:`,
                 });
                 photos.forEach((p) => {
                     allImageParts.push({ inlineData: { data: p.base64, mimeType: p.mimeType } });
@@ -399,7 +402,7 @@ export const generateDesign = async (
             );
             const namedCharactersDirective =
                 namedCharacterSummary.length > 0
-                    ? `\n\n[NAMED CHARACTERS PROVIDED — MULTI-ANGLE STRICT IDENTITY MAPPING]\nThe user attached labeled reference photos for these specific characters: ${namedCharacterSummary.join(', ')}. Each character's reference photos show the SAME real person from multiple angles—use all of their angles together so their real face is 100% unmistakable, and never blend or swap faces between different characters.`
+                    ? `\n\n[NAMED CHARACTERS PROVIDED — 100% REAL FACE & BODY IDENTITY LOCK]\nThe user attached labeled reference photos for: ${namedCharacterSummary.join(', ')}. Each character's reference photos show the SAME real person from multiple angles. Reproduce their exact real face AND exact real body build with photographic fidelity so anyone who knows them in real life immediately recognizes them as 100% real—zero face drift, zero body morphing, and never blend or swap faces between characters.`
                     : '';
 
 
@@ -638,11 +641,11 @@ ${weaknessesList}
             
             // Keep variation labels strictly in JS metadata (never include label names in prompt text so the model never renders them!)
             const GENERATE_VARIATION_DIRECTIONS = [
-                'Composition Style: Use a tight, high-impact close-up framing with strong subject rim lighting. (Internal layout cue only—do not write these words on the image.)',
-                'Composition Style: Use a dynamic two-tone contrasting background split with shallow depth-of-field and eye-leading framing. (Internal layout cue only—do not write these words on the image.)',
-                'Composition Style: Use a clean, uncluttered minimalist composition with generous negative space and punchy contrast. (Internal layout cue only—do not write these words on the image.)',
-                'Composition Style: Use moody cinematic color grading with dramatic directional lighting and atmospheric depth. (Internal layout cue only—do not write these words on the image.)',
-                'Composition Style: Use a vibrant high-saturation color-blocked background with crisp subject edge glow. (Internal layout cue only—do not write these words on the image.)',
+                'Composition Style: Use a tight, high-impact close-up photographic framing with natural directional lighting and crisp lens focus on the subject. (Internal layout cue only—do not write these words on the image.)',
+                'Composition Style: Use a dynamic two-tone contrasting background split with realistic shallow depth-of-field and eye-leading photographic framing. (Internal layout cue only—do not write these words on the image.)',
+                'Composition Style: Use a clean, uncluttered minimalist composition with generous negative space and punchy photographic contrast. (Internal layout cue only—do not write these words on the image.)',
+                'Composition Style: Use natural cinematic film color grading with realistic directional lighting and atmospheric background depth. (Internal layout cue only—do not write these words on the image.)',
+                'Composition Style: Use a vibrant high-contrast color-blocked background with clean natural separation behind the real subject. (Internal layout cue only—do not write these words on the image.)',
             ];
 
             const isImproveMode = Boolean(
@@ -686,10 +689,10 @@ ${weaknessesList}
 
                 const designerLikenessDirective =
                     images.length > 0
-                        ? `\n\n[REAL THUMBNAIL DESIGNER — LIKENESS & EXPRESSION DIRECTION (INTERNAL GUIDANCE ONLY)]
-- **100% Physical Likeness Lock:** Keep every person shown in the attached photos/cutouts 100% recognizable — preserve their exact facial structure, eye shape, nose, skin tone, hairline/hairstyle, facial hair, glasses, age, and build. NEVER replace them with a generic AI face or smooth away natural photographic skin texture.
-- **High-CTR Expression & Polish:** Act like a top YouTube thumbnail designer: while keeping their exact real identity 100% intact, subtly direct their facial expression, eye contact, and posture so they look engaging, emotionally alive, and aligned with the thumbnail's hook (e.g. confident eye contact, genuine excitement, curiosity, or dramatic reaction) with crisp catchlights in the eyes and clean studio rim lighting.
-- **Multi-Person & Story Authenticity:** If multiple distinct people or real video moments are attached, compose them naturally into one cohesive, realistic thumbnail scene with clear foreground/background hierarchy and authentic lighting—never looking like pasted stickers or plastic AI art.`
+                        ? `\n\n[100% REAL PHOTOGRAPH — FACE, BODY & ANTI-AI-PLASTIC DIRECTIVE (TOP PRIORITY, INTERNAL GUIDANCE ONLY)]
+- **100% Exact Face & Body Lock:** Every person from the attached reference photos MUST remain 100% identical to their real self — exact facial structure, eye shape, nose, mouth, jawline, ears, hairline/hairstyle, facial hair, glasses, age, exact skin tone, and exact body build (neck, shoulders, torso, arms, weight, and posture). NEVER slim, bulk up, de-age, beautify, or alter their facial or body proportions.
+- **Indistinguishable From a Real Camera Photo (ZERO "AI Look"):** Render the person as a genuine candid photograph shot on a real 50mm DSLR camera — preserve natural human skin pores, subtle natural imperfections, realistic hair strands, real fabric folds, and true optical depth of field. STRICTLY AVOID waxy/plastic airbrushed skin, over-smoothed beauty filters, artificial CGI/3D gloss, fake HDR halos, or glowing neon edges on skin.
+- **Natural Scene Integration:** Match the lighting direction, color temperature, and shadows on the person naturally to the real environment so it looks like they were physically photographed on location — never like an AI-generated illustration or pasted cutout.`
                         : '';
 
                 const referenceBlueprintDirective = referenceThumbnail
@@ -725,7 +728,7 @@ ${weaknessesList}
                             () =>
                                 ai.models.generateContent({
                                     model: getModelWithFallback('IMAGE', false),
-                                    contents: { parts: [{ text: variationPrompt }, ...allImageParts] },
+                                    contents: { parts: [...allImageParts, { text: variationPrompt }] },
                                     config: imageConfig as any,
                                 }),
                             {

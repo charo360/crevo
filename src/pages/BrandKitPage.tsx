@@ -39,7 +39,7 @@ interface SavedBrandKit {
 
 const MAX_CHARACTERS = 6;
 const MAX_PHOTOS_PER_CHARACTER = 3;
-const PHOTO_SLOT_HINTS = ['1. Front face', '2. Smile / angle', '3. Side / reaction'];
+const PHOTO_SLOT_HINTS = ['1. Front face', '2. Angle / smile', '3. Upper body / build'];
 
 function migrateLegacyFacesToCharacters(faces: SavedFaceItem[]): SavedCharacterRecord[] {
     const map = new Map<string, SavedCharacterRecord>();
@@ -112,7 +112,7 @@ function fileToCompressedDataUrl(
                 }
                 ctx.drawImage(img, 0, 0, w, h);
                 const mimeType = preservePng ? 'image/png' : 'image/jpeg';
-                const dataUrl = preservePng ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.84);
+                const dataUrl = preservePng ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.92);
                 resolve({ dataUrl, mimeType });
             };
             img.src = rawUrl;
@@ -212,7 +212,7 @@ export const BrandKitPage: FC = () => {
         const addedPhotos: SavedPhotoItem[] = [];
         for (const file of files.slice(0, remainingSlots)) {
             try {
-                const compressed = await fileToCompressedDataUrl(file, 640, false);
+                const compressed = await fileToCompressedDataUrl(file, 1024, false);
                 addedPhotos.push({
                     id: `photo_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
                     data_url: compressed.dataUrl,
