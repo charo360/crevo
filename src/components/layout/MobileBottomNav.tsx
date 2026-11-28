@@ -32,18 +32,18 @@ export const MobileBottomNav: FC = () => {
                 path.startsWith('/dashboard/twitter-card'),
         },
         {
+            id: 'daily_post',
+            label: 'Post',
+            to: '/dashboard/daily-post',
+            icon: '📅',
+            active: path.startsWith('/dashboard/daily-post'),
+        },
+        {
             id: 'repurpose',
             label: 'Clips',
             to: '/dashboard/content-repurpose',
             icon: '🎬',
             active: path.startsWith('/dashboard/content-repurpose'),
-        },
-        {
-            id: 'resize',
-            label: 'Resize',
-            to: '/dashboard/resize',
-            icon: '🪄',
-            active: path.startsWith('/dashboard/resize'),
         },
         {
             id: 'library',

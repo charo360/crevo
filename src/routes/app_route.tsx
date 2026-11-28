@@ -204,6 +204,16 @@ export const AppRoutes: FC = () => {
             }
           />
           <Route
+            path={AppRoutePaths.dashboard.dailyPost}
+            element={
+              <ProtectedRoute>
+                <ErrorBoundary>
+                  <StudioPage view="daily-post" />
+                </ErrorBoundary>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path={AppRoutePaths.dashboard.improveThumbnail}
             element={
               <ProtectedRoute>

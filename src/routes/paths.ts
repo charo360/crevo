@@ -28,6 +28,7 @@ export const AppRoutePaths = {
     home: "/dashboard/home",
     improveThumbnail: "/dashboard/improve-thumbnail",
     youtubeThumbnail: "/dashboard/youtube-thumbnail",
+    dailyPost: "/dashboard/daily-post",
     podcastCover: "/dashboard/podcast-cover",
     contentRepurpose: "/dashboard/content-repurpose",
     twitterCard: "/dashboard/twitter-card",
@@ -49,6 +50,7 @@ export const DashboardViewToPlatform = {
   'home': 'youtube_improve',
   'improve-thumbnail': 'youtube_improve',
   'youtube-thumbnail': 'youtube',
+  'daily-post': 'daily_post',
   'podcast-cover': 'podcast',
   'content-repurpose': 'repurpose',
   'twitter-card': 'twitter',
@@ -63,6 +65,7 @@ export const DashboardViewToPlatform = {
 export const PlatformToRoute = {
   'youtube_improve': '/dashboard/improve-thumbnail',
   'youtube': '/dashboard/youtube-thumbnail',
+  'daily_post': '/dashboard/daily-post',
   'podcast': '/dashboard/podcast-cover',
   'repurpose': '/dashboard/content-repurpose',
   'twitter': '/dashboard/twitter-card',
