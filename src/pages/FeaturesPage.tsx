@@ -10,7 +10,11 @@ const SEO_FAQS = [
     },
     {
         q: 'Does Crevo AI keep my real face recognizable in thumbnails?',
-        a: 'Yes. Crevo AI enforces a strict physical likeness lock that preserves your exact facial structure, skin tone, hair, glasses, and age while subtly enhancing eye contact, expression energy, and studio rim lighting—just like a professional YouTube thumbnail designer.',
+        a: 'Yes. With Named Characters in your Brand Kit, you can save up to 6 characters with 3 high-resolution (1024px) reference photos each (front face, angle, and upper body). Crevo AI locks 100% of your exact facial geometry, natural skin texture, and real body build with zero plastic AI look—and even lets you switch outfits on demand.',
+    },
+    {
+        q: 'Can I create Daily Social Posts or retouch my own phone photos in Crevo AI?',
+        a: 'Yes! The Daily Post tab lets you either generate realistic, photographer-grade social photos for Instagram, Facebook, LinkedIn, X, Stories, and YouTube Community—or use Retouch My Photo to upgrade lighting, sharpness, and optionally change the location of any photo you already took, complete with natural, cliché-free captions.',
     },
     {
         q: 'How large of a video file can I upload to Crevo AI?',
@@ -66,6 +70,38 @@ const FEATURE_CATEGORIES = [
         ],
         ctaLabel: 'Try Thumbnail Improver →',
         ctaTo: '/platforms/youtube',
+    },
+    {
+        id: 'daily-post-retouch',
+        badge: 'NEW · REAL-CAMERA PHOTOGRAPHY',
+        icon: '📅',
+        title: 'Daily Social Post Creator & Pro Photo Retouch',
+        summary:
+            'Turn Crevo into your daily content studio for Instagram, Facebook, LinkedIn, X, Stories, and YouTube Community. Generate real-camera lifestyle shots or upload your own phone photo to retouch lighting, clarity, and location with natural Before/After comparison.',
+        bullets: [
+            'Two modes: Create New Shot (6 social formats) or Retouch My Photo (Pro Edit or Change Place)',
+            'Photographer-grade DSLR realism with natural poses, real skin texture, and zero AI plastic look',
+            'Niche-aware AI post idea generator that reads your bio and rotates fresh scenes every click',
+            'Cliché-free, real-human captions & hashtags ready to copy and post in seconds',
+        ],
+        ctaLabel: 'Create Today’s Post Free →',
+        ctaTo: '/signup',
+    },
+    {
+        id: 'named-characters-brand-kit',
+        badge: '100% FACE & BODY LOCK · OUTFITS',
+        icon: '⭐',
+        title: 'Named Characters (3 Photos Each), Brand Kit & AI Outfit Switcher',
+        summary:
+            'Save up to 6 recurring characters (yourself, co-hosts, or guests) with 3 sharp 1024px reference angles each, plus your niche bio, seamless brand logo, and brand colors. Tap a character in Studio and optionally swap outfits without losing your real likeness.',
+        bullets: [
+            'Up to 6 Named Characters × 3 reference photos (front, angle, upper body) for unmistakable likeness',
+            'Optional Outfit Switcher: Keep Photo, AI Different Outfit, or Custom (works on direct uploads too)',
+            'Seamless Brand Logo integration (strips white boxes) with independent ON/OFF toggle',
+            'Auto-applies in Thumbnail Studio, Improve Thumbnail, and Daily Post',
+        ],
+        ctaLabel: 'Set Up Your Brand Kit →',
+        ctaTo: '/signup',
     },
     {
         id: 'video-repurpose',

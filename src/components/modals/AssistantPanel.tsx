@@ -29,6 +29,32 @@ const HELP_TOPICS: HelpTopic[] = [
             '4. Click "Generate Designs", then tap the Eye icon to preview how it looks live inside a YouTube Desktop or Mobile feed!'
     },
     {
+        id: 'daily-post',
+        label: 'Daily Post & Retouch',
+        keywords: [
+            'daily', 'post', 'social', 'instagram', 'facebook', 'linkedin', 'retouch', 'photo',
+            'caption', 'hashtags', 'idea', 'suggest', 'background', 'location', 'place', 'before', 'after'
+        ],
+        answer:
+            'How to use Daily Post (top bar):\n' +
+            '• ✨ Create New Shot: Pick Instagram, Facebook, LinkedIn, X, Stories, or YT Community, choose a vibe (like Real Photo / Swag), enter your niche & topic (or tap "✨ Suggest Idea"), and generate a real-camera photo + natural human caption.\n' +
+            '• 🪄 Retouch My Photo: Upload any phone photo you took and choose "Pro Edit Only" (fixes lighting & clarity) or "Change Place" (keeps your exact face & pose in a new real location), then tap "Compare Original" to see the Before/After!'
+    },
+    {
+        id: 'characters-outfits',
+        label: 'Characters & Outfits',
+        keywords: [
+            'character', 'characters', 'brand kit', 'face', 'outfit', 'clothes', 'shirt', 'suit', 'hoodie',
+            'co-host', 'cohost', 'logo', 'niche', 'bio', 'likeness'
+        ],
+        answer:
+            'How to use Named Characters & Outfits:\n' +
+            '1. Open your Avatar menu → "⭐ My Face & Brand Kit" (/dashboard/brand-kit).\n' +
+            '2. Add up to 6 Named Characters with 3 clear photos each (front face, angle/smile, and upper body) plus your Niche bio, logo, and brand colors.\n' +
+            '3. In Studio or Daily Post, tap any character pill to include all 3 of their angles at once.\n' +
+            '4. Use the "👕 Outfit" bar (works for saved characters AND direct photo uploads) to Keep Photo, let AI pick a Different Outfit, or type a Custom outfit!'
+    },
+    {
         id: 'clips',
         label: 'Clip a YouTube Video',
         keywords: [
