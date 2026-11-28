@@ -356,22 +356,50 @@ export const generateDesign = async (
                 }
             }
 
-            optimizedImages.forEach((img, idx) => {
-                if (img.characterName && img.characterName.trim()) {
-                    allImageParts.push({
-                        text: `NAMED CHARACTER REFERENCE #${idx + 1} — Character Name: "${img.characterName.trim()}". Whenever "${img.characterName.trim()}" is referenced or featured in the thumbnail, you MUST depict THIS exact real person preserving 100% of their face, hair, skin tone, and identity:`,
-                    });
+            // Group named character photos so multi-angle references for the SAME person are clearly presented together
+            const namedGroups = new Map<string, { name: string; photos: ImageAsset[] }>();
+            const unnamedImages: ImageAsset[] = [];
+            optimizedImages.forEach((img) => {
+                const name = img.characterName?.trim();
+                if (name) {
+                    const key = (img.characterId || name).toLowerCase();
+                    const existing = namedGroups.get(key);
+                    if (existing) {
+                        existing.photos.push(img);
+                    } else {
+                        namedGroups.set(key, { name, photos: [img] });
+                    }
+                } else {
+                    unnamedImages.push(img);
                 }
+            });
+
+            let charGroupIdx = 0;
+            namedGroups.forEach(({ name, photos }) => {
+                charGroupIdx += 1;
+                const countText =
+                    photos.length > 1
+                        ? `The following ${photos.length} reference photos ALL show the SAME exact real person ("${name}") from different angles/expressions. Study ALL ${photos.length} photos together to lock 100% of "${name}"'s exact face shape, eyes, nose, jawline, hair, skin tone, and likeness`
+                        : `This reference photo shows the exact real person named "${name}". Preserve 100% of "${name}"'s exact face, hair, skin tone, and identity`;
+                allImageParts.push({
+                    text: `NAMED CHARACTER #${charGroupIdx} — "${name}": ${countText}. Whenever "${name}" appears in the thumbnail, you MUST depict THIS exact person and never invent a generic face or blend them with anyone else:`,
+                });
+                photos.forEach((p) => {
+                    allImageParts.push({ inlineData: { data: p.base64, mimeType: p.mimeType } });
+                });
+            });
+
+            unnamedImages.forEach((img) => {
                 allImageParts.push({ inlineData: { data: img.base64, mimeType: img.mimeType } });
             });
             if (logoPart) allImageParts.push(logoPart);
 
-            const namedCharacterList = optimizedImages
-                .map((img) => img.characterName?.trim())
-                .filter(Boolean) as string[];
+            const namedCharacterSummary = Array.from(namedGroups.values()).map(
+                ({ name, photos }) => `"${name}" (${photos.length} reference photo${photos.length > 1 ? 's' : ''})`
+            );
             const namedCharactersDirective =
-                namedCharacterList.length > 0
-                    ? `\n\n[NAMED CHARACTERS PROVIDED — STRICT IDENTITY MAPPING]\nThe user attached labeled reference photos for these specific characters: ${namedCharacterList.map((n) => `"${n}"`).join(', ')}. Keep each named character's real face 100% distinct and faithful to their own labeled photo—never blend or swap faces between characters.`
+                namedCharacterSummary.length > 0
+                    ? `\n\n[NAMED CHARACTERS PROVIDED — MULTI-ANGLE STRICT IDENTITY MAPPING]\nThe user attached labeled reference photos for these specific characters: ${namedCharacterSummary.join(', ')}. Each character's reference photos show the SAME real person from multiple angles—use all of their angles together so their real face is 100% unmistakable, and never blend or swap faces between different characters.`
                     : '';
 
 

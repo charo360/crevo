@@ -14,14 +14,58 @@ interface SavedFaceItem {
     mime_type: string;
 }
 
+interface SavedPhotoItem {
+    id: string;
+    data_url: string;
+    mime_type: string;
+}
+
+interface SavedCharacterRecord {
+    id: string;
+    name: string;
+    photos: SavedPhotoItem[];
+}
+
 interface SavedBrandKit {
     channel_name: string;
-    face_images: SavedFaceItem[];
+    characters?: SavedCharacterRecord[];
+    face_images?: SavedFaceItem[];
     logo_data_url: string;
     logo_position: LogoPosition;
     colors: ColorsState;
     preferred_style: string;
     updated_at?: string | null;
+}
+
+const MAX_CHARACTERS = 6;
+const MAX_PHOTOS_PER_CHARACTER = 3;
+const PHOTO_SLOT_HINTS = ['1. Front face', '2. Smile / angle', '3. Side / reaction'];
+
+function migrateLegacyFacesToCharacters(faces: SavedFaceItem[]): SavedCharacterRecord[] {
+    const map = new Map<string, SavedCharacterRecord>();
+    faces.forEach((f, idx) => {
+        if (!f?.data_url?.startsWith('data:image/')) return;
+        const name = (f.label || '').trim() || `Character ${idx + 1}`;
+        const key = name.toLowerCase();
+        const existing = map.get(key);
+        const photo: SavedPhotoItem = {
+            id: f.id || `photo_${idx}_${Date.now()}`,
+            data_url: f.data_url,
+            mime_type: f.mime_type || 'image/jpeg',
+        };
+        if (existing) {
+            if (existing.photos.length < MAX_PHOTOS_PER_CHARACTER) {
+                existing.photos.push(photo);
+            }
+        } else if (map.size < MAX_CHARACTERS) {
+            map.set(key, {
+                id: `char_${idx}_${Date.now()}`,
+                name,
+                photos: [photo],
+            });
+        }
+    });
+    return Array.from(map.values());
 }
 
 const DEFAULT_COLORS: ColorsState = {
@@ -78,13 +122,14 @@ function fileToCompressedDataUrl(
 }
 
 export const BrandKitPage: FC = () => {
-    const faceInputRef = useRef<HTMLInputElement>(null);
+    const charPhotoInputRef = useRef<HTMLInputElement>(null);
+    const activeCharIdForUploadRef = useRef<string | null>(null);
     const logoInputRef = useRef<HTMLInputElement>(null);
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [channelName, setChannelName] = useState('');
-    const [faces, setFaces] = useState<SavedFaceItem[]>([]);
+    const [characters, setCharacters] = useState<SavedCharacterRecord[]>([]);
     const [logoDataUrl, setLogoDataUrl] = useState('');
     const [logoPosition, setLogoPosition] = useState<LogoPosition>('top-right');
     const [colors, setColors] = useState<ColorsState>(DEFAULT_COLORS);
@@ -99,7 +144,13 @@ export const BrandKitPage: FC = () => {
                 const bk = res?.brandKit;
                 if (bk) {
                     setChannelName(bk.channel_name || '');
-                    setFaces(Array.isArray(bk.face_images) ? bk.face_images : []);
+                    if (Array.isArray(bk.characters) && bk.characters.length > 0) {
+                        setCharacters(bk.characters);
+                    } else if (Array.isArray(bk.face_images) && bk.face_images.length > 0) {
+                        setCharacters(migrateLegacyFacesToCharacters(bk.face_images));
+                    } else {
+                        setCharacters([]);
+                    }
                     setLogoDataUrl(bk.logo_data_url || '');
                     setLogoPosition((bk.logo_position as LogoPosition) || 'top-right');
                     if (bk.colors?.primary) {
@@ -125,24 +176,45 @@ export const BrandKitPage: FC = () => {
         };
     }, []);
 
-    const handleFaceUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleAddCharacter = () => {
+        if (characters.length >= MAX_CHARACTERS) {
+            toast.info(`You can save up to ${MAX_CHARACTERS} characters. Remove one first to add another.`);
+            return;
+        }
+        const newChar: SavedCharacterRecord = {
+            id: `char_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            name: '',
+            photos: [],
+        };
+        setCharacters((prev) => [...prev, newChar]);
+    };
+
+    const triggerCharacterPhotoUpload = (charId: string) => {
+        activeCharIdForUploadRef.current = charId;
+        charPhotoInputRef.current?.click();
+    };
+
+    const handleCharacterPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files: File[] = Array.from(e.target.files || []);
         e.target.value = '';
-        if (files.length === 0) return;
+        const targetCharId = activeCharIdForUploadRef.current;
+        if (!targetCharId || files.length === 0) return;
 
-        const remainingSlots = Math.max(0, 6 - faces.length);
+        const targetChar = characters.find((c) => c.id === targetCharId);
+        if (!targetChar) return;
+
+        const remainingSlots = Math.max(0, MAX_PHOTOS_PER_CHARACTER - targetChar.photos.length);
         if (remainingSlots === 0) {
-            toast.info('You can save up to 6 characters. Remove one first to add another.');
+            toast.info(`Each character can have up to ${MAX_PHOTOS_PER_CHARACTER} reference photos. Remove one first to replace it.`);
             return;
         }
 
-        const toAdd: SavedFaceItem[] = [];
+        const addedPhotos: SavedPhotoItem[] = [];
         for (const file of files.slice(0, remainingSlots)) {
             try {
                 const compressed = await fileToCompressedDataUrl(file, 640, false);
-                toAdd.push({
-                    id: `face_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-                    label: file.name.replace(/\.[^.]+$/, '').slice(0, 30) || `Character ${faces.length + toAdd.length + 1}`,
+                addedPhotos.push({
+                    id: `photo_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
                     data_url: compressed.dataUrl,
                     mime_type: compressed.mimeType,
                 });
@@ -150,8 +222,14 @@ export const BrandKitPage: FC = () => {
                 toast.error(err?.message || 'Could not process selected photo.');
             }
         }
-        if (toAdd.length > 0) {
-            setFaces((prev) => [...prev, ...toAdd].slice(0, 6));
+        if (addedPhotos.length > 0) {
+            setCharacters((prev) =>
+                prev.map((c) =>
+                    c.id === targetCharId
+                        ? { ...c, photos: [...c.photos, ...addedPhotos].slice(0, MAX_PHOTOS_PER_CHARACTER) }
+                        : c
+                )
+            );
         }
     };
 
@@ -169,18 +247,29 @@ export const BrandKitPage: FC = () => {
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
+        const incompleteChars = characters.filter((c) => c.photos.length === 0);
+        if (incompleteChars.length > 0 && characters.some((c) => c.photos.length > 0)) {
+            toast.info('Characters without photos were skipped — add at least 1 photo to save a character.');
+        } else if (characters.length > 0 && incompleteChars.length === characters.length) {
+            toast.error('Please add at least 1 reference photo to your character before saving.');
+            return;
+        }
         setSaving(true);
         try {
-            const normalizedFaces = faces.map((f, idx) => ({
-                ...f,
-                label: (f.label || '').trim() || `Character ${idx + 1}`,
-            }));
-            setFaces(normalizedFaces);
+            const normalizedCharacters = characters
+                .filter((c) => c.photos.length > 0)
+                .map((c, idx) => ({
+                    ...c,
+                    name: (c.name || '').trim() || `Character ${idx + 1}`,
+                    photos: c.photos.slice(0, MAX_PHOTOS_PER_CHARACTER),
+                }));
+            setCharacters(normalizedCharacters);
             const res = await apiRequest<{ brandKit: SavedBrandKit }>('/api/user/brand-kit', {
                 method: 'PUT',
                 body: JSON.stringify({
                     channel_name: channelName.trim(),
-                    face_images: normalizedFaces,
+                    characters: normalizedCharacters,
+                    face_images: [],
                     logo_data_url: logoDataUrl,
                     logo_position: logoPosition,
                     colors,
@@ -200,7 +289,7 @@ export const BrandKitPage: FC = () => {
         try {
             await apiRequest('/api/user/brand-kit', { method: 'DELETE' });
             setChannelName('');
-            setFaces([]);
+            setCharacters([]);
             setLogoDataUrl('');
             setLogoPosition('top-right');
             setColors(DEFAULT_COLORS);
@@ -286,7 +375,7 @@ export const BrandKitPage: FC = () => {
                     </div>
                 ) : (
                     <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-                        {/* Card 1: Face / Persona Photos */}
+                        {/* Card 1: Named Characters (3 reference photos each) */}
                         <section
                             style={{
                                 background: '#ffffff',
@@ -296,45 +385,45 @@ export const BrandKitPage: FC = () => {
                                 boxShadow: '0 4px 16px rgba(87, 28, 134, 0.04)',
                             }}
                         >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
                                 <div>
                                     <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#111827' }}>
-                                        1. Named Characters (Up to 6)
+                                        1. Named Characters (Up to {MAX_CHARACTERS} · 3 Photos Each)
                                     </h2>
                                     <p style={{ margin: '3px 0 0', fontSize: '13px', color: '#6b7280' }}>
-                                        Upload photos of yourself, co-hosts, or recurring characters and give each one a name (e.g., <strong>Sam</strong>, <strong>Sarah</strong>). That way the AI knows exactly who is who when you mention them!
+                                        Add yourself, co-hosts, or guests with <strong>up to 3 clear photos each</strong> (front, smile, side angle) so the AI never misses how someone looks.
                                     </p>
                                 </div>
                                 <input
-                                    ref={faceInputRef}
+                                    ref={charPhotoInputRef}
                                     type="file"
                                     accept="image/*"
                                     multiple
-                                    onChange={handleFaceUpload}
+                                    onChange={handleCharacterPhotoUpload}
                                     style={{ display: 'none' }}
                                 />
                                 <button
                                     type="button"
-                                    onClick={() => faceInputRef.current?.click()}
-                                    disabled={faces.length >= 6}
+                                    onClick={handleAddCharacter}
+                                    disabled={characters.length >= MAX_CHARACTERS}
                                     style={{
-                                        padding: '8px 14px',
+                                        padding: '9px 15px',
                                         borderRadius: '10px',
                                         border: 'none',
-                                        background: faces.length >= 6 ? '#d1d5db' : '#571c86',
+                                        background: characters.length >= MAX_CHARACTERS ? '#d1d5db' : '#571c86',
                                         color: '#ffffff',
                                         fontSize: '13px',
                                         fontWeight: 700,
-                                        cursor: faces.length >= 6 ? 'not-allowed' : 'pointer',
+                                        cursor: characters.length >= MAX_CHARACTERS ? 'not-allowed' : 'pointer',
                                     }}
                                 >
-                                    + Add Character ({faces.length}/6)
+                                    + Add Character ({characters.length}/{MAX_CHARACTERS})
                                 </button>
                             </div>
 
-                            {faces.length === 0 ? (
+                            {characters.length === 0 ? (
                                 <div
-                                    onClick={() => faceInputRef.current?.click()}
+                                    onClick={handleAddCharacter}
                                     style={{
                                         border: '2px dashed #d8ccf0',
                                         borderRadius: '12px',
@@ -346,88 +435,197 @@ export const BrandKitPage: FC = () => {
                                         fontSize: '13.5px',
                                     }}
                                 >
-                                    <div style={{ fontSize: '26px', marginBottom: '6px' }}>📸</div>
-                                    <strong>Click to upload 1–6 character photos &amp; name each one</strong>
-                                    <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
-                                        JPG, PNG, or WebP · Great for solo creators, co-hosts, and duo channels
+                                    <div style={{ fontSize: '28px', marginBottom: '6px' }}>👤</div>
+                                    <strong>+ Add Your First Character</strong>
+                                    <div style={{ fontSize: '12.5px', color: '#6b7280', marginTop: '4px' }}>
+                                        Give them a name (e.g. Sam) and drop in up to 3 reference photos so AI locks onto their exact face
                                     </div>
                                 </div>
                             ) : (
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '12px' }}>
-                                    {faces.map((face, idx) => (
-                                        <div
-                                            key={face.id}
-                                            style={{
-                                                borderRadius: '12px',
-                                                overflow: 'hidden',
-                                                border: '1.5px solid #d8ccf0',
-                                                background: '#faf8fd',
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                            }}
-                                        >
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                                    {characters.map((char, charIdx) => {
+                                        const photoCount = char.photos.length;
+                                        return (
                                             <div
+                                                key={char.id}
                                                 style={{
-                                                    position: 'relative',
-                                                    aspectRatio: '1 / 1',
-                                                    background: '#111827',
+                                                    borderRadius: '14px',
+                                                    border: '1.5px solid #e4dcf2',
+                                                    background: '#faf8fd',
+                                                    padding: '14px',
                                                 }}
                                             >
-                                                <img
-                                                    src={face.data_url}
-                                                    alt={face.label || `Character ${idx + 1}`}
-                                                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setFaces((prev) => prev.filter((f) => f.id !== face.id))}
-                                                    aria-label="Remove character"
+                                                {/* Character header: Name input + Remove */}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                                                    <div style={{ flex: '1 1 200px' }}>
+                                                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#571c86', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>
+                                                            Character Name
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            value={char.name}
+                                                            maxLength={32}
+                                                            autoFocus={!char.name && char.photos.length === 0}
+                                                            onChange={(e) => {
+                                                                const nextName = e.target.value;
+                                                                setCharacters((prev) =>
+                                                                    prev.map((c) => (c.id === char.id ? { ...c, name: nextName } : c))
+                                                                );
+                                                            }}
+                                                            placeholder={`e.g. ${charIdx === 0 ? 'Sam' : charIdx === 1 ? 'Sarah' : `Character ${charIdx + 1}`}`}
+                                                            style={{
+                                                                width: '100%',
+                                                                padding: '8px 12px',
+                                                                borderRadius: '10px',
+                                                                border: '1.5px solid #d8ccf0',
+                                                                fontSize: '14px',
+                                                                fontWeight: 700,
+                                                                color: '#1f1b24',
+                                                                background: '#ffffff',
+                                                            }}
+                                                        />
+                                                    </div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', alignSelf: 'flex-end' }}>
+                                                        {photoCount < MAX_PHOTOS_PER_CHARACTER && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => triggerCharacterPhotoUpload(char.id)}
+                                                                style={{
+                                                                    padding: '8px 12px',
+                                                                    borderRadius: '9px',
+                                                                    border: '1px solid #d8ccf0',
+                                                                    background: '#ffffff',
+                                                                    color: '#571c86',
+                                                                    fontSize: '12.5px',
+                                                                    fontWeight: 700,
+                                                                    cursor: 'pointer',
+                                                                }}
+                                                            >
+                                                                + Upload Photos ({photoCount}/3)
+                                                            </button>
+                                                        )}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setCharacters((prev) => prev.filter((c) => c.id !== char.id))}
+                                                            style={{
+                                                                padding: '8px 10px',
+                                                                borderRadius: '9px',
+                                                                border: '1px solid #fecaca',
+                                                                background: '#fff5f5',
+                                                                color: '#b91c1c',
+                                                                fontSize: '12px',
+                                                                fontWeight: 700,
+                                                                cursor: 'pointer',
+                                                            }}
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {/* 3 Simple Reference Photo Slots */}
+                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '10px' }}>
+                                                    {[0, 1, 2].map((slotIdx) => {
+                                                        const photo = char.photos[slotIdx];
+                                                        return photo ? (
+                                                            <div
+                                                                key={photo.id}
+                                                                style={{
+                                                                    position: 'relative',
+                                                                    aspectRatio: '1 / 1',
+                                                                    borderRadius: '10px',
+                                                                    overflow: 'hidden',
+                                                                    border: '1.5px solid #c4b5fd',
+                                                                    background: '#111827',
+                                                                }}
+                                                            >
+                                                                <img
+                                                                    src={photo.data_url}
+                                                                    alt={`${char.name || 'Character'} photo ${slotIdx + 1}`}
+                                                                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                                                                />
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        setCharacters((prev) =>
+                                                                            prev.map((c) =>
+                                                                                c.id === char.id
+                                                                                    ? { ...c, photos: c.photos.filter((p) => p.id !== photo.id) }
+                                                                                    : c
+                                                                            )
+                                                                        )
+                                                                    }
+                                                                    aria-label="Remove photo"
+                                                                    style={{
+                                                                        position: 'absolute',
+                                                                        top: '5px',
+                                                                        right: '5px',
+                                                                        width: '24px',
+                                                                        height: '24px',
+                                                                        borderRadius: '50%',
+                                                                        border: 'none',
+                                                                        background: 'rgba(0,0,0,0.75)',
+                                                                        color: '#ffffff',
+                                                                        fontSize: '15px',
+                                                                        cursor: 'pointer',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
+                                                                    }}
+                                                                >
+                                                                    ×
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <button
+                                                                key={`empty_${slotIdx}`}
+                                                                type="button"
+                                                                onClick={() => triggerCharacterPhotoUpload(char.id)}
+                                                                style={{
+                                                                    aspectRatio: '1 / 1',
+                                                                    borderRadius: '10px',
+                                                                    border: '2px dashed #d8ccf0',
+                                                                    background: '#ffffff',
+                                                                    color: '#6b7280',
+                                                                    cursor: 'pointer',
+                                                                    display: 'flex',
+                                                                    flexDirection: 'column',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    gap: '4px',
+                                                                    padding: '8px',
+                                                                    textAlign: 'center',
+                                                                }}
+                                                            >
+                                                                <span style={{ fontSize: '20px', color: '#7e22ce', lineHeight: 1 }}>+</span>
+                                                                <span style={{ fontSize: '11px', fontWeight: 700, color: '#4b5563' }}>
+                                                                    {PHOTO_SLOT_HINTS[slotIdx]}
+                                                                </span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+
+                                                {/* Simple accuracy status hint */}
+                                                <div
                                                     style={{
-                                                        position: 'absolute',
-                                                        top: '6px',
-                                                        right: '6px',
-                                                        width: '26px',
-                                                        height: '26px',
-                                                        borderRadius: '50%',
-                                                        border: 'none',
-                                                        background: 'rgba(0,0,0,0.75)',
-                                                        color: '#ffffff',
-                                                        fontSize: '16px',
-                                                        cursor: 'pointer',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
+                                                        marginTop: '10px',
+                                                        fontSize: '12px',
+                                                        fontWeight: 600,
+                                                        color: photoCount === 3 ? '#15803d' : photoCount > 0 ? '#6d28d9' : '#9ca3af',
                                                     }}
                                                 >
-                                                    ×
-                                                </button>
+                                                    {photoCount === 3
+                                                        ? '✅ 3/3 reference photos — Best AI face accuracy'
+                                                        : photoCount === 2
+                                                        ? '👍 2/3 photos — Add 1 more angle for maximum accuracy'
+                                                        : photoCount === 1
+                                                        ? '💡 1/3 photos — Add 2 more angles (smile, side) so AI never misses how they look'
+                                                        : 'Click any slot above to pick 1–3 photos at once'}
+                                                </div>
                                             </div>
-                                            <div style={{ padding: '8px' }}>
-                                                <input
-                                                    type="text"
-                                                    value={face.label}
-                                                    maxLength={32}
-                                                    onChange={(e) => {
-                                                        const nextName = e.target.value;
-                                                        setFaces((prev) =>
-                                                            prev.map((f) => (f.id === face.id ? { ...f, label: nextName } : f))
-                                                        );
-                                                    }}
-                                                    placeholder={`Character ${idx + 1} (e.g. Sam)`}
-                                                    style={{
-                                                        width: '100%',
-                                                        padding: '6px 8px',
-                                                        borderRadius: '8px',
-                                                        border: '1px solid #d8ccf0',
-                                                        fontSize: '12.5px',
-                                                        fontWeight: 700,
-                                                        color: '#1f1b24',
-                                                        background: '#ffffff',
-                                                    }}
-                                                />
-                                            </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             )}
                         </section>

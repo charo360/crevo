@@ -1,6 +1,6 @@
 import React, { FC } from 'react';
 import {
-    Platform, ImageAsset, VideoAsset, TextState, LogoState, ColorsState,
+    Platform, ImageAsset, SavedCharacter, VideoAsset, TextState, LogoState, ColorsState,
     PreferencesState, AnalysisResult, ImagenAspectRatio, VeoAspectRatio, ResizeOption
 } from '../../types';
 import { YouTubeModule } from './YouTubeModule';
@@ -50,7 +50,7 @@ interface SidebarProps {
     isBatchResizing?: boolean;
     outputAspectRatio?: string;
     onOutputAspectRatioChange?: (ar: string) => void;
-    savedCharacters?: ImageAsset[];
+    savedCharacters?: SavedCharacter[];
     isOpen?: boolean;
     onClose?: () => void;
 }

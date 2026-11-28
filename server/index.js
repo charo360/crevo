@@ -4241,6 +4241,32 @@ app.get('/api/user/brand-kit', requireAuth, async (req, res) => {
 app.put('/api/user/brand-kit', requireAuth, async (req, res) => {
     try {
         const body = req.body || {};
+
+        const rawCharacters = Array.isArray(body.characters) ? body.characters.slice(0, 6) : [];
+        const characters = [];
+        for (const c of rawCharacters) {
+            const rawPhotos = Array.isArray(c?.photos) ? c.photos.slice(0, 3) : [];
+            const photos = [];
+            for (const p of rawPhotos) {
+                const dataUrl = typeof p?.data_url === 'string' ? p.data_url.trim() : '';
+                if (!dataUrl.startsWith('data:image/') || dataUrl.length > 900_000) continue;
+                photos.push({
+                    id: String(p.id || `bk_photo_${photos.length + 1}`).slice(0, 64),
+                    data_url: dataUrl,
+                    mime_type: String(p.mime_type || 'image/jpeg').slice(0, 40),
+                });
+            }
+            if (photos.length === 0) continue;
+            const charName = typeof c?.name === 'string' && c.name.trim()
+                ? c.name.trim().slice(0, 40)
+                : `Character ${characters.length + 1}`;
+            characters.push({
+                id: String(c.id || `bk_char_${characters.length + 1}`).slice(0, 64),
+                name: charName,
+                photos,
+            });
+        }
+
         const rawFaces = Array.isArray(body.face_images) ? body.face_images.slice(0, 6) : [];
         const face_images = [];
         for (const f of rawFaces) {
@@ -4248,7 +4274,7 @@ app.put('/api/user/brand-kit', requireAuth, async (req, res) => {
             if (!dataUrl.startsWith('data:image/') || dataUrl.length > 900_000) continue;
             face_images.push({
                 id: String(f.id || `bk_face_${face_images.length + 1}`).slice(0, 64),
-                label: String(f.label || `Face ${face_images.length + 1}`).slice(0, 40),
+                label: String(f.label || `Character ${face_images.length + 1}`).trim().slice(0, 40),
                 data_url: dataUrl,
                 mime_type: String(f.mime_type || 'image/jpeg').slice(0, 40),
             });
@@ -4266,6 +4292,7 @@ app.put('/api/user/brand-kit', requireAuth, async (req, res) => {
 
         const brand_kit = {
             channel_name: typeof body.channel_name === 'string' ? body.channel_name.trim().slice(0, 60) : '',
+            characters,
             face_images,
             logo_data_url,
             logo_position: typeof body.logo_position === 'string' ? body.logo_position.slice(0, 24) : 'top-right',
@@ -4287,6 +4314,7 @@ app.delete('/api/user/brand-kit', requireAuth, async (req, res) => {
             $set: {
                 brand_kit: {
                     channel_name: '',
+                    characters: [],
                     face_images: [],
                     logo_data_url: '',
                     logo_position: 'top-right',

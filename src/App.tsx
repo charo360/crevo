@@ -4,7 +4,7 @@ import { GoogleGenAI } from "@google/genai";
 import { createAiClient } from './core/services/ai-providers/openrouterClient';
 import { toast } from 'react-toastify';
 import {
-    Platform, ImageAsset, VideoAsset, LogoState, TextState, ColorsState, 
+    Platform, ImageAsset, SavedCharacter, VideoAsset, LogoState, TextState, ColorsState, 
     PreferencesState, DesignResult, AnalysisResult, 
     EditorState, EditableElement, ImagenAspectRatio, VeoAspectRatio, ResizeOption
 } from './types';
@@ -104,7 +104,7 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
     const [colors, setColors] = useState<ColorsState>(prefs.colors);
     const [preferences, setPreferences] = useState<PreferencesState>(prefs.preferences);
     const [brandChannelName, setBrandChannelName] = useState<string>('');
-    const [savedCharacters, setSavedCharacters] = useState<ImageAsset[]>([]);
+    const [savedCharacters, setSavedCharacters] = useState<SavedCharacter[]>([]);
     const brandKitAppliedRef = useRef<boolean>(false);
 
     // Auto-load saved Brand Kit (Named Characters, Logo, Brand Colors & Style) once per Studio mount
@@ -148,23 +148,63 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                         );
                     }
                 }
-                if (Array.isArray(bk.face_images) && bk.face_images.length > 0) {
-                    const parsedFaces: ImageAsset[] = [];
+                const parsedCharacters: SavedCharacter[] = [];
+                if (Array.isArray(bk.characters) && bk.characters.length > 0) {
+                    bk.characters.forEach((c: any, cIdx: number) => {
+                        const charId = String(c?.id || `brand_char_${cIdx}`);
+                        const charName = (typeof c?.name === 'string' && c.name.trim()) || `Character ${cIdx + 1}`;
+                        const photos: ImageAsset[] = [];
+                        if (Array.isArray(c?.photos)) {
+                            c.photos.slice(0, 3).forEach((p: any, pIdx: number) => {
+                                if (typeof p?.data_url === 'string' && p.data_url.startsWith('data:image/')) {
+                                    const m = p.data_url.match(/^data:([^;]+);base64,(.+)$/s);
+                                    if (m) {
+                                        photos.push({
+                                            id: `brand_char_${charId}_p${pIdx}`,
+                                            mimeType: m[1],
+                                            base64: m[2],
+                                            url: p.data_url,
+                                            characterId: charId,
+                                            characterName: charName,
+                                        });
+                                    }
+                                }
+                            });
+                        }
+                        if (photos.length > 0) {
+                            parsedCharacters.push({ id: charId, name: charName, photos });
+                        }
+                    });
+                } else if (Array.isArray(bk.face_images) && bk.face_images.length > 0) {
+                    const legacyMap = new Map<string, SavedCharacter>();
                     bk.face_images.forEach((f: any, idx: number) => {
                         if (typeof f?.data_url === 'string' && f.data_url.startsWith('data:image/')) {
                             const m = f.data_url.match(/^data:([^;]+);base64,(.+)$/s);
                             if (m) {
-                                parsedFaces.push({
-                                    id: `brand_char_${f.id || idx}`,
+                                const charName = (typeof f.label === 'string' && f.label.trim()) || `Character ${idx + 1}`;
+                                const key = charName.toLowerCase();
+                                const existing = legacyMap.get(key);
+                                const charId = existing ? existing.id : `brand_char_${f.id || idx}`;
+                                const asset: ImageAsset = {
+                                    id: `brand_char_${charId}_p${existing ? existing.photos.length : 0}`,
                                     mimeType: m[1],
                                     base64: m[2],
                                     url: f.data_url,
-                                    characterName: (typeof f.label === 'string' && f.label.trim()) || `Character ${idx + 1}`,
-                                });
+                                    characterId: charId,
+                                    characterName: charName,
+                                };
+                                if (existing) {
+                                    if (existing.photos.length < 3) existing.photos.push(asset);
+                                } else {
+                                    legacyMap.set(key, { id: charId, name: charName, photos: [asset] });
+                                }
                             }
                         }
                     });
-                    setSavedCharacters(parsedFaces);
+                    parsedCharacters.push(...Array.from(legacyMap.values()));
+                }
+                if (parsedCharacters.length > 0) {
+                    setSavedCharacters(parsedCharacters);
                 }
             })
             .catch(() => {});

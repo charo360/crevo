@@ -80,6 +80,19 @@ const userSchema = new mongoose.Schema(
         },
         brand_kit: {
             channel_name: { type: String, trim: true, default: '' },
+            characters: [
+                {
+                    id: { type: String, default: '' },
+                    name: { type: String, trim: true, default: '' },
+                    photos: [
+                        {
+                            id: { type: String, default: '' },
+                            data_url: { type: String, default: '' },
+                            mime_type: { type: String, default: 'image/jpeg' },
+                        },
+                    ],
+                },
+            ],
             face_images: [
                 {
                     id: { type: String, default: '' },

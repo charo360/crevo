@@ -10,7 +10,14 @@ export interface ImageAsset {
     url: string;
     base64: string;
     mimeType: string;
+    characterId?: string;
     characterName?: string;
+}
+
+export interface SavedCharacter {
+    id: string;
+    name: string;
+    photos: ImageAsset[];
 }
 
 export interface VideoAsset {

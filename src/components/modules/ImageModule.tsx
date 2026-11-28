@@ -1,7 +1,7 @@
 import React, { FC, useRef, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { ImageAsset, Platform, ImagenAspectRatio } from '../../types';
+import { ImageAsset, SavedCharacter, Platform, ImagenAspectRatio } from '../../types';
 import { Module } from './Module';
 import { ICONS } from '../../constants';
 import { PLATFORM_CONFIGS } from '../../constants/platforms';
@@ -12,7 +12,7 @@ interface ImageModuleProps {
     platform: Platform;
     images: ImageAsset[];
     onImagesChange: (i: ImageAsset[]) => void;
-    savedCharacters?: ImageAsset[];
+    savedCharacters?: SavedCharacter[];
     onGenerateImage: (p: string, np: string, ar: ImagenAspectRatio) => Promise<ImageAsset | null>;
     isGeneratingImage: boolean;
     outputAspectRatio?: string;
@@ -97,18 +97,18 @@ export const ImageModule: FC<ImageModuleProps> = ({
         await onGenerateImage(genPrompt, negativePrompt, aspectRatio);
     };
 
-    const toggleSavedCharacter = (char: ImageAsset) => {
-        const exists = images.some((img) => img.id === char.id);
+    const toggleSavedCharacter = (char: SavedCharacter) => {
+        const exists = images.some((img) => img.characterId === char.id);
         if (exists) {
-            onImagesChange(images.filter((img) => img.id !== char.id));
+            onImagesChange(images.filter((img) => img.characterId !== char.id));
         } else {
-            onImagesChange([...images, char]);
+            onImagesChange([...images, ...char.photos]);
         }
     };
 
     return (
         <Module icon={ICONS.IMAGE} title="Images">
-            {savedCharacters.length > 0 && (
+            {savedCharacters.length > 0 ? (
                 <div
                     style={{
                         marginBottom: '12px',
@@ -139,12 +139,14 @@ export const ImageModule: FC<ImageModuleProps> = ({
                     </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                         {savedCharacters.map((char) => {
-                            const selected = images.some((img) => img.id === char.id);
+                            const selected = images.some((img) => img.characterId === char.id);
+                            const avatarUrl = char.photos[0]?.url;
                             return (
                                 <button
                                     key={char.id}
                                     type="button"
                                     onClick={() => toggleSavedCharacter(char)}
+                                    title={`${char.name} (${char.photos.length} reference photo${char.photos.length > 1 ? 's' : ''})`}
                                     style={{
                                         display: 'inline-flex',
                                         alignItems: 'center',
@@ -160,23 +162,45 @@ export const ImageModule: FC<ImageModuleProps> = ({
                                         transition: 'all 0.15s ease',
                                     }}
                                 >
-                                    <img
-                                        src={char.url}
-                                        alt={char.characterName || 'Character'}
-                                        style={{
-                                            width: '22px',
-                                            height: '22px',
-                                            borderRadius: '50%',
-                                            objectFit: 'cover',
-                                            display: 'block',
-                                        }}
-                                    />
-                                    <span>{char.characterName || 'Character'}</span>
+                                    {avatarUrl && (
+                                        <img
+                                            src={avatarUrl}
+                                            alt={char.name}
+                                            style={{
+                                                width: '22px',
+                                                height: '22px',
+                                                borderRadius: '50%',
+                                                objectFit: 'cover',
+                                                display: 'block',
+                                            }}
+                                        />
+                                    )}
+                                    <span>{char.name}</span>
+                                    <span style={{ fontSize: '10.5px', opacity: 0.8 }}>
+                                        ({char.photos.length})
+                                    </span>
                                     {selected && <span style={{ fontSize: '11px' }}>✓</span>}
                                 </button>
                             );
                         })}
                     </div>
+                </div>
+            ) : (
+                <div style={{ marginBottom: '10px' }}>
+                    <Link
+                        to="/dashboard/brand-kit"
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            fontSize: '11.5px',
+                            fontWeight: 700,
+                            color: '#6d28d9',
+                            textDecoration: 'none',
+                        }}
+                    >
+                        ⭐ Save your face as a Named Character (up to 3 photos) →
+                    </Link>
                 </div>
             )}
             <label className="sub-label">Upload Images (Optional)</label>
