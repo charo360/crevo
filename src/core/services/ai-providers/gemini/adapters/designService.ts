@@ -395,7 +395,12 @@ export const generateDesign = async (
             unnamedImages.forEach((img) => {
                 allImageParts.push({ inlineData: { data: img.base64, mimeType: img.mimeType } });
             });
-            if (logoPart) allImageParts.push(logoPart);
+            if (logoPart) {
+                allImageParts.push({
+                    text: `BRAND LOGO REFERENCE — Place this logo natively inside the design at the ${logo.position.replace('-', ' ')} corner. Extract ONLY the logo emblem/wordmark itself (completely remove any white or solid rectangular background box around it) so it blends seamlessly as an authentic part of the artwork, NEVER looking like a pasted sticker:`,
+                });
+                allImageParts.push(logoPart);
+            }
 
             const namedCharacterSummary = Array.from(namedGroups.values()).map(
                 ({ name, photos }) => `"${name}" (${photos.length} reference photo${photos.length > 1 ? 's' : ''})`
@@ -730,7 +735,14 @@ ${weaknessesList}
 - Fit this outfit naturally onto their exact real shoulders, torso, and body proportions with realistic fabric texture, folds, and lighting while keeping 100% of their exact real face, hair, skin tone, and body build.`
                           : '';
 
-                const variationPrompt = `${finalPrompt}${referenceBlueprintDirective}${namedCharactersDirective}${outfitDirective}${designerLikenessDirective}${aspectOverrideDirective}\n\n${variationDirective}`;
+                const logoIntegrationDirective = logoPart
+                    ? `\n\n[BRAND LOGO INTEGRATION — SEAMLESS DESIGN ELEMENT (MANDATORY)]
+- Integrate the attached BRAND LOGO naturally into the composition at the ${logo.position.replace('-', ' ')} with clean breathing room from the edges.
+- NEVER paste the logo as a harsh opaque white/colored square box or slapped-on sticker. Completely remove any rectangular background behind the logo so ONLY the clean logo mark/wordmark sits naturally in the layout.
+- Harmonize its scale (tasteful, balanced, never oversized), lighting, and subtle shadow/contrast with the surrounding artwork so it looks professionally designed into the scene from the start. Keep it crisp and never overlapping any person's face or main headline.`
+                    : '';
+
+                const variationPrompt = `${finalPrompt}${referenceBlueprintDirective}${namedCharactersDirective}${outfitDirective}${logoIntegrationDirective}${designerLikenessDirective}${aspectOverrideDirective}\n\n${variationDirective}`;
 
                 const imageConfig = {
                     responseModalities: [Modality.IMAGE],
