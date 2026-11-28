@@ -620,20 +620,39 @@ ${weaknessesList}
             } else if (platform === 'daily_post') {
                 const hasHeadline = Boolean(currentText.headline && currentText.headline.trim());
                 const hasBrandColors = Boolean(colors.primary && colors.primary.trim());
-                finalPrompt = `
-            [START OF ABSOLUTE, NON-NEGOTIABLE PHOTOGRAPHY REQUIREMENTS]
-            1.  **OUTPUT ASPECT RATIO:** Compose cleanly for ${effectiveAspectRatio}. Never draw borders, frames, UI chrome, watermarks, or aspect ratio labels.
-            2.  **100% REAL CAMERA PHOTOGRAPH (ZERO "AI LOOK"):** Act as an elite real-world editorial & lifestyle photographer shooting on a full-frame mirrorless camera (35mm/50mm/85mm prime lens, f/1.8–f/2.8). The final image MUST look indistinguishable from a real photograph taken on location — genuine skin pores and micro-texture, natural hair strands, authentic real-world lighting, subtle natural lens depth-of-field, realistic clothing drape, and natural color science. STRICTLY FORBIDDEN: waxy/airbrushed plastic skin, fake HDR glow, CGI gloss, synthetic neon outlines, or stiff stock-photo poses.
-            3.  **NATURAL POSE, CONFIDENCE & SWAG:** Direct the subject in a natural, confident, candid real-life pose and camera angle appropriate for the scene (relaxed shoulders, authentic body language, natural eye contact or candid off-camera gaze — like a friend or pro photographer captured them in the moment).
-            4.  **TEXT & GRAPHIC DESIGN RULE:** ${
-                hasHeadline
+                const isRetouchMode = Boolean(currentText.body && currentText.body.startsWith('[RETOUCH_MY_PHOTO]'));
+
+                const textDesignRule = hasHeadline
                     ? `The user explicitly wants text on this photo. Apply pro editorial graphic-design rules:
                 - Render ONLY this exact text with 100% spelling accuracy: "${currentText.headline.trim()}" (do NOT add extra words, labels, or watermarks).
                 - Place the text cleanly in natural negative space (upper third, lower third, or clean side margin) — NEVER cover or overlap the person's face, eyes, or key focal area.
                 - Ensure effortless mobile readability with strong figure-ground contrast (use a subtle, natural dark/soft gradient or clean editorial shadow behind the text if needed — never ugly neon strokes or cluttered boxes).
                 - Match the typography weight, spacing, and visual hierarchy to the niche and mood of the photo so the text and photograph feel professionally art-directed together.`
-                    : 'STRICTLY ZERO TEXT on the image — pure, clean, authentic photography with NO captions, NO letters, NO graphics, and NO watermarks anywhere.'
-            }
+                    : 'STRICTLY ZERO TEXT on the image — pure, clean, authentic photography with NO captions, NO letters, NO graphics, and NO watermarks anywhere.';
+
+                if (isRetouchMode) {
+                    finalPrompt = `
+            [START OF ABSOLUTE, NON-NEGOTIABLE PHOTO RETOUCH REQUIREMENTS]
+            1.  **OUTPUT ASPECT RATIO:** Compose cleanly for ${effectiveAspectRatio}. Never draw borders, frames, split screens, UI chrome, or watermarks.
+            2.  **PRO PHOTOGRAPHER RETOUCH OF THE EXACT UPLOADED PHOTO:** Act as an elite commercial photo retoucher editing the user's actual uploaded photograph in Lightroom/Capture One. Keep 100% of the person's EXACT face, expression, eyes, hair, skin tone, real pores, exact body shape, and EXACT pose from the uploaded photo. Do NOT turn them into a different person, do NOT airbrush/smooth their skin into plastic, and do NOT change their facial features or body proportions.
+            3.  **REALISTIC LIGHTING & OPTICS:** Upgrade the exposure, dynamic range, crisp natural focus, rich true-to-life film color grading, and subtle natural 50mm lens depth-of-field so it looks like it was shot on a $5,000 full-frame camera. If a new location/background is requested, seamlessly relight the person's edges, hair, and clothing to match the new environment's real light direction and color temperature so it looks 100% photographed on location — never like a pasted cutout.
+            4.  **TEXT & GRAPHIC DESIGN RULE:** ${textDesignRule}
+            [END OF ABSOLUTE, NON-NEGOTIABLE PHOTO RETOUCH REQUIREMENTS]
+
+            ---
+
+            **Retouch Brief:**
+            - ${currentText.body.replace('[RETOUCH_MY_PHOTO]', '').trim()}
+
+            **Final Check:** Does the person look 100% identical to themselves in the original photo, just photographed with pro lighting, clean background, and zero "AI plastic" artifacts?
+        `;
+                } else {
+                    finalPrompt = `
+            [START OF ABSOLUTE, NON-NEGOTIABLE PHOTOGRAPHY REQUIREMENTS]
+            1.  **OUTPUT ASPECT RATIO:** Compose cleanly for ${effectiveAspectRatio}. Never draw borders, frames, UI chrome, watermarks, or aspect ratio labels.
+            2.  **100% REAL CAMERA PHOTOGRAPH (ZERO "AI LOOK"):** Act as an elite real-world editorial & lifestyle photographer shooting on a full-frame mirrorless camera (35mm/50mm/85mm prime lens, f/1.8–f/2.8). The final image MUST look indistinguishable from a real photograph taken on location — genuine skin pores and micro-texture, natural hair strands, authentic real-world lighting, subtle natural lens depth-of-field, realistic clothing drape, and natural color science. STRICTLY FORBIDDEN: waxy/airbrushed plastic skin, fake HDR glow, CGI gloss, synthetic neon outlines, or stiff stock-photo poses.
+            3.  **NATURAL POSE, CONFIDENCE & SWAG:** Direct the subject in a natural, confident, candid real-life pose and camera angle appropriate for the scene (relaxed shoulders, authentic body language, natural eye contact or candid off-camera gaze — like a friend or pro photographer captured them in the moment).
+            4.  **TEXT & GRAPHIC DESIGN RULE:** ${textDesignRule}
             [END OF ABSOLUTE, NON-NEGOTIABLE PHOTOGRAPHY REQUIREMENTS]
 
             ---
@@ -645,6 +664,7 @@ ${weaknessesList}
 
             **Final Check:** Would a friend scrolling Instagram or Facebook believe a real photographer took this picture today? If anything looks CGI, plastic, or overly processed, make it more natural and candid.
         `;
+                }
             } else {
                 // Fallback for other platforms (e.g. Twitter Card)
                 finalPrompt = `

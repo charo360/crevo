@@ -137,20 +137,38 @@ interface DailyPostViewProps {
 }
 
 const CREATIVE_SCENE_SEEDS = [
-    'rooftop terrace at golden-hour sunset with warm skyline glow',
-    'luxury hotel balcony or resort poolside with soft natural sunlight',
+    'rooftop terrace at dusk with warm city skyline lights',
+    'luxury hotel balcony or resort poolside in soft natural daylight',
     'confident full-length mirror outfit-check in a stylish modern room',
-    'candid night city street with warm neon bokeh and cinematic streetlights',
-    'sleek car interior or stepping out of a car with effortless main-character energy',
-    'sunlit modern bedroom or loft morning natural window light',
+    'candid night city street with warm neon bokeh and streetlights',
+    'sleek car interior or stepping out of a car with relaxed confidence',
+    'sunlit modern bedroom or loft with soft morning window light',
     'high-fashion studio flash editorial portrait with crisp shadows',
     'upscale evening lounge or moody restaurant candlelight ambiance',
     'urban street-style crosswalk stride shot candidly on a 50mm lens',
-    'beachfront or waterfront breeze at late afternoon golden hour',
+    'beachfront or waterfront breeze in crisp late-afternoon light',
     'behind-the-scenes creator setup with natural candid laugh or glance',
     'stylish minimalist architectural staircase or marble lobby',
-    'cozy late-night home aesthetic with warm lamp glow',
-    'post-workout athletic glow in natural daylight or sleek modern gym',
+    'cozy late-night home aesthetic with warm lamp light',
+    'post-workout athletic shot in natural daylight or sleek modern gym',
+];
+
+const CAPTION_TONE_STYLES = [
+    'Ultra-short confident 1-liner (4 to 9 words total, casual, minimal emojis)',
+    'Casual everyday check-in or relatable thought about today (1-2 natural sentences)',
+    'Playful, direct question to followers that invites real replies in the comments',
+    'Real, grounded mini-story or honest personal observation (2 short lines)',
+    'Witty, understated, cool one-sentence caption with dry charm',
+    'Warm, personal note written directly to friends and followers',
+];
+
+const RETOUCH_LOCATION_PRESETS = [
+    'City Night Street',
+    'Luxury Hotel Lobby',
+    'Sunny Beachfront',
+    'Clean Photo Studio',
+    'Upscale Evening Lounge',
+    'Modern Rooftop Terrace',
 ];
 
 function extractTextFromAiResponse(res: any): string {
@@ -173,7 +191,9 @@ export const DailyPostView: FC<DailyPostViewProps> = ({
 }) => {
     const { user, refreshCredits } = useAuth();
     const uploadInputRef = useRef<HTMLInputElement>(null);
+    const retouchInputRef = useRef<HTMLInputElement>(null);
 
+    const [dailyMode, setDailyMode] = useState<'create' | 'retouch'>('create');
     const [targetId, setTargetId] = useState<string>('instagram_portrait');
     const [postTypeId, setPostTypeId] = useState<string>('lifestyle');
     const [nicheText, setNicheText] = useState<string>(brandNicheBio);
@@ -182,10 +202,16 @@ export const DailyPostView: FC<DailyPostViewProps> = ({
     const [includeLogo, setIncludeLogo] = useState<boolean>(false);
     const [useBrandColors, setUseBrandColors] = useState<boolean>(false);
     const [attachedImages, setAttachedImages] = useState<ImageAsset[]>([]);
+    const [retouchPhoto, setRetouchPhoto] = useState<ImageAsset | null>(null);
+    const [retouchStyle, setRetouchStyle] = useState<'keep_bg' | 'change_bg'>('keep_bg');
+    const [retouchLocation, setRetouchLocation] = useState<string>('');
+    const [showOriginalBefore, setShowOriginalBefore] = useState<boolean>(false);
     const autoSelectedRef = useRef<boolean>(false);
     const recentIdeasRef = useRef<string[]>([]);
+    const recentCaptionsRef = useRef<string[]>([]);
     const lastSuggestedTopicRef = useRef<string>('');
     const sceneSeedCursorRef = useRef<number>(Math.floor(Math.random() * CREATIVE_SCENE_SEEDS.length));
+    const captionToneCursorRef = useRef<number>(Math.floor(Math.random() * CAPTION_TONE_STYLES.length));
 
     useEffect(() => {
         if (brandNicheBio && !nicheText) {
@@ -245,18 +271,44 @@ export const DailyPostView: FC<DailyPostViewProps> = ({
         }
     };
 
-    const generateSocialCaption = async (postTopic: string, onImageText: string) => {
-        const prompt = `Write a genuine, human, ready-to-paste social media caption for ${selectedTarget.label}.
-- Post Vibe: ${selectedPostType.label}
-- About the Person / What They Do: ${nicheText.trim() || '(everyday creator / personal account)'}
-- What the photo/post is about: ${postTopic}
-- Text on image (if any): ${onImageText || '(none — clean real photo)'}
-- Style: ${selectedTarget.captionStyle}
+    const handleRetouchPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file || !file.type.startsWith('image/')) return;
+        try {
+            const { base64, mimeType } = await fileToBase64(file);
+            setRetouchPhoto({
+                id: `retouch_src_${Date.now()}`,
+                url: `data:${mimeType};base64,${base64}`,
+                base64,
+                mimeType,
+            });
+            setShowOriginalBefore(false);
+        } catch (err: any) {
+            toast.error(err?.message || 'Could not read selected photo.');
+        }
+    };
 
-CRITICAL RULES:
-- Write in natural, authentic first-person human voice ("I", "me", "today") as THIS real person posting to their own friends and followers.
-- NEVER mention "Crevo", "AI", "generated", or any software/app/brand name unless the user explicitly wrote that brand name inside the topic above.
-- Keep it grounded, confident, and real — zero robotic AI clichés ("elevate your journey", "unleash", "game-changer").
+    const generateSocialCaption = async (postTopic: string, onImageText: string) => {
+        captionToneCursorRef.current =
+            (captionToneCursorRef.current + 1 + Math.floor(Math.random() * 2)) % CAPTION_TONE_STYLES.length;
+        const toneDirection = CAPTION_TONE_STYLES[captionToneCursorRef.current];
+        const avoidCaptions =
+            recentCaptionsRef.current.length > 0
+                ? `\n- DO NOT repeat wording or themes from these previous captions:\n  ${recentCaptionsRef.current.map((c, i) => `${i + 1}. ${c}`).join('\n  ')}`
+                : '';
+
+        const prompt = `Write a genuine, real-human, ready-to-paste social media caption for ${selectedTarget.label}.
+- Caption Tone for THIS post: ${toneDirection}
+- About the Person / What They Do: ${nicheText.trim() || '(everyday personal social media user)'}
+- Context of the photo/post: ${postTopic}
+- Text on image (if any): ${onImageText || '(none — clean real photo)'}
+- Platform style: ${selectedTarget.captionStyle}${avoidCaptions}
+
+CRITICAL ANTI-CLICHÉ RULES:
+- Write like a REAL person posting to their own friends/followers — natural, effortless, varied every single time.
+- STRICTLY BANNED OVERUSED PHRASES: NEVER use "golden hour", "chasing sunsets", "main character", "good vibes", "vibes only", "living my best life", "soaking it in", "glow up", "elevate", "unleash", "game-changer", "Crevo", or "AI".
+- Do NOT describe the camera lighting unless the user asked you to — talk about the moment, mood, or thought like a real human would.
 
 Return STRICT JSON only (no markdown fences) with this exact shape:
 {"caption":"...","hashtags":["#tag1","#tag2"]}`;
@@ -272,7 +324,11 @@ Return STRICT JSON only (no markdown fences) with this exact shape:
         const cleaned = raw.replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
         try {
             const parsed = JSON.parse(cleaned);
-            setCaption(typeof parsed.caption === 'string' ? parsed.caption.trim() : raw);
+            const nextCaption = typeof parsed.caption === 'string' ? parsed.caption.trim() : raw;
+            setCaption(nextCaption);
+            if (nextCaption) {
+                recentCaptionsRef.current = [nextCaption, ...recentCaptionsRef.current].slice(0, 5);
+            }
             setHashtags(
                 Array.isArray(parsed.hashtags)
                     ? parsed.hashtags
@@ -352,7 +408,17 @@ Return STRICT JSON only (no markdown fences):
         if (isGenerating) return;
         const cleanTopic = topic.trim();
         const cleanHeadline = headlineOnImage.trim();
-        if (!cleanTopic && !cleanHeadline) {
+
+        if (dailyMode === 'retouch') {
+            if (!retouchPhoto) {
+                toast.error('Please upload the photo you want to retouch first.');
+                return;
+            }
+            if (retouchStyle === 'change_bg' && !retouchLocation.trim()) {
+                toast.error('Pick or type the new location/background you want.');
+                return;
+            }
+        } else if (!cleanTopic && !cleanHeadline) {
             toast.error('Enter a topic or click "Suggest Idea" first.');
             return;
         }
@@ -363,30 +429,55 @@ Return STRICT JSON only (no markdown fences):
             if (!hasCredits) {
                 triggerOutOfCreditsModal({
                     requiredCredits,
-                    actionLabel: 'Generating a Daily Social Post',
+                    actionLabel: dailyMode === 'retouch' ? 'Retouching Your Photo' : 'Generating a Daily Social Post',
                 });
-                toast.error(`You need ${requiredCredits} credits to generate a Daily Post.`);
+                toast.error(`You need ${requiredCredits} credits to continue.`);
                 return;
             }
         }
 
         setIsGenerating(true);
+        setShowOriginalBefore(false);
         try {
-            // Auto-attach any saved character mentioned by name in topic/headline
-            const combinedText = `${cleanTopic} ${cleanHeadline}`;
-            const autoMatched: ImageAsset[] = [];
-            for (const char of savedCharacters) {
-                if (attachedImages.some((img) => img.characterId === char.id)) continue;
-                const escaped = char.name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                if (escaped && new RegExp(`\\b${escaped}\\b`, 'i').test(combinedText)) {
-                    autoMatched.push(...char.photos);
-                }
-            }
-            const imagesForGen = [...attachedImages, ...autoMatched];
+            let imagesForGen: ImageAsset[] = [];
+            let bodyPrompt = '';
+            let captionContext = '';
 
-            const effectiveColors: ColorsState = useBrandColors
-                ? colors
-                : { primary: '', secondary: '', accent: '', background: '' };
+            if (dailyMode === 'retouch' && retouchPhoto) {
+                imagesForGen = [retouchPhoto];
+                const loc = retouchLocation.trim();
+                bodyPrompt =
+                    retouchStyle === 'change_bg'
+                        ? `[RETOUCH_MY_PHOTO] Keep 100% of this person's exact face, expression, hair, body build, and pose from their uploaded photo, and seamlessly place them in a realistic, natural "${loc}" setting with matching lighting, shadows, and crisp 50mm DSLR photo quality.`
+                        : `[RETOUCH_MY_PHOTO] Keep 100% of this person's exact face, expression, hair, body build, pose, AND their real background from the uploaded photo, but professionally retouch the photo like an elite photographer: balance lighting and exposure, clean up distracting clutter, enrich true-to-life film colors, sharpen focus on the subject, and add subtle natural lens depth-of-field.`;
+                captionContext =
+                    retouchStyle === 'change_bg'
+                        ? `Personal social photo at ${loc}`
+                        : cleanTopic || 'Personal everyday photo shared with friends & followers';
+            } else {
+                // Auto-attach any saved character mentioned by name in topic/headline
+                const combinedText = `${cleanTopic} ${cleanHeadline}`;
+                const autoMatched: ImageAsset[] = [];
+                for (const char of savedCharacters) {
+                    if (attachedImages.some((img) => img.characterId === char.id)) continue;
+                    const escaped = char.name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    if (escaped && new RegExp(`\\b${escaped}\\b`, 'i').test(combinedText)) {
+                        autoMatched.push(...char.photos);
+                    }
+                }
+                imagesForGen = [...attachedImages, ...autoMatched];
+                bodyPrompt = `DAILY SOCIAL POST FOR ${selectedTarget.label}. ${nicheText.trim() ? `Creator Niche / Identity: ${nicheText.trim()}. ` : ''}Post Vibe: ${selectedPostType.label}. Visual direction: ${selectedPostType.visualGuidance} Topic & scene: ${cleanTopic || cleanHeadline}. ${
+                    cleanHeadline
+                        ? `Render ONLY this clean, readable headline on the graphic: "${cleanHeadline}".`
+                        : 'Do NOT render any text overlay on the image — make it a clean, authentic, photo-only social post.'
+                }`;
+                captionContext = cleanTopic || cleanHeadline;
+            }
+
+            const effectiveColors: ColorsState =
+                dailyMode === 'create' && useBrandColors
+                    ? colors
+                    : { primary: '', secondary: '', accent: '', background: '' };
             const effectiveLogo: LogoState = includeLogo
                 ? logo
                 : { url: null, base64: null, mimeType: null, size: 15, opacity: 100, position: 'top-right' };
@@ -404,11 +495,7 @@ Return STRICT JSON only (no markdown fences):
                 subheadlineWeight: 'normal',
                 subheadlineItalic: false,
                 subheadlineColor: '#f3f4f6',
-                body: `DAILY SOCIAL POST FOR ${selectedTarget.label}. ${nicheText.trim() ? `Creator Niche / Identity: ${nicheText.trim()}. ` : ''}Post Vibe: ${selectedPostType.label}. Visual direction: ${selectedPostType.visualGuidance} Topic & scene: ${cleanTopic || cleanHeadline}. ${
-                    cleanHeadline
-                        ? `Render ONLY this clean, readable headline on the graphic: "${cleanHeadline}".`
-                        : 'Do NOT render any text overlay on the image — make it a clean, authentic, photo-only social post.'
-                }`,
+                body: bodyPrompt,
                 author: '',
             };
 
@@ -433,7 +520,7 @@ Return STRICT JSON only (no markdown fences):
                     null,
                     selectedTarget.aspectRatio
                 ),
-                generateSocialCaption(cleanTopic || cleanHeadline, cleanHeadline).catch(() => {}),
+                generateSocialCaption(captionContext, cleanHeadline).catch(() => {}),
             ]);
 
             const first = designResults?.[0];
@@ -443,8 +530,13 @@ Return STRICT JSON only (no markdown fences):
             setGeneratedImageUrl(first.image.url);
 
             if (user) {
-                await deductCredits(user.id, `Daily Post (${selectedTarget.shortLabel})`, requiredCredits, {
+                const actionTitle =
+                    dailyMode === 'retouch'
+                        ? `Photo Retouch (${selectedTarget.shortLabel})`
+                        : `Daily Post (${selectedTarget.shortLabel})`;
+                await deductCredits(user.id, actionTitle, requiredCredits, {
                     platform: 'daily_post',
+                    mode: dailyMode,
                     socialTarget: selectedTarget.id,
                     aspectRatio: selectedTarget.aspectRatio,
                 });
@@ -453,12 +545,16 @@ Return STRICT JSON only (no markdown fences):
                     dataUrl: first.image.url,
                     type: 'thumbnail',
                     platform: 'daily_post',
-                    title: cleanHeadline || cleanTopic.slice(0, 60) || `Daily Post (${selectedTarget.shortLabel})`,
+                    title: cleanHeadline || captionContext.slice(0, 60) || actionTitle,
                     aspectRatio: selectedTarget.aspectRatio,
                 }).catch(() => {});
             }
 
-            toast.success('Daily Post ready! Download the image & copy your caption.');
+            toast.success(
+                dailyMode === 'retouch'
+                    ? 'Photo retouched! Toggle Before/After or download & copy your caption.'
+                    : 'Daily Post ready! Download the image & copy your caption.'
+            );
         } catch (err: any) {
             toast.error(err?.message || 'Failed to generate Daily Post.');
         } finally {
@@ -468,12 +564,17 @@ Return STRICT JSON only (no markdown fences):
 
     const handleRegenerateCaption = async () => {
         if (isRegeneratingCaption) return;
-        const cleanTopic = topic.trim() || headlineOnImage.trim();
-        if (!cleanTopic) return;
+        const captionCtx =
+            dailyMode === 'retouch'
+                ? retouchStyle === 'change_bg' && retouchLocation.trim()
+                    ? `Personal social photo at ${retouchLocation.trim()}`
+                    : topic.trim() || 'Personal everyday photo shared with friends & followers'
+                : topic.trim() || headlineOnImage.trim();
+        if (!captionCtx) return;
         setIsRegeneratingCaption(true);
         try {
-            await generateSocialCaption(cleanTopic, headlineOnImage.trim());
-            toast.success('Caption refreshed!');
+            await generateSocialCaption(captionCtx, headlineOnImage.trim());
+            toast.success('Fresh caption ready!');
         } catch {
             toast.error('Could not refresh caption.');
         } finally {
@@ -566,6 +667,54 @@ Return STRICT JSON only (no markdown fences):
                             gap: '16px',
                         }}
                     >
+                        {/* Mode Switcher: Create New Shot vs Retouch My Photo */}
+                        <div
+                            style={{
+                                display: 'grid',
+                                gridTemplateColumns: '1fr 1fr',
+                                gap: '6px',
+                                padding: '4px',
+                                borderRadius: '12px',
+                                background: '#f3effa',
+                                border: '1px solid #e4dcf2',
+                            }}
+                        >
+                            <button
+                                type="button"
+                                onClick={() => setDailyMode('create')}
+                                style={{
+                                    padding: '9px 10px',
+                                    borderRadius: '9px',
+                                    border: 'none',
+                                    background: dailyMode === 'create' ? '#571c86' : 'transparent',
+                                    color: dailyMode === 'create' ? '#ffffff' : '#4c1d95',
+                                    fontSize: '12.5px',
+                                    fontWeight: 800,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease',
+                                }}
+                            >
+                                ✨ Create New Shot
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setDailyMode('retouch')}
+                                style={{
+                                    padding: '9px 10px',
+                                    borderRadius: '9px',
+                                    border: 'none',
+                                    background: dailyMode === 'retouch' ? '#571c86' : 'transparent',
+                                    color: dailyMode === 'retouch' ? '#ffffff' : '#4c1d95',
+                                    fontSize: '12.5px',
+                                    fontWeight: 800,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease',
+                                }}
+                            >
+                                🪄 Retouch My Photo
+                            </button>
+                        </div>
+
                         {/* 1. Platform & Size */}
                         <div>
                             <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, color: '#374151', marginBottom: '8px' }}>
@@ -597,6 +746,201 @@ Return STRICT JSON only (no markdown fences):
                             </div>
                         </div>
 
+                        {dailyMode === 'retouch' ? (
+                            <>
+                                {/* Retouch Step 2: Upload Your Real Photo */}
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, color: '#374151', marginBottom: '8px' }}>
+                                        2. Upload the Photo You Took
+                                    </label>
+                                    <input
+                                        ref={retouchInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={handleRetouchPhotoUpload}
+                                        style={{ display: 'none' }}
+                                    />
+                                    {retouchPhoto ? (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', borderRadius: '12px', background: '#faf7ff', border: '1.5px solid #c4b5fd' }}>
+                                            <img
+                                                src={retouchPhoto.url}
+                                                alt="Original photo to retouch"
+                                                style={{ width: '68px', height: '68px', borderRadius: '10px', objectFit: 'cover', display: 'block' }}
+                                            />
+                                            <div style={{ flex: 1 }}>
+                                                <div style={{ fontSize: '13px', fontWeight: 800, color: '#111827' }}>Photo ready for pro retouch</div>
+                                                <div style={{ fontSize: '11.5px', color: '#6b7280', marginTop: '2px' }}>
+                                                    AI keeps your exact face, body &amp; pose — just upgrades lighting, quality &amp; optional location.
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => retouchInputRef.current?.click()}
+                                                    style={{
+                                                        marginTop: '6px',
+                                                        padding: '4px 10px',
+                                                        borderRadius: '8px',
+                                                        border: '1px solid #d8ccf0',
+                                                        background: '#ffffff',
+                                                        color: '#571c86',
+                                                        fontSize: '11.5px',
+                                                        fontWeight: 700,
+                                                        cursor: 'pointer',
+                                                    }}
+                                                >
+                                                    Change Photo
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => retouchInputRef.current?.click()}
+                                            style={{
+                                                width: '100%',
+                                                padding: '22px 14px',
+                                                borderRadius: '12px',
+                                                border: '2px dashed #c4b5fd',
+                                                background: '#faf7ff',
+                                                color: '#4c1d95',
+                                                cursor: 'pointer',
+                                                textAlign: 'center',
+                                            }}
+                                        >
+                                            <div style={{ fontSize: '24px', marginBottom: '4px' }}>📷</div>
+                                            <div style={{ fontSize: '13.5px', fontWeight: 800 }}>Click to upload your photo</div>
+                                            <div style={{ fontSize: '11.5px', color: '#6b7280', marginTop: '3px' }}>
+                                                Phone selfie, portrait, or full-body shot — AI makes it look pro-photographer edited
+                                            </div>
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Retouch Step 3: Keep Background vs Change Location */}
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, color: '#374151', marginBottom: '8px' }}>
+                                        3. What Should AI Upgrade?
+                                    </label>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setRetouchStyle('keep_bg')}
+                                            style={{
+                                                padding: '10px',
+                                                borderRadius: '10px',
+                                                border: retouchStyle === 'keep_bg' ? '1.5px solid #571c86' : '1px solid #e5e7eb',
+                                                background: retouchStyle === 'keep_bg' ? '#f3e8ff' : '#ffffff',
+                                                color: retouchStyle === 'keep_bg' ? '#4c1d95' : '#374151',
+                                                fontSize: '12px',
+                                                fontWeight: 800,
+                                                cursor: 'pointer',
+                                                textAlign: 'left',
+                                            }}
+                                        >
+                                            ✨ Pro Edit Only
+                                            <div style={{ fontSize: '11px', fontWeight: 500, color: '#6b7280', marginTop: '2px' }}>
+                                                Keep real background, fix lighting &amp; quality
+                                            </div>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setRetouchStyle('change_bg')}
+                                            style={{
+                                                padding: '10px',
+                                                borderRadius: '10px',
+                                                border: retouchStyle === 'change_bg' ? '1.5px solid #571c86' : '1px solid #e5e7eb',
+                                                background: retouchStyle === 'change_bg' ? '#f3e8ff' : '#ffffff',
+                                                color: retouchStyle === 'change_bg' ? '#4c1d95' : '#374151',
+                                                fontSize: '12px',
+                                                fontWeight: 800,
+                                                cursor: 'pointer',
+                                                textAlign: 'left',
+                                            }}
+                                        >
+                                            🌍 Change Place
+                                            <div style={{ fontSize: '11px', fontWeight: 500, color: '#6b7280', marginTop: '2px' }}>
+                                                Same face &amp; pose in a new real location
+                                            </div>
+                                        </button>
+                                    </div>
+
+                                    {retouchStyle === 'change_bg' && (
+                                        <div style={{ marginTop: '10px' }}>
+                                            <input
+                                                type="text"
+                                                value={retouchLocation}
+                                                onChange={(e) => setRetouchLocation(e.target.value)}
+                                                placeholder="Type any place (e.g., Paris street at dusk, luxury yacht, sleek gym)..."
+                                                maxLength={140}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '9px 12px',
+                                                    borderRadius: '10px',
+                                                    border: '1.5px solid #d8ccf0',
+                                                    fontSize: '13px',
+                                                    color: '#111827',
+                                                }}
+                                            />
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '7px' }}>
+                                                {RETOUCH_LOCATION_PRESETS.map((place) => (
+                                                    <button
+                                                        key={place}
+                                                        type="button"
+                                                        onClick={() => setRetouchLocation(place)}
+                                                        style={{
+                                                            padding: '4px 9px',
+                                                            borderRadius: '999px',
+                                                            border: '1px solid #e4dcf2',
+                                                            background: retouchLocation.toLowerCase() === place.toLowerCase() ? '#f3e8ff' : '#ffffff',
+                                                            color: '#571c86',
+                                                            fontSize: '11px',
+                                                            fontWeight: 700,
+                                                            cursor: 'pointer',
+                                                        }}
+                                                    >
+                                                        {place}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Optional Outfit tweak for Retouch */}
+                                {retouchPhoto && (
+                                    <div style={{ padding: '10px 12px', borderRadius: '12px', background: '#faf7ff', border: '1px solid #e4dcf2' }}>
+                                        <OutfitSelector
+                                            preferences={preferences}
+                                            onPreferencesChange={onPreferencesChange}
+                                            disabled={isGenerating}
+                                        />
+                                    </div>
+                                )}
+
+                                {/* Optional Text on Image */}
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, color: '#374151', marginBottom: '6px' }}>
+                                        4. Text on Image <span style={{ fontWeight: 500, color: '#9ca3af' }}>(optional — leave blank for clean photo)</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={headlineOnImage}
+                                        onChange={(e) => setHeadlineOnImage(e.target.value)}
+                                        placeholder="Optional short headline..."
+                                        maxLength={90}
+                                        style={{
+                                            width: '100%',
+                                            padding: '9px 12px',
+                                            borderRadius: '10px',
+                                            border: '1.5px solid #e5e7eb',
+                                            fontSize: '13.5px',
+                                            fontWeight: 600,
+                                            color: '#111827',
+                                        }}
+                                    />
+                                </div>
+                            </>
+                        ) : (
+                            <>
                         {/* 2. Post Type */}
                         <div>
                             <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, color: '#374151', marginBottom: '8px' }}>
@@ -877,6 +1221,8 @@ Return STRICT JSON only (no markdown fences):
                                 Use Brand Colors
                             </label>
                         </div>
+                            </>
+                        )}
 
                         {/* Generate CTA */}
                         <button
@@ -898,7 +1244,13 @@ Return STRICT JSON only (no markdown fences):
                                 boxShadow: '0 8px 20px rgba(87, 28, 134, 0.25)',
                             }}
                         >
-                            {isGenerating ? 'Creating Your Daily Post...' : '✨ Generate Daily Post (2 Credits)'}
+                            {isGenerating
+                                ? dailyMode === 'retouch'
+                                    ? 'Retouching Your Photo...'
+                                    : 'Creating Your Daily Post...'
+                                : dailyMode === 'retouch'
+                                  ? '🪄 Retouch My Photo (2 Credits)'
+                                  : '✨ Generate Daily Post (2 Credits)'}
                         </button>
                     </div>
 
@@ -915,27 +1267,47 @@ Return STRICT JSON only (no markdown fences):
                             gap: '16px',
                         }}
                     >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                             <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#111827' }}>
                                 Ready-to-Post Pack ({selectedTarget.shortLabel})
                             </h2>
                             {generatedImageUrl && (
-                                <button
-                                    type="button"
-                                    onClick={handleDownloadImage}
-                                    style={{
-                                        padding: '7px 14px',
-                                        borderRadius: '9px',
-                                        border: 'none',
-                                        background: '#571c86',
-                                        color: '#ffffff',
-                                        fontSize: '12.5px',
-                                        fontWeight: 700,
-                                        cursor: 'pointer',
-                                    }}
-                                >
-                                    ⬇️ Download Image
-                                </button>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    {dailyMode === 'retouch' && retouchPhoto && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowOriginalBefore((prev) => !prev)}
+                                            style={{
+                                                padding: '7px 11px',
+                                                borderRadius: '9px',
+                                                border: '1px solid #d8ccf0',
+                                                background: showOriginalBefore ? '#f3e8ff' : '#ffffff',
+                                                color: '#571c86',
+                                                fontSize: '12px',
+                                                fontWeight: 700,
+                                                cursor: 'pointer',
+                                            }}
+                                        >
+                                            {showOriginalBefore ? '👁️ Viewing Original' : '↔️ Compare Original'}
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={handleDownloadImage}
+                                        style={{
+                                            padding: '7px 14px',
+                                            borderRadius: '9px',
+                                            border: 'none',
+                                            background: '#571c86',
+                                            color: '#ffffff',
+                                            fontSize: '12.5px',
+                                            fontWeight: 700,
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        ⬇️ Download Image
+                                    </button>
+                                </div>
                             )}
                         </div>
 
@@ -975,8 +1347,8 @@ Return STRICT JSON only (no markdown fences):
                                     }}
                                 >
                                     <img
-                                        src={generatedImageUrl}
-                                        alt="Generated Daily Social Post"
+                                        src={showOriginalBefore && retouchPhoto ? retouchPhoto.url : generatedImageUrl}
+                                        alt={showOriginalBefore ? 'Original Uploaded Photo' : 'Generated Daily Social Post'}
                                         style={{ maxWidth: '100%', maxHeight: '520px', objectFit: 'contain', display: 'block' }}
                                     />
                                 </div>
