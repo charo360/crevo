@@ -4292,6 +4292,7 @@ app.put('/api/user/brand-kit', requireAuth, async (req, res) => {
 
         const brand_kit = {
             channel_name: typeof body.channel_name === 'string' ? body.channel_name.trim().slice(0, 60) : '',
+            niche_bio: typeof body.niche_bio === 'string' ? body.niche_bio.trim().slice(0, 300) : '',
             characters,
             face_images,
             logo_data_url,
@@ -4314,6 +4315,7 @@ app.delete('/api/user/brand-kit', requireAuth, async (req, res) => {
             $set: {
                 brand_kit: {
                     channel_name: '',
+                    niche_bio: '',
                     characters: [],
                     face_images: [],
                     logo_data_url: '',

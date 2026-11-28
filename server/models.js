@@ -80,6 +80,7 @@ const userSchema = new mongoose.Schema(
         },
         brand_kit: {
             channel_name: { type: String, trim: true, default: '' },
+            niche_bio: { type: String, trim: true, default: '' },
             characters: [
                 {
                     id: { type: String, default: '' },

@@ -105,6 +105,7 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
     const [colors, setColors] = useState<ColorsState>(prefs.colors);
     const [preferences, setPreferences] = useState<PreferencesState>(prefs.preferences);
     const [brandChannelName, setBrandChannelName] = useState<string>('');
+    const [brandNicheBio, setBrandNicheBio] = useState<string>('');
     const [savedCharacters, setSavedCharacters] = useState<SavedCharacter[]>([]);
     const brandKitAppliedRef = useRef<boolean>(false);
     const autoSelectedSingleCharRef = useRef<boolean>(false);
@@ -122,6 +123,9 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
 
                 if (typeof bk.channel_name === 'string' && bk.channel_name.trim()) {
                     setBrandChannelName(bk.channel_name.trim());
+                }
+                if (typeof bk.niche_bio === 'string' && bk.niche_bio.trim()) {
+                    setBrandNicheBio(bk.niche_bio.trim());
                 }
                 if (bk.colors?.primary && bk.colors?.secondary && bk.colors?.accent && bk.colors?.background) {
                     setColors({
@@ -951,6 +955,7 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                     preferences={preferences}
                     onPreferencesChange={setPreferences}
                     brandChannelName={brandChannelName}
+                    brandNicheBio={brandNicheBio}
                 />
             ) : (
                 /* Design Studio - generates thumbnails and images */

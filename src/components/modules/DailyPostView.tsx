@@ -114,6 +114,7 @@ interface DailyPostViewProps {
     preferences: PreferencesState;
     onPreferencesChange: (p: PreferencesState) => void;
     brandChannelName?: string;
+    brandNicheBio?: string;
 }
 
 function extractTextFromAiResponse(res: any): string {
@@ -132,17 +133,26 @@ export const DailyPostView: FC<DailyPostViewProps> = ({
     preferences,
     onPreferencesChange,
     brandChannelName = '',
+    brandNicheBio = '',
 }) => {
     const { user, refreshCredits } = useAuth();
     const uploadInputRef = useRef<HTMLInputElement>(null);
 
     const [targetId, setTargetId] = useState<string>('instagram_portrait');
     const [postTypeId, setPostTypeId] = useState<string>('tip');
+    const [nicheText, setNicheText] = useState<string>(brandNicheBio);
     const [topic, setTopic] = useState<string>('');
     const [headlineOnImage, setHeadlineOnImage] = useState<string>('');
-    const [useBrandKit, setUseBrandKit] = useState<boolean>(true);
+    const [includeLogo, setIncludeLogo] = useState<boolean>(false);
+    const [useBrandColors, setUseBrandColors] = useState<boolean>(true);
     const [attachedImages, setAttachedImages] = useState<ImageAsset[]>([]);
     const autoSelectedRef = useRef<boolean>(false);
+
+    useEffect(() => {
+        if (brandNicheBio && !nicheText) {
+            setNicheText(brandNicheBio);
+        }
+    }, [brandNicheBio]);
 
     const [isSuggesting, setIsSuggesting] = useState<boolean>(false);
     const [isGenerating, setIsGenerating] = useState<boolean>(false);
@@ -200,6 +210,7 @@ export const DailyPostView: FC<DailyPostViewProps> = ({
         const prompt = `Write a ready-to-paste social media post for ${selectedTarget.label}.
 - Post Type: ${selectedPostType.label}
 - Creator / Brand: ${brandChannelName || 'Creator'}
+- About the Creator / Niche: ${nicheText.trim() || '(general creator)'}
 - Topic: ${postTopic}
 - Text shown on the visual: ${onImageText || '(none / photo-only)'}
 - Style requirement: ${selectedTarget.captionStyle}
@@ -237,10 +248,11 @@ Return STRICT JSON only (no markdown fences) with this exact shape:
         if (isSuggesting) return;
         setIsSuggesting(true);
         try {
-            const prompt = `Suggest 1 fresh, high-engagement daily social media post idea for ${selectedTarget.label}.
+            const prompt = `Suggest 1 fresh, specific, high-engagement daily social media post idea for ${selectedTarget.label}.
 - Post Type: ${selectedPostType.label}
-- Creator / Brand Name: ${brandChannelName || 'Content Creator / Entrepreneur'}
-- Current rough topic (if any): ${topic.trim() || '(none — pick a timely, relatable creator/growth topic)'}
+- Creator / Brand Name: ${brandChannelName || 'Content Creator'}
+- About the Creator / Niche & Audience: ${nicheText.trim() || '(not specified yet — suggest a broadly useful creator/growth post)'}
+- Current rough topic (if any): ${topic.trim() || '(none — invent a fresh, specific idea tailored to their niche above)'}
 
 Return STRICT JSON only (no markdown fences):
 {"topic":"1-2 sentence post idea","headline":"Short 3-6 word punchy on-image hook"}`;
@@ -301,10 +313,10 @@ Return STRICT JSON only (no markdown fences):
             }
             const imagesForGen = [...attachedImages, ...autoMatched];
 
-            const effectiveColors: ColorsState = useBrandKit
+            const effectiveColors: ColorsState = useBrandColors
                 ? colors
                 : { primary: '#571c86', secondary: '#7e22ce', accent: '#facc15', background: '#111827' };
-            const effectiveLogo: LogoState = useBrandKit
+            const effectiveLogo: LogoState = includeLogo
                 ? logo
                 : { url: null, base64: null, mimeType: null, size: 15, opacity: 100, position: 'top-right' };
 
@@ -545,11 +557,38 @@ Return STRICT JSON only (no markdown fences):
                             </div>
                         </div>
 
-                        {/* 3. Topic + Suggest Idea */}
+                        {/* 3. About You / Niche (for AI Idea Suggestions) */}
+                        <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', gap: '8px' }}>
+                                <label style={{ fontSize: '12px', fontWeight: 800, color: '#374151' }}>
+                                    3. About You / Your Niche <span style={{ fontWeight: 500, color: '#9ca3af' }}>(so AI knows what to suggest)</span>
+                                </label>
+                                <Link to="/dashboard/brand-kit" style={{ fontSize: '11px', fontWeight: 700, color: '#7e22ce', textDecoration: 'none' }}>
+                                    Save in Brand Kit →
+                                </Link>
+                            </div>
+                            <input
+                                type="text"
+                                value={nicheText}
+                                onChange={(e) => setNicheText(e.target.value)}
+                                maxLength={300}
+                                placeholder="e.g., Fitness coach for busy parents, Tech YouTuber, Real estate agent..."
+                                style={{
+                                    width: '100%',
+                                    padding: '9px 12px',
+                                    borderRadius: '10px',
+                                    border: '1.5px solid #e5e7eb',
+                                    fontSize: '13px',
+                                    color: '#111827',
+                                }}
+                            />
+                        </div>
+
+                        {/* 4. Topic + Suggest Idea */}
                         <div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                                 <label style={{ fontSize: '12px', fontWeight: 800, color: '#374151' }}>
-                                    3. What&apos;s today&apos;s post about?
+                                    4. What&apos;s today&apos;s post about?
                                 </label>
                                 <button
                                     type="button"
@@ -587,10 +626,10 @@ Return STRICT JSON only (no markdown fences):
                             />
                         </div>
 
-                        {/* 4. Optional On-Image Headline */}
+                        {/* 5. Optional On-Image Headline */}
                         <div>
                             <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, color: '#374151', marginBottom: '6px' }}>
-                                4. Text on Image <span style={{ fontWeight: 500, color: '#9ca3af' }}>(optional — leave blank for photo-only)</span>
+                                5. Text on Image <span style={{ fontWeight: 500, color: '#9ca3af' }}>(optional — leave blank for photo-only)</span>
                             </label>
                             <input
                                 type="text"
@@ -621,7 +660,7 @@ Return STRICT JSON only (no markdown fences):
                         >
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', gap: '8px' }}>
                                 <span style={{ fontSize: '12px', fontWeight: 800, color: '#4c1d95' }}>
-                                    5. Character / Photo
+                                    6. Character / Photo
                                 </span>
                                 <input
                                     ref={uploadInputRef}
@@ -747,15 +786,26 @@ Return STRICT JSON only (no markdown fences):
                             )}
                         </div>
 
-                        {/* Brand Kit toggle */}
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12.5px', fontWeight: 600, color: '#374151', cursor: 'pointer' }}>
-                            <input
-                                type="checkbox"
-                                checked={useBrandKit}
-                                onChange={(e) => setUseBrandKit(e.target.checked)}
-                            />
-                            Apply my Brand Kit colors &amp; logo automatically
-                        </label>
+                        {/* Brand Kit independent ON/OFF switches */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px', padding: '10px 12px', borderRadius: '10px', background: '#f9fafb', border: '1px solid #e5e7eb' }}>
+                            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', fontSize: '12.5px', fontWeight: 700, color: '#374151', cursor: logo.url ? 'pointer' : 'not-allowed', opacity: logo.url ? 1 : 0.55 }}>
+                                <input
+                                    type="checkbox"
+                                    checked={includeLogo && Boolean(logo.url)}
+                                    disabled={!logo.url}
+                                    onChange={(e) => setIncludeLogo(e.target.checked)}
+                                />
+                                Include Brand Logo {logo.url ? '(Optional)' : '(Add in Brand Kit)'}
+                            </label>
+                            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', fontSize: '12.5px', fontWeight: 700, color: '#374151', cursor: 'pointer' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={useBrandColors}
+                                    onChange={(e) => setUseBrandColors(e.target.checked)}
+                                />
+                                Use Brand Colors
+                            </label>
+                        </div>
 
                         {/* Generate CTA */}
                         <button

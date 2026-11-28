@@ -28,6 +28,7 @@ interface SavedCharacterRecord {
 
 interface SavedBrandKit {
     channel_name: string;
+    niche_bio?: string;
     characters?: SavedCharacterRecord[];
     face_images?: SavedFaceItem[];
     logo_data_url: string;
@@ -129,6 +130,7 @@ export const BrandKitPage: FC = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [channelName, setChannelName] = useState('');
+    const [nicheBio, setNicheBio] = useState('');
     const [characters, setCharacters] = useState<SavedCharacterRecord[]>([]);
     const [logoDataUrl, setLogoDataUrl] = useState('');
     const [logoPosition, setLogoPosition] = useState<LogoPosition>('top-right');
@@ -144,6 +146,7 @@ export const BrandKitPage: FC = () => {
                 const bk = res?.brandKit;
                 if (bk) {
                     setChannelName(bk.channel_name || '');
+                    setNicheBio(bk.niche_bio || '');
                     if (Array.isArray(bk.characters) && bk.characters.length > 0) {
                         setCharacters(bk.characters);
                     } else if (Array.isArray(bk.face_images) && bk.face_images.length > 0) {
@@ -268,6 +271,7 @@ export const BrandKitPage: FC = () => {
                 method: 'PUT',
                 body: JSON.stringify({
                     channel_name: channelName.trim(),
+                    niche_bio: nicheBio.trim(),
                     characters: normalizedCharacters,
                     face_images: [],
                     logo_data_url: logoDataUrl,
@@ -289,6 +293,7 @@ export const BrandKitPage: FC = () => {
         try {
             await apiRequest('/api/user/brand-kit', { method: 'DELETE' });
             setChannelName('');
+            setNicheBio('');
             setCharacters([]);
             setLogoDataUrl('');
             setLogoPosition('top-right');
@@ -659,6 +664,25 @@ export const BrandKitPage: FC = () => {
                                             borderRadius: '10px',
                                             border: '1px solid #d8ccf0',
                                             fontSize: '14px',
+                                        }}
+                                    />
+                                    <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#374151', marginTop: '12px', marginBottom: '6px' }}>
+                                        About You / Your Niche <span style={{ fontWeight: 500, color: '#6b7280' }}>(helps AI suggest daily post ideas)</span>
+                                    </label>
+                                    <textarea
+                                        value={nicheBio}
+                                        onChange={(e) => setNicheBio(e.target.value)}
+                                        maxLength={300}
+                                        rows={3}
+                                        placeholder="e.g., I'm a fitness coach helping busy parents lose weight at home, or I run a tech & AI YouTube channel for creators..."
+                                        style={{
+                                            width: '100%',
+                                            padding: '10px 12px',
+                                            borderRadius: '10px',
+                                            border: '1px solid #d8ccf0',
+                                            fontSize: '13.5px',
+                                            fontFamily: 'inherit',
+                                            resize: 'vertical',
                                         }}
                                     />
                                     <p style={{ margin: '6px 0 0', fontSize: '12px', color: '#6b7280' }}>
