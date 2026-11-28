@@ -104,10 +104,10 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
     const [colors, setColors] = useState<ColorsState>(prefs.colors);
     const [preferences, setPreferences] = useState<PreferencesState>(prefs.preferences);
     const [brandChannelName, setBrandChannelName] = useState<string>('');
-    const brandKitFacesRef = useRef<ImageAsset[]>([]);
+    const [savedCharacters, setSavedCharacters] = useState<ImageAsset[]>([]);
     const brandKitAppliedRef = useRef<boolean>(false);
 
-    // Auto-load saved Brand Kit (My Face, Logo, Brand Colors & Style) once per Studio mount
+    // Auto-load saved Brand Kit (Named Characters, Logo, Brand Colors & Style) once per Studio mount
     useEffect(() => {
         if (!user || brandKitAppliedRef.current) return;
         let cancelled = false;
@@ -135,16 +135,17 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                 if (typeof bk.logo_data_url === 'string' && bk.logo_data_url.startsWith('data:image/')) {
                     const m = bk.logo_data_url.match(/^data:([^;]+);base64,(.+)$/s);
                     if (m) {
-                        setLogo((prev) => ({
-                            ...prev,
-                            image: prev.image || {
-                                id: `brand_logo_${Date.now()}`,
-                                mimeType: m[1],
-                                base64: m[2],
-                                url: bk.logo_data_url,
-                            },
-                            position: bk.logo_position || prev.position,
-                        }));
+                        setLogo((prev) =>
+                            prev.url
+                                ? prev
+                                : {
+                                      ...prev,
+                                      url: bk.logo_data_url,
+                                      mimeType: m[1],
+                                      base64: m[2],
+                                      position: bk.logo_position || prev.position,
+                                  }
+                        );
                     }
                 }
                 if (Array.isArray(bk.face_images) && bk.face_images.length > 0) {
@@ -154,19 +155,16 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                             const m = f.data_url.match(/^data:([^;]+);base64,(.+)$/s);
                             if (m) {
                                 parsedFaces.push({
-                                    id: `brand_face_${idx}_${Date.now()}`,
+                                    id: `brand_char_${f.id || idx}`,
                                     mimeType: m[1],
                                     base64: m[2],
                                     url: f.data_url,
+                                    characterName: (typeof f.label === 'string' && f.label.trim()) || `Character ${idx + 1}`,
                                 });
                             }
                         }
                     });
-                    brandKitFacesRef.current = parsedFaces;
-                    // Auto-populate saved faces on Thumbnail/Cover creation modes when no images are loaded yet
-                    if (parsedFaces.length > 0 && platform !== 'youtube_improve' && platform !== 'resize') {
-                        setImages((prev) => (prev.length === 0 ? parsedFaces : prev));
-                    }
+                    setSavedCharacters(parsedFaces);
                 }
             })
             .catch(() => {});
@@ -174,13 +172,6 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
             cancelled = true;
         };
     }, [user]);
-
-    // When switching from Improve Thumbnail to a Thumbnail/Cover creation tab, auto-fill saved Brand Kit faces if empty
-    useEffect(() => {
-        if (platform !== 'youtube_improve' && platform !== 'resize' && brandKitFacesRef.current.length > 0) {
-            setImages((prev) => (prev.length === 0 ? brandKitFacesRef.current : prev));
-        }
-    }, [platform]);
     
     // App status state (persist finished results in sessionStorage; never persist in-progress loading overlays)
     const [results, setResults] = useState<DesignResult[]>(() => {
@@ -906,6 +897,7 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                         platform={platform}
                         outputAspectRatio={outputAspectRatio}
                         onOutputAspectRatioChange={setOutputAspectRatio}
+                        savedCharacters={savedCharacters}
                         text={text} onTextChange={setText}
                         images={images} onImagesChange={setImages}
                         referenceThumbnail={referenceThumbnail} onReferenceThumbnailChange={setReferenceThumbnail}

@@ -10,6 +10,7 @@ export interface ImageAsset {
     url: string;
     base64: string;
     mimeType: string;
+    characterName?: string;
 }
 
 export interface VideoAsset {

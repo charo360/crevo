@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { apiRequest } from '../lib/api';
 import { VIBE_STYLES } from '../constants';
-import { ColorsState, LogoPosition } from '../types';
+import { ColorsState, LogoState } from '../types';
+
+type LogoPosition = LogoState['position'];
 
 interface SavedFaceItem {
     id: string;
@@ -124,13 +126,13 @@ export const BrandKitPage: FC = () => {
     }, []);
 
     const handleFaceUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(e.target.files || []);
+        const files: File[] = Array.from(e.target.files || []);
         e.target.value = '';
         if (files.length === 0) return;
 
         const remainingSlots = Math.max(0, 6 - faces.length);
         if (remainingSlots === 0) {
-            toast.info('You can save up to 6 face photos. Remove one first to add another.');
+            toast.info('You can save up to 6 characters. Remove one first to add another.');
             return;
         }
 
@@ -140,7 +142,7 @@ export const BrandKitPage: FC = () => {
                 const compressed = await fileToCompressedDataUrl(file, 640, false);
                 toAdd.push({
                     id: `face_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-                    label: file.name.replace(/\.[^.]+$/, '').slice(0, 30) || `Face ${faces.length + toAdd.length + 1}`,
+                    label: file.name.replace(/\.[^.]+$/, '').slice(0, 30) || `Character ${faces.length + toAdd.length + 1}`,
                     data_url: compressed.dataUrl,
                     mime_type: compressed.mimeType,
                 });
@@ -169,11 +171,16 @@ export const BrandKitPage: FC = () => {
         e.preventDefault();
         setSaving(true);
         try {
+            const normalizedFaces = faces.map((f, idx) => ({
+                ...f,
+                label: (f.label || '').trim() || `Character ${idx + 1}`,
+            }));
+            setFaces(normalizedFaces);
             const res = await apiRequest<{ brandKit: SavedBrandKit }>('/api/user/brand-kit', {
                 method: 'PUT',
                 body: JSON.stringify({
                     channel_name: channelName.trim(),
-                    face_images: faces,
+                    face_images: normalizedFaces,
                     logo_data_url: logoDataUrl,
                     logo_position: logoPosition,
                     colors,
@@ -181,7 +188,7 @@ export const BrandKitPage: FC = () => {
                 }),
             });
             setLastSavedAt(res?.brandKit?.updated_at || new Date().toISOString());
-            toast.success('Brand Kit saved! Studio will now automatically use your face, logo & brand colors.');
+            toast.success('Brand Kit saved! Your named characters, logo & colors are ready in Studio.');
         } catch (err: any) {
             toast.error(err?.message || 'Failed to save Brand Kit.');
         } finally {
@@ -292,10 +299,10 @@ export const BrandKitPage: FC = () => {
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
                                 <div>
                                     <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#111827' }}>
-                                        1. My Face / Subject Photos (Up to 6)
+                                        1. Named Characters (Up to 6)
                                     </h2>
                                     <p style={{ margin: '3px 0 0', fontSize: '13px', color: '#6b7280' }}>
-                                        Upload clear, well-lit photos of yourself or co-hosts (up to 6). Crevo automatically pre-loads them in Thumbnail Studio.
+                                        Upload photos of yourself, co-hosts, or recurring characters and give each one a name (e.g., <strong>Sam</strong>, <strong>Sarah</strong>). That way the AI knows exactly who is who when you mention them!
                                     </p>
                                 </div>
                                 <input
@@ -321,7 +328,7 @@ export const BrandKitPage: FC = () => {
                                         cursor: faces.length >= 6 ? 'not-allowed' : 'pointer',
                                     }}
                                 >
-                                    + Upload Face Photo ({faces.length}/6)
+                                    + Add Character ({faces.length}/6)
                                 </button>
                             </div>
 
@@ -340,53 +347,85 @@ export const BrandKitPage: FC = () => {
                                     }}
                                 >
                                     <div style={{ fontSize: '26px', marginBottom: '6px' }}>📸</div>
-                                    <strong>Click to upload 1–6 clear face photos</strong>
+                                    <strong>Click to upload 1–6 character photos &amp; name each one</strong>
                                     <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
-                                        JPG, PNG, or WebP · Automatically compressed for fast syncing
+                                        JPG, PNG, or WebP · Great for solo creators, co-hosts, and duo channels
                                     </div>
                                 </div>
                             ) : (
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '12px' }}>
-                                    {faces.map((face) => (
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '12px' }}>
+                                    {faces.map((face, idx) => (
                                         <div
                                             key={face.id}
                                             style={{
-                                                position: 'relative',
                                                 borderRadius: '12px',
                                                 overflow: 'hidden',
                                                 border: '1.5px solid #d8ccf0',
-                                                aspectRatio: '1 / 1',
-                                                background: '#111827',
+                                                background: '#faf8fd',
+                                                display: 'flex',
+                                                flexDirection: 'column',
                                             }}
                                         >
-                                            <img
-                                                src={face.data_url}
-                                                alt={face.label}
-                                                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() => setFaces((prev) => prev.filter((f) => f.id !== face.id))}
-                                                aria-label="Remove face photo"
+                                            <div
                                                 style={{
-                                                    position: 'absolute',
-                                                    top: '6px',
-                                                    right: '6px',
-                                                    width: '26px',
-                                                    height: '26px',
-                                                    borderRadius: '50%',
-                                                    border: 'none',
-                                                    background: 'rgba(0,0,0,0.75)',
-                                                    color: '#ffffff',
-                                                    fontSize: '16px',
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
+                                                    position: 'relative',
+                                                    aspectRatio: '1 / 1',
+                                                    background: '#111827',
                                                 }}
                                             >
-                                                ×
-                                            </button>
+                                                <img
+                                                    src={face.data_url}
+                                                    alt={face.label || `Character ${idx + 1}`}
+                                                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setFaces((prev) => prev.filter((f) => f.id !== face.id))}
+                                                    aria-label="Remove character"
+                                                    style={{
+                                                        position: 'absolute',
+                                                        top: '6px',
+                                                        right: '6px',
+                                                        width: '26px',
+                                                        height: '26px',
+                                                        borderRadius: '50%',
+                                                        border: 'none',
+                                                        background: 'rgba(0,0,0,0.75)',
+                                                        color: '#ffffff',
+                                                        fontSize: '16px',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                    }}
+                                                >
+                                                    ×
+                                                </button>
+                                            </div>
+                                            <div style={{ padding: '8px' }}>
+                                                <input
+                                                    type="text"
+                                                    value={face.label}
+                                                    maxLength={32}
+                                                    onChange={(e) => {
+                                                        const nextName = e.target.value;
+                                                        setFaces((prev) =>
+                                                            prev.map((f) => (f.id === face.id ? { ...f, label: nextName } : f))
+                                                        );
+                                                    }}
+                                                    placeholder={`Character ${idx + 1} (e.g. Sam)`}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '6px 8px',
+                                                        borderRadius: '8px',
+                                                        border: '1px solid #d8ccf0',
+                                                        fontSize: '12.5px',
+                                                        fontWeight: 700,
+                                                        color: '#1f1b24',
+                                                        background: '#ffffff',
+                                                    }}
+                                                />
+                                            </div>
                                         </div>
                                     ))}
                                 </div>

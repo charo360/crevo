@@ -50,6 +50,7 @@ interface SidebarProps {
     isBatchResizing?: boolean;
     outputAspectRatio?: string;
     onOutputAspectRatioChange?: (ar: string) => void;
+    savedCharacters?: ImageAsset[];
     isOpen?: boolean;
     onClose?: () => void;
 }
@@ -105,6 +106,7 @@ export const Sidebar: FC<SidebarProps> = (props) => {
                         platform={props.platform}
                         images={props.images}
                         onImagesChange={props.onImagesChange}
+                        savedCharacters={props.savedCharacters}
                         onGenerateImage={props.onGenerateImage}
                         isGeneratingImage={props.isGeneratingImage}
                         outputAspectRatio={props.outputAspectRatio}

@@ -1,4 +1,5 @@
 import React, { FC, useRef, useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { ImageAsset, Platform, ImagenAspectRatio } from '../../types';
 import { Module } from './Module';
@@ -11,6 +12,7 @@ interface ImageModuleProps {
     platform: Platform;
     images: ImageAsset[];
     onImagesChange: (i: ImageAsset[]) => void;
+    savedCharacters?: ImageAsset[];
     onGenerateImage: (p: string, np: string, ar: ImagenAspectRatio) => Promise<ImageAsset | null>;
     isGeneratingImage: boolean;
     outputAspectRatio?: string;
@@ -20,6 +22,7 @@ interface ImageModuleProps {
 export const ImageModule: FC<ImageModuleProps> = ({
     images,
     onImagesChange,
+    savedCharacters = [],
     onGenerateImage,
     isGeneratingImage,
     platform,
@@ -94,8 +97,88 @@ export const ImageModule: FC<ImageModuleProps> = ({
         await onGenerateImage(genPrompt, negativePrompt, aspectRatio);
     };
 
+    const toggleSavedCharacter = (char: ImageAsset) => {
+        const exists = images.some((img) => img.id === char.id);
+        if (exists) {
+            onImagesChange(images.filter((img) => img.id !== char.id));
+        } else {
+            onImagesChange([...images, char]);
+        }
+    };
+
     return (
         <Module icon={ICONS.IMAGE} title="Images">
+            {savedCharacters.length > 0 && (
+                <div
+                    style={{
+                        marginBottom: '12px',
+                        padding: '10px',
+                        borderRadius: '10px',
+                        background: '#faf7ff',
+                        border: '1px solid #e4dcf2',
+                    }}
+                >
+                    <div
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            marginBottom: '8px',
+                            gap: '8px',
+                        }}
+                    >
+                        <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#4c1d95' }}>
+                            ⭐ Saved Characters (Tap to include)
+                        </span>
+                        <Link
+                            to="/dashboard/brand-kit"
+                            style={{ fontSize: '11px', fontWeight: 700, color: '#6b7280', textDecoration: 'none' }}
+                        >
+                            Manage →
+                        </Link>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {savedCharacters.map((char) => {
+                            const selected = images.some((img) => img.id === char.id);
+                            return (
+                                <button
+                                    key={char.id}
+                                    type="button"
+                                    onClick={() => toggleSavedCharacter(char)}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '4px 10px 4px 4px',
+                                        borderRadius: '999px',
+                                        border: selected ? '1.5px solid #571c86' : '1px solid #d8ccf0',
+                                        background: selected ? 'linear-gradient(135deg, #571c86, #7e22ce)' : '#ffffff',
+                                        color: selected ? '#ffffff' : '#2b2338',
+                                        fontSize: '12px',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s ease',
+                                    }}
+                                >
+                                    <img
+                                        src={char.url}
+                                        alt={char.characterName || 'Character'}
+                                        style={{
+                                            width: '22px',
+                                            height: '22px',
+                                            borderRadius: '50%',
+                                            objectFit: 'cover',
+                                            display: 'block',
+                                        }}
+                                    />
+                                    <span>{char.characterName || 'Character'}</span>
+                                    {selected && <span style={{ fontSize: '11px' }}>✓</span>}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
             <label className="sub-label">Upload Images (Optional)</label>
             <div
                 onClick={() => fileInputRef.current?.click()}
@@ -172,8 +255,30 @@ export const ImageModule: FC<ImageModuleProps> = ({
             {images.length > 0 && (
                 <div className="image-preview-grid">
                     {images.map(image => (
-                        <div key={image.id} className="image-preview-item">
-                            <img src={image.url} alt="preview" />
+                        <div key={image.id} className="image-preview-item" style={{ position: 'relative' }}>
+                            <img src={image.url} alt={image.characterName || 'preview'} />
+                            {image.characterName && (
+                                <span
+                                    style={{
+                                        position: 'absolute',
+                                        bottom: '4px',
+                                        left: '4px',
+                                        right: '4px',
+                                        padding: '2px 5px',
+                                        borderRadius: '6px',
+                                        background: 'rgba(87, 28, 134, 0.88)',
+                                        color: '#ffffff',
+                                        fontSize: '10px',
+                                        fontWeight: 700,
+                                        textAlign: 'center',
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                    }}
+                                >
+                                    {image.characterName}
+                                </span>
+                            )}
                             <button className="delete-image-btn" onClick={() => onImagesChange(images.filter(i => i.id !== image.id))}>&times;</button>
                         </div>
                     ))}

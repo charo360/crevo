@@ -356,8 +356,23 @@ export const generateDesign = async (
                 }
             }
 
-            optimizedImages.forEach(img => allImageParts.push({ inlineData: { data: img.base64, mimeType: img.mimeType } }));
+            optimizedImages.forEach((img, idx) => {
+                if (img.characterName && img.characterName.trim()) {
+                    allImageParts.push({
+                        text: `NAMED CHARACTER REFERENCE #${idx + 1} — Character Name: "${img.characterName.trim()}". Whenever "${img.characterName.trim()}" is referenced or featured in the thumbnail, you MUST depict THIS exact real person preserving 100% of their face, hair, skin tone, and identity:`,
+                    });
+                }
+                allImageParts.push({ inlineData: { data: img.base64, mimeType: img.mimeType } });
+            });
             if (logoPart) allImageParts.push(logoPart);
+
+            const namedCharacterList = optimizedImages
+                .map((img) => img.characterName?.trim())
+                .filter(Boolean) as string[];
+            const namedCharactersDirective =
+                namedCharacterList.length > 0
+                    ? `\n\n[NAMED CHARACTERS PROVIDED — STRICT IDENTITY MAPPING]\nThe user attached labeled reference photos for these specific characters: ${namedCharacterList.map((n) => `"${n}"`).join(', ')}. Keep each named character's real face 100% distinct and faithful to their own labeled photo—never blend or swap faces between characters.`
+                    : '';
 
 
             let improvementPlan: ImprovementPlan | null = null;
@@ -669,7 +684,7 @@ ${weaknessesList}
                           }). Compose the entire design strictly for ${effectiveAspectRatio} and ignore any conflicting orientation note above.`
                         : '';
 
-                const variationPrompt = `${finalPrompt}${referenceBlueprintDirective}${designerLikenessDirective}${aspectOverrideDirective}\n\n${variationDirective}`;
+                const variationPrompt = `${finalPrompt}${referenceBlueprintDirective}${namedCharactersDirective}${designerLikenessDirective}${aspectOverrideDirective}\n\n${variationDirective}`;
 
                 const imageConfig = {
                     responseModalities: [Modality.IMAGE],
