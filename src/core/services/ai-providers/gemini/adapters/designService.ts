@@ -617,6 +617,30 @@ ${weaknessesList}
 
             **Final Check:** Verify crisp readable text, an uncluttered bottom-right corner, and zero timestamps or ratio labels drawn on the image.
         `;
+            } else if (platform === 'daily_post') {
+                const hasHeadline = Boolean(currentText.headline && currentText.headline.trim());
+                const hasBrandColors = Boolean(colors.primary && colors.primary.trim());
+                finalPrompt = `
+            [START OF ABSOLUTE, NON-NEGOTIABLE PHOTOGRAPHY REQUIREMENTS]
+            1.  **OUTPUT ASPECT RATIO:** Compose cleanly for ${effectiveAspectRatio}. Never draw borders, frames, UI chrome, watermarks, or aspect ratio labels.
+            2.  **100% REAL CAMERA PHOTOGRAPH (ZERO "AI LOOK"):** Act as an elite real-world editorial & lifestyle photographer shooting on a full-frame mirrorless camera (35mm/50mm/85mm prime lens, f/1.8–f/2.8). The final image MUST look indistinguishable from a real photograph taken on location — genuine skin pores and micro-texture, natural hair strands, authentic real-world lighting, subtle natural lens depth-of-field, realistic clothing drape, and natural color science. STRICTLY FORBIDDEN: waxy/airbrushed plastic skin, fake HDR glow, CGI gloss, synthetic neon outlines, or stiff stock-photo poses.
+            3.  **NATURAL POSE, CONFIDENCE & SWAG:** Direct the subject in a natural, confident, candid real-life pose and camera angle appropriate for the scene (relaxed shoulders, authentic body language, natural eye contact or candid off-camera gaze — like a friend or pro photographer captured them in the moment).
+            4.  **TEXT RULE:** ${
+                hasHeadline
+                    ? `Render ONLY this exact short text cleanly in tasteful modern editorial typography with natural breathing room: "${currentText.headline.trim()}". Do NOT add any other random words or watermarks.`
+                    : 'STRICTLY ZERO TEXT on the image — pure, clean, authentic photography with NO captions, NO letters, NO graphics, and NO watermarks anywhere.'
+            }
+            [END OF ABSOLUTE, NON-NEGOTIABLE PHOTOGRAPHY REQUIREMENTS]
+
+            ---
+
+            **Creative Brief:**
+            - **Scene & Vibe:** ${currentText.body || 'Authentic everyday lifestyle photograph ready to share on Instagram or Facebook.'}
+            ${hasBrandColors ? `- **Subtle Brand Color Harmony:** Gently harmonize wardrobe/environment accents with Primary ${colors.primary}, Secondary ${colors.secondary}, Accent ${colors.accent} while keeping skin tones and lighting 100% realistic and photographic.` : '- **Color Science:** 100% true-to-life natural photographic colors — do NOT apply artificial brand tints or color overlays.'}
+            - **Subject Fidelity:** If person/character reference photos are attached, reproduce 100% of their exact real face AND exact real body build with total photographic authenticity so friends and followers immediately recognize them as real.
+
+            **Final Check:** Would a friend scrolling Instagram or Facebook believe a real photographer took this picture today? If anything looks CGI, plastic, or overly processed, make it more natural and candid.
+        `;
             } else {
                 // Fallback for other platforms (e.g. Twitter Card)
                 finalPrompt = `

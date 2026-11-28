@@ -33,76 +33,95 @@ const SOCIAL_TARGETS: SocialTarget[] = [
         label: 'Instagram Post (4:5)',
         shortLabel: 'Instagram 4:5',
         aspectRatio: '4:5',
-        captionStyle: 'engaging Instagram caption with a strong hook line, short punchy paragraphs, a question CTA, and 5-8 relevant hashtags',
+        captionStyle: 'authentic, natural first-person Instagram caption with real personality, relaxed confidence, a casual question or vibe line, and 4-6 natural hashtags',
+    },
+    {
+        id: 'facebook_post',
+        label: 'Facebook Post (4:5)',
+        shortLabel: 'Facebook',
+        aspectRatio: '4:5',
+        captionStyle: 'warm, relatable, real-person Facebook post written like talking to friends and followers — natural, conversational, zero corporate buzzwords, 0-3 light hashtags',
     },
     {
         id: 'instagram_square',
-        label: 'Instagram / FB (1:1)',
+        label: 'Square Post (1:1)',
         shortLabel: 'Square 1:1',
         aspectRatio: '1:1',
-        captionStyle: 'conversational Instagram/Facebook caption with a clear hook, practical takeaway, and 5-7 hashtags',
+        captionStyle: 'natural, engaging social caption with a genuine human voice, short readable lines, and 4-6 relevant hashtags',
     },
     {
         id: 'linkedin',
         label: 'LinkedIn (1:1)',
         shortLabel: 'LinkedIn 1:1',
         aspectRatio: '1:1',
-        captionStyle: 'sharp, authentic LinkedIn post with short scannable lines, a strong opening insight, zero fluff, and 3-5 professional hashtags',
+        captionStyle: 'sharp, authentic first-person LinkedIn post with short scannable lines, a real insight, zero fluff, and 3-4 hashtags',
     },
     {
         id: 'x_twitter',
         label: 'X / Twitter (16:9)',
         shortLabel: 'X / Twitter 16:9',
         aspectRatio: '16:9',
-        captionStyle: 'concise, high-punch X/Twitter post under 260 characters with 1-3 hashtags max',
+        captionStyle: 'concise, natural, high-punch X/Twitter post under 250 characters with 0-2 hashtags max',
     },
     {
         id: 'story_reels',
         label: 'Story / Reels (9:16)',
         shortLabel: 'Story 9:16',
         aspectRatio: '9:16',
-        captionStyle: 'short punchy Reels/TikTok/Story caption with a curiosity hook and 4-6 hashtags',
+        captionStyle: 'short, punchy, effortless Story/Reels/TikTok caption with 3-5 natural hashtags',
     },
     {
         id: 'youtube_community',
         label: 'YT Community (1:1)',
         shortLabel: 'YT Community',
         aspectRatio: '1:1',
-        captionStyle: 'warm YouTube Community post written directly to subscribers inviting comments, with 0-2 hashtags',
+        captionStyle: 'warm YouTube Community post written directly to subscribers inviting real comments, with 0-2 hashtags',
     },
 ];
 
 interface PostTypeOption {
     id: string;
     label: string;
+    isPhotoFirst: boolean;
     visualGuidance: string;
 }
 
 const POST_TYPES: PostTypeOption[] = [
     {
+        id: 'lifestyle',
+        label: '📸 Real Photo / Swag',
+        isPhotoFirst: true,
+        visualGuidance: 'Candid, effortless real-camera lifestyle portrait (street style, café, golden hour, or modern interior) with natural confident pose, authentic swag, real lens bokeh, and zero graphic overlays.',
+    },
+    {
+        id: 'editorial',
+        label: '✨ Luxury / Editorial',
+        isPhotoFirst: true,
+        visualGuidance: 'High-end magazine-style real DSLR portrait with clean architectural or studio backdrop, refined natural lighting, confident relaxed posture, and authentic film-grade realism.',
+    },
+    {
+        id: 'fitness',
+        label: '💪 Fitness / Active',
+        isPhotoFirst: true,
+        visualGuidance: 'Authentic real-camera gym, outdoor run, or athletic lifestyle photograph with natural sweat/lighting realism, dynamic posture, and true-to-life body build.',
+    },
+    {
         id: 'tip',
-        label: '💡 Tip / Value',
-        visualGuidance: 'Clean editorial value-post visual with crisp hierarchy, high readability, and modern creator polish.',
+        label: '💡 Tip / Value Card',
+        isPhotoFirst: false,
+        visualGuidance: 'Clean, modern creator value-post combining a real candid photograph of the person with crisp, readable editorial typography.',
     },
     {
         id: 'quote',
         label: '💬 Quote / Hot Take',
-        visualGuidance: 'Bold minimalist typographic social post with strong contrast and clean breathing room around the statement.',
-    },
-    {
-        id: 'lifestyle',
-        label: '📸 Lifestyle / Personal',
-        visualGuidance: 'Authentic candid real-camera lifestyle photograph (50mm DSLR look, natural real-world lighting, zero AI plastic look).',
+        isPhotoFirst: false,
+        visualGuidance: 'Bold minimalist social statement post with strong contrast, authentic photographic atmosphere, and clean typography.',
     },
     {
         id: 'promo',
         label: '🚀 Promo / Launch',
-        visualGuidance: 'High-impact announcement/launch graphic with clear focal subject, clean modern badge/headline, and premium brand look.',
-    },
-    {
-        id: 'story',
-        label: '📖 Story / Lesson',
-        visualGuidance: 'Relatable storytelling social post with authentic emotion, natural framing, and clean hook text.',
+        isPhotoFirst: false,
+        visualGuidance: 'Clean, premium announcement post with natural photography of the person and crisp modern headline layout.',
     },
 ];
 
@@ -139,12 +158,12 @@ export const DailyPostView: FC<DailyPostViewProps> = ({
     const uploadInputRef = useRef<HTMLInputElement>(null);
 
     const [targetId, setTargetId] = useState<string>('instagram_portrait');
-    const [postTypeId, setPostTypeId] = useState<string>('tip');
+    const [postTypeId, setPostTypeId] = useState<string>('lifestyle');
     const [nicheText, setNicheText] = useState<string>(brandNicheBio);
     const [topic, setTopic] = useState<string>('');
     const [headlineOnImage, setHeadlineOnImage] = useState<string>('');
     const [includeLogo, setIncludeLogo] = useState<boolean>(false);
-    const [useBrandColors, setUseBrandColors] = useState<boolean>(true);
+    const [useBrandColors, setUseBrandColors] = useState<boolean>(false);
     const [attachedImages, setAttachedImages] = useState<ImageAsset[]>([]);
     const autoSelectedRef = useRef<boolean>(false);
 
@@ -207,13 +226,17 @@ export const DailyPostView: FC<DailyPostViewProps> = ({
     };
 
     const generateSocialCaption = async (postTopic: string, onImageText: string) => {
-        const prompt = `Write a ready-to-paste social media post for ${selectedTarget.label}.
-- Post Type: ${selectedPostType.label}
-- Creator / Brand: ${brandChannelName || 'Creator'}
-- About the Creator / Niche: ${nicheText.trim() || '(general creator)'}
-- Topic: ${postTopic}
-- Text shown on the visual: ${onImageText || '(none / photo-only)'}
-- Style requirement: ${selectedTarget.captionStyle}
+        const prompt = `Write a genuine, human, ready-to-paste social media caption for ${selectedTarget.label}.
+- Post Vibe: ${selectedPostType.label}
+- About the Person / What They Do: ${nicheText.trim() || '(everyday creator / personal account)'}
+- What the photo/post is about: ${postTopic}
+- Text on image (if any): ${onImageText || '(none — clean real photo)'}
+- Style: ${selectedTarget.captionStyle}
+
+CRITICAL RULES:
+- Write in natural, authentic first-person human voice ("I", "me", "today") as THIS real person posting to their own friends and followers.
+- NEVER mention "Crevo", "AI", "generated", or any software/app/brand name unless the user explicitly wrote that brand name inside the topic above.
+- Keep it grounded, confident, and real — zero robotic AI clichés ("elevate your journey", "unleash", "game-changer").
 
 Return STRICT JSON only (no markdown fences) with this exact shape:
 {"caption":"...","hashtags":["#tag1","#tag2"]}`;
@@ -248,14 +271,17 @@ Return STRICT JSON only (no markdown fences) with this exact shape:
         if (isSuggesting) return;
         setIsSuggesting(true);
         try {
-            const prompt = `Suggest 1 fresh, specific, high-engagement daily social media post idea for ${selectedTarget.label}.
-- Post Type: ${selectedPostType.label}
-- Creator / Brand Name: ${brandChannelName || 'Content Creator'}
-- About the Creator / Niche & Audience: ${nicheText.trim() || '(not specified yet — suggest a broadly useful creator/growth post)'}
-- Current rough topic (if any): ${topic.trim() || '(none — invent a fresh, specific idea tailored to their niche above)'}
+            const prompt = `Suggest 1 fresh, authentic, real-life daily social media post idea for ${selectedTarget.label}.
+- Post Vibe: ${selectedPostType.label}
+- About the Person / What They Do: ${nicheText.trim() || '(everyday personal social media user / lifestyle creator)'}
+- Current rough idea (if any): ${topic.trim() || '(none — suggest a natural, high-engagement real-life photo scene, pose, lighting, and relatable vibe)'}
+
+CRITICAL RULES:
+- Tailor the idea 100% to this real person's vibe/niche. NEVER mention "Crevo", "AI", or any app/tool name unless they explicitly put it in their bio above.
+- If the Post Vibe is photo-first (${selectedPostType.isPhotoFirst ? 'YES' : 'NO'}), describe a realistic real-world photo scene + natural confident pose/angle in "topic" and leave "headline" as an empty string "" so it stays a clean real photo.
 
 Return STRICT JSON only (no markdown fences):
-{"topic":"1-2 sentence post idea","headline":"Short 3-6 word punchy on-image hook"}`;
+{"topic":"1-2 sentence realistic photo scene & post idea","headline":"${selectedPostType.isPhotoFirst ? '' : 'Short 3-6 word punchy on-image hook'}"}`;
 
             const res = await apiRequest<any>('/api/ai/generate', {
                 method: 'POST',
@@ -268,7 +294,7 @@ Return STRICT JSON only (no markdown fences):
             const cleaned = raw.replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
             const parsed = JSON.parse(cleaned);
             if (parsed.topic) setTopic(String(parsed.topic).trim());
-            if (parsed.headline) setHeadlineOnImage(String(parsed.headline).trim());
+            setHeadlineOnImage(typeof parsed.headline === 'string' ? parsed.headline.trim() : '');
             toast.success('Fresh post idea ready!');
         } catch (err: any) {
             toast.error(err?.message || 'Could not suggest an idea right now.');
@@ -315,7 +341,7 @@ Return STRICT JSON only (no markdown fences):
 
             const effectiveColors: ColorsState = useBrandColors
                 ? colors
-                : { primary: '#571c86', secondary: '#7e22ce', accent: '#facc15', background: '#111827' };
+                : { primary: '', secondary: '', accent: '', background: '' };
             const effectiveLogo: LogoState = includeLogo
                 ? logo
                 : { url: null, base64: null, mimeType: null, size: 15, opacity: 100, position: 'top-right' };
