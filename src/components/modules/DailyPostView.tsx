@@ -91,7 +91,7 @@ const POST_TYPES: PostTypeOption[] = [
         id: 'lifestyle',
         label: '📸 Real Photo / Swag',
         isPhotoFirst: true,
-        visualGuidance: 'Candid, effortless real-camera lifestyle portrait (street style, café, golden hour, or modern interior) with natural confident pose, authentic swag, real lens bokeh, and zero graphic overlays.',
+        visualGuidance: 'Candid, high-engagement real-camera portrait with natural confident pose, authentic swag, flattering camera angle, real lens depth-of-field, and zero graphic overlays.',
     },
     {
         id: 'editorial',
@@ -136,6 +136,23 @@ interface DailyPostViewProps {
     brandNicheBio?: string;
 }
 
+const CREATIVE_SCENE_SEEDS = [
+    'rooftop terrace at golden-hour sunset with warm skyline glow',
+    'luxury hotel balcony or resort poolside with soft natural sunlight',
+    'confident full-length mirror outfit-check in a stylish modern room',
+    'candid night city street with warm neon bokeh and cinematic streetlights',
+    'sleek car interior or stepping out of a car with effortless main-character energy',
+    'sunlit modern bedroom or loft morning natural window light',
+    'high-fashion studio flash editorial portrait with crisp shadows',
+    'upscale evening lounge or moody restaurant candlelight ambiance',
+    'urban street-style crosswalk stride shot candidly on a 50mm lens',
+    'beachfront or waterfront breeze at late afternoon golden hour',
+    'behind-the-scenes creator setup with natural candid laugh or glance',
+    'stylish minimalist architectural staircase or marble lobby',
+    'cozy late-night home aesthetic with warm lamp glow',
+    'post-workout athletic glow in natural daylight or sleek modern gym',
+];
+
 function extractTextFromAiResponse(res: any): string {
     const parts = res?.candidates?.[0]?.content?.parts;
     if (Array.isArray(parts)) {
@@ -166,6 +183,9 @@ export const DailyPostView: FC<DailyPostViewProps> = ({
     const [useBrandColors, setUseBrandColors] = useState<boolean>(false);
     const [attachedImages, setAttachedImages] = useState<ImageAsset[]>([]);
     const autoSelectedRef = useRef<boolean>(false);
+    const recentIdeasRef = useRef<string[]>([]);
+    const lastSuggestedTopicRef = useRef<string>('');
+    const sceneSeedCursorRef = useRef<number>(Math.floor(Math.random() * CREATIVE_SCENE_SEEDS.length));
 
     useEffect(() => {
         if (brandNicheBio && !nicheText) {
@@ -271,17 +291,37 @@ Return STRICT JSON only (no markdown fences) with this exact shape:
         if (isSuggesting) return;
         setIsSuggesting(true);
         try {
-            const prompt = `Suggest 1 fresh, authentic, real-life daily social media post idea for ${selectedTarget.label}.
-- Post Vibe: ${selectedPostType.label}
-- About the Person / What They Do: ${nicheText.trim() || '(everyday personal social media user / lifestyle creator)'}
-- Current rough idea (if any): ${topic.trim() || '(none — suggest a natural, high-engagement real-life photo scene, pose, lighting, and relatable vibe)'}
+            // Rotate to a fresh, non-repeating scene direction on every click
+            sceneSeedCursorRef.current =
+                (sceneSeedCursorRef.current + 1 + Math.floor(Math.random() * 3)) % CREATIVE_SCENE_SEEDS.length;
+            const freshSceneSeed = CREATIVE_SCENE_SEEDS[sceneSeedCursorRef.current];
+
+            // Only treat topic as user input if the user actually typed something different from our last auto-suggestion
+            const userTypedSeed =
+                topic.trim() && topic.trim() !== lastSuggestedTopicRef.current ? topic.trim() : '';
+
+            const avoidList =
+                recentIdeasRef.current.length > 0
+                    ? `\n- DO NOT repeat, rephrase, or reuse the setting/theme of any of these recent suggestions:\n  ${recentIdeasRef.current.map((idea, i) => `${i + 1}. ${idea}`).join('\n  ')}`
+                    : '';
+
+            const prompt = `You are a viral social media creative director helping a real creator get maximum likes, saves, and comments on ${selectedTarget.label}.
+
+First, deeply analyze this creator's niche and audience:
+- About the Creator / Niche: ${nicheText.trim() || '(personal lifestyle & social creator)'}
+- Selected Post Vibe: ${selectedPostType.label}
+- Fresh Visual Direction Seed (use or adapt specifically to their niche): ${freshSceneSeed}
+- User's own rough idea (if any): ${userTypedSeed || '(none — invent a completely fresh, scroll-stopping, high-engagement idea tailored to their exact niche)'}${avoidList}
 
 CRITICAL RULES:
-- Tailor the idea 100% to this real person's vibe/niche. NEVER mention "Crevo", "AI", or any app/tool name unless they explicitly put it in their bio above.
-- If the Post Vibe is photo-first (${selectedPostType.isPhotoFirst ? 'YES' : 'NO'}), describe a realistic real-world photo scene + natural confident pose/angle in "topic" and leave "headline" as an empty string "" so it stays a clean real photo.
+1. Make the idea 100% tailored to what THEIR specific audience loves to interact with (glamorous, confident, relatable, bold, or high-value depending on their niche — always Instagram/Facebook safe and tasteful).
+2. Be specific about the exact real-world setting, confident pose/body language, camera angle, and lighting so the photo looks like a real photographer shot it.
+3. STRICTLY BANNED CLICHÉS: NEVER default to "coffee", "coffee shop", "holding a latte", or "café" unless the user explicitly wrote coffee in their niche or idea.
+4. NEVER mention "Crevo", "AI", or any app/tool name unless it's in their niche.
+5. If Post Vibe is photo-first (${selectedPostType.isPhotoFirst ? 'YES' : 'NO'}), leave "headline" as an empty string "" so it stays a pure, real photograph. Otherwise write a punchy 3-6 word scroll-stopping hook for "headline".
 
 Return STRICT JSON only (no markdown fences):
-{"topic":"1-2 sentence realistic photo scene & post idea","headline":"${selectedPostType.isPhotoFirst ? '' : 'Short 3-6 word punchy on-image hook'}"}`;
+{"topic":"1-2 sentence vivid, specific real-life photo scene, pose, angle, and high-engagement concept","headline":"${selectedPostType.isPhotoFirst ? '' : 'Short 3-6 word punchy hook'}"}`;
 
             const res = await apiRequest<any>('/api/ai/generate', {
                 method: 'POST',
@@ -293,7 +333,12 @@ Return STRICT JSON only (no markdown fences):
             const raw = extractTextFromAiResponse(res);
             const cleaned = raw.replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
             const parsed = JSON.parse(cleaned);
-            if (parsed.topic) setTopic(String(parsed.topic).trim());
+            if (parsed.topic) {
+                const nextTopic = String(parsed.topic).trim();
+                setTopic(nextTopic);
+                lastSuggestedTopicRef.current = nextTopic;
+                recentIdeasRef.current = [nextTopic, ...recentIdeasRef.current].slice(0, 8);
+            }
             setHeadlineOnImage(typeof parsed.headline === 'string' ? parsed.headline.trim() : '');
             toast.success('Fresh post idea ready!');
         } catch (err: any) {
@@ -359,12 +404,12 @@ Return STRICT JSON only (no markdown fences):
                 subheadlineWeight: 'normal',
                 subheadlineItalic: false,
                 subheadlineColor: '#f3f4f6',
-                body: `DAILY SOCIAL POST FOR ${selectedTarget.label}. Post Type: ${selectedPostType.label}. Visual direction: ${selectedPostType.visualGuidance} Topic & scene: ${cleanTopic || cleanHeadline}. ${
+                body: `DAILY SOCIAL POST FOR ${selectedTarget.label}. ${nicheText.trim() ? `Creator Niche / Identity: ${nicheText.trim()}. ` : ''}Post Vibe: ${selectedPostType.label}. Visual direction: ${selectedPostType.visualGuidance} Topic & scene: ${cleanTopic || cleanHeadline}. ${
                     cleanHeadline
                         ? `Render ONLY this clean, readable headline on the graphic: "${cleanHeadline}".`
                         : 'Do NOT render any text overlay on the image — make it a clean, authentic, photo-only social post.'
                 }`,
-                author: brandChannelName || '',
+                author: '',
             };
 
             const dailyPrefs: PreferencesState = {

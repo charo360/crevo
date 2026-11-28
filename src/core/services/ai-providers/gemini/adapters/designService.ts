@@ -625,9 +625,13 @@ ${weaknessesList}
             1.  **OUTPUT ASPECT RATIO:** Compose cleanly for ${effectiveAspectRatio}. Never draw borders, frames, UI chrome, watermarks, or aspect ratio labels.
             2.  **100% REAL CAMERA PHOTOGRAPH (ZERO "AI LOOK"):** Act as an elite real-world editorial & lifestyle photographer shooting on a full-frame mirrorless camera (35mm/50mm/85mm prime lens, f/1.8–f/2.8). The final image MUST look indistinguishable from a real photograph taken on location — genuine skin pores and micro-texture, natural hair strands, authentic real-world lighting, subtle natural lens depth-of-field, realistic clothing drape, and natural color science. STRICTLY FORBIDDEN: waxy/airbrushed plastic skin, fake HDR glow, CGI gloss, synthetic neon outlines, or stiff stock-photo poses.
             3.  **NATURAL POSE, CONFIDENCE & SWAG:** Direct the subject in a natural, confident, candid real-life pose and camera angle appropriate for the scene (relaxed shoulders, authentic body language, natural eye contact or candid off-camera gaze — like a friend or pro photographer captured them in the moment).
-            4.  **TEXT RULE:** ${
+            4.  **TEXT & GRAPHIC DESIGN RULE:** ${
                 hasHeadline
-                    ? `Render ONLY this exact short text cleanly in tasteful modern editorial typography with natural breathing room: "${currentText.headline.trim()}". Do NOT add any other random words or watermarks.`
+                    ? `The user explicitly wants text on this photo. Apply pro editorial graphic-design rules:
+                - Render ONLY this exact text with 100% spelling accuracy: "${currentText.headline.trim()}" (do NOT add extra words, labels, or watermarks).
+                - Place the text cleanly in natural negative space (upper third, lower third, or clean side margin) — NEVER cover or overlap the person's face, eyes, or key focal area.
+                - Ensure effortless mobile readability with strong figure-ground contrast (use a subtle, natural dark/soft gradient or clean editorial shadow behind the text if needed — never ugly neon strokes or cluttered boxes).
+                - Match the typography weight, spacing, and visual hierarchy to the niche and mood of the photo so the text and photograph feel professionally art-directed together.`
                     : 'STRICTLY ZERO TEXT on the image — pure, clean, authentic photography with NO captions, NO letters, NO graphics, and NO watermarks anywhere.'
             }
             [END OF ABSOLUTE, NON-NEGOTIABLE PHOTOGRAPHY REQUIREMENTS]
