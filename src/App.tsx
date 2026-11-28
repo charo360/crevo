@@ -883,6 +883,7 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
             {previewingImage && (
                 <PreviewModal
                     image={previewingImage}
+                    defaultTitle={text.headline || originalYoutubeTitle}
                     onCancel={() => setPreviewingImage(null)}
                 />
             )}

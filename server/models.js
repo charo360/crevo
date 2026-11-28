@@ -78,6 +78,27 @@ const userSchema = new mongoose.Schema(
             trim: true,
             default: '',
         },
+        brand_kit: {
+            channel_name: { type: String, trim: true, default: '' },
+            face_images: [
+                {
+                    id: { type: String, default: '' },
+                    label: { type: String, default: '' },
+                    data_url: { type: String, default: '' },
+                    mime_type: { type: String, default: 'image/jpeg' },
+                },
+            ],
+            logo_data_url: { type: String, default: '' },
+            logo_position: { type: String, default: 'top-right' },
+            colors: {
+                primary: { type: String, default: '' },
+                secondary: { type: String, default: '' },
+                accent: { type: String, default: '' },
+                background: { type: String, default: '' },
+            },
+            preferred_style: { type: String, default: '' },
+            updated_at: { type: Date, default: null },
+        },
     },
     {
         timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },

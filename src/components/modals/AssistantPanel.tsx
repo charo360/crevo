@@ -23,11 +23,10 @@ const HELP_TOPICS: HelpTopic[] = [
         ],
         answer:
             'How to create a thumbnail in Studio:\n' +
-            '1. Upload your subject photo (or pick frames from a video).\n' +
+            '1. Upload your subject photo (or tap "⭐ My Face & Brand Kit" to load your saved face, logo & colors in 1 click).\n' +
             '2. Enter your main headline and optional subtitle.\n' +
             '3. Pick a Vibe/Style, colors, and Output Size (16:9 YouTube, 9:16 Shorts/TikTok, 1:1, or 4:5).\n' +
-            '4. Click "Generate Designs".\n\n' +
-            'On mobile, use the top switcher (Create ⇄ Results) to jump between your settings and finished designs.'
+            '4. Click "Generate Designs", then tap the Eye icon to preview how it looks live inside a YouTube Desktop or Mobile feed!'
     },
     {
         id: 'clips',

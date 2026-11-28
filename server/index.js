@@ -2330,7 +2330,7 @@ app.post('/api/video/clip', requireAuth, async (req, res) => {
         const filterParts = [];
 
         if (normalizedCrop === 'split_podcast' && outputHeight > outputWidth) {
-            // 2-Speaker Podcast Split-Screen: stack Left Speaker on top & Right Speaker on bottom
+            // 2-Speaker Podcast Split-Screen: stack Left Speaker on top & Right Speaker on bottom with crisp seam divider
             const halfH = Math.floor(outputHeight / 2);
             filterParts.push(`[0:v]split=2[left_raw][right_raw]`);
             filterParts.push(
@@ -2339,7 +2339,9 @@ app.post('/api/video/clip', requireAuth, async (req, res) => {
             filterParts.push(
                 `[right_raw]crop=iw/2:ih:iw/2:0,scale=${outputWidth}:${halfH}:force_original_aspect_ratio=increase:flags=lanczos,crop=${outputWidth}:${halfH}[bot_v]`
             );
-            filterParts.push(`[top_v][bot_v]vstack=inputs=2${postChain}[v]`);
+            filterParts.push(
+                `[top_v][bot_v]vstack=inputs=2,drawbox=x=0:y=${halfH - 2}:w=${outputWidth}:h=4:color=black@0.85:t=fill${postChain}[v]`
+            );
         } else {
             let cropExpr = `crop=${outputWidth}:${outputHeight}`;
             if (normalizedCrop === 'left') {
@@ -2506,7 +2508,9 @@ async function renderClipToLibraryFile({
             filterParts.push(
                 `[right_raw]crop=iw/2:ih:iw/2:0,scale=${outputWidth}:${halfH}:force_original_aspect_ratio=increase:flags=lanczos,crop=${outputWidth}:${halfH}[bot_v]`
             );
-            filterParts.push(`[top_v][bot_v]vstack=inputs=2${postChain}[v]`);
+            filterParts.push(
+                `[top_v][bot_v]vstack=inputs=2,drawbox=x=0:y=${halfH - 2}:w=${outputWidth}:h=4:color=black@0.85:t=fill${postChain}[v]`
+            );
         } else {
             let cropExpr = `crop=${outputWidth}:${outputHeight}`;
             if (normalizedCrop === 'left') {
@@ -4221,6 +4225,80 @@ app.get('/api/admin/openrouter-balance', requireAdmin, async (_req, res) => {
         return res.json(info);
     } catch (err) {
         return res.status(500).json({ error: err?.message || 'Failed to check OpenRouter balance' });
+    }
+});
+
+// ==================== Saved Face & Brand Kit ====================
+app.get('/api/user/brand-kit', requireAuth, async (req, res) => {
+    try {
+        const userDoc = await User.findById(req.user.id).select('brand_kit').lean();
+        return res.json({ brandKit: userDoc?.brand_kit || null });
+    } catch (err) {
+        return res.status(500).json({ error: err?.message || 'Failed to load Brand Kit' });
+    }
+});
+
+app.put('/api/user/brand-kit', requireAuth, async (req, res) => {
+    try {
+        const body = req.body || {};
+        const rawFaces = Array.isArray(body.face_images) ? body.face_images.slice(0, 3) : [];
+        const face_images = [];
+        for (const f of rawFaces) {
+            const dataUrl = typeof f?.data_url === 'string' ? f.data_url.trim() : '';
+            if (!dataUrl.startsWith('data:image/') || dataUrl.length > 900_000) continue;
+            face_images.push({
+                id: String(f.id || `bk_face_${face_images.length + 1}`).slice(0, 64),
+                label: String(f.label || `Face ${face_images.length + 1}`).slice(0, 40),
+                data_url: dataUrl,
+                mime_type: String(f.mime_type || 'image/jpeg').slice(0, 40),
+            });
+        }
+
+        const rawLogo = typeof body.logo_data_url === 'string' ? body.logo_data_url.trim() : '';
+        const logo_data_url = rawLogo.startsWith('data:image/') && rawLogo.length <= 600_000 ? rawLogo : '';
+
+        const safeColors = {
+            primary: typeof body?.colors?.primary === 'string' ? body.colors.primary.slice(0, 20) : '',
+            secondary: typeof body?.colors?.secondary === 'string' ? body.colors.secondary.slice(0, 20) : '',
+            accent: typeof body?.colors?.accent === 'string' ? body.colors.accent.slice(0, 20) : '',
+            background: typeof body?.colors?.background === 'string' ? body.colors.background.slice(0, 20) : '',
+        };
+
+        const brand_kit = {
+            channel_name: typeof body.channel_name === 'string' ? body.channel_name.trim().slice(0, 60) : '',
+            face_images,
+            logo_data_url,
+            logo_position: typeof body.logo_position === 'string' ? body.logo_position.slice(0, 24) : 'top-right',
+            colors: safeColors,
+            preferred_style: typeof body.preferred_style === 'string' ? body.preferred_style.slice(0, 60) : '',
+            updated_at: new Date(),
+        };
+
+        await User.findByIdAndUpdate(req.user.id, { $set: { brand_kit } });
+        return res.json({ brandKit: brand_kit });
+    } catch (err) {
+        return res.status(500).json({ error: err?.message || 'Failed to save Brand Kit' });
+    }
+});
+
+app.delete('/api/user/brand-kit', requireAuth, async (req, res) => {
+    try {
+        await User.findByIdAndUpdate(req.user.id, {
+            $set: {
+                brand_kit: {
+                    channel_name: '',
+                    face_images: [],
+                    logo_data_url: '',
+                    logo_position: 'top-right',
+                    colors: { primary: '', secondary: '', accent: '', background: '' },
+                    preferred_style: '',
+                    updated_at: null,
+                },
+            },
+        });
+        return res.json({ ok: true });
+    } catch (err) {
+        return res.status(500).json({ error: err?.message || 'Failed to clear Brand Kit' });
     }
 });
 

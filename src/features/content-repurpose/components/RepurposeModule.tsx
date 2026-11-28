@@ -871,6 +871,11 @@ export const RepurposeModule: FC<RepurposeModuleProps> = ({ onResultsGenerated, 
                             );
                         })}
                     </div>
+                    {options.crop_mode === 'split_podcast' && (
+                        <p style={{ margin: '7px 0 0', fontSize: '12px', color: '#571c86', fontWeight: 500 }}>
+                            🎙️ Stacks the left speaker on top and right speaker on bottom in Full HD 1080×1920 — ideal for 2-person podcasts &amp; interviews.
+                        </p>
+                    )}
                 </div>
 
                 <div className="feature-toggles" style={{ marginTop: '14px' }}>
