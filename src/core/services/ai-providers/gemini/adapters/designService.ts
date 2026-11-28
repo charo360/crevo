@@ -621,13 +621,19 @@ ${weaknessesList}
                 const hasHeadline = Boolean(currentText.headline && currentText.headline.trim());
                 const hasBrandColors = Boolean(colors.primary && colors.primary.trim());
                 const isRetouchMode = Boolean(currentText.body && currentText.body.startsWith('[RETOUCH_MY_PHOTO]'));
+                const textStyleMatch = currentText.body?.match(/\[TEXT_DESIGN_STYLE:\s*([^\]]+)\]/);
+                const customTextStyleDirection = textStyleMatch?.[1]?.trim() || '';
+                const cleanBody = (currentText.body || '')
+                    .replace('[RETOUCH_MY_PHOTO]', '')
+                    .replace(/\[TEXT_DESIGN_STYLE:\s*[^\]]+\]/, '')
+                    .trim();
 
                 const textDesignRule = hasHeadline
-                    ? `The user explicitly wants text on this photo. Apply pro editorial graphic-design rules:
+                    ? `The user explicitly wants designed typography on this photo. Apply agency-grade editorial graphic-design rules:
                 - Render ONLY this exact text with 100% spelling accuracy: "${currentText.headline.trim()}" (do NOT add extra words, labels, or watermarks).
+                ${customTextStyleDirection ? `- CHOSEN TEXT DESIGN STYLE (MANDATORY): ${customTextStyleDirection}` : '- Match the typography weight, spacing, and visual hierarchy to the niche and mood of the photo.'}
                 - Place the text cleanly in natural negative space (upper third, lower third, or clean side margin) — NEVER cover or overlap the person's face, eyes, or key focal area.
-                - Ensure effortless mobile readability with strong figure-ground contrast (use a subtle, natural dark/soft gradient or clean editorial shadow behind the text if needed — never ugly neon strokes or cluttered boxes).
-                - Match the typography weight, spacing, and visual hierarchy to the niche and mood of the photo so the text and photograph feel professionally art-directed together.`
+                - Ensure effortless mobile readability with strong figure-ground contrast — the text and photograph must feel professionally art-directed together, never like plain slapped-on default text.`
                     : 'STRICTLY ZERO TEXT on the image — pure, clean, authentic photography with NO captions, NO letters, NO graphics, and NO watermarks anywhere.';
 
                 if (isRetouchMode) {
@@ -642,7 +648,7 @@ ${weaknessesList}
             ---
 
             **Retouch Brief:**
-            - ${currentText.body.replace('[RETOUCH_MY_PHOTO]', '').trim()}
+            - ${cleanBody}
 
             **Final Check:** Does the person look 100% identical to themselves in the original photo, just photographed with pro lighting, clean background, and zero "AI plastic" artifacts?
         `;
@@ -658,7 +664,7 @@ ${weaknessesList}
             ---
 
             **Creative Brief:**
-            - **Scene & Vibe:** ${currentText.body || 'Authentic everyday lifestyle photograph ready to share on Instagram or Facebook.'}
+            - **Scene & Vibe:** ${cleanBody || 'Authentic everyday lifestyle photograph ready to share on Instagram or Facebook.'}
             ${hasBrandColors ? `- **Subtle Brand Color Harmony:** Gently harmonize wardrobe/environment accents with Primary ${colors.primary}, Secondary ${colors.secondary}, Accent ${colors.accent} while keeping skin tones and lighting 100% realistic and photographic.` : '- **Color Science:** 100% true-to-life natural photographic colors — do NOT apply artificial brand tints or color overlays.'}
             - **Subject Fidelity:** If person/character reference photos are attached, reproduce 100% of their exact real face AND exact real body build with total photographic authenticity so friends and followers immediately recognize them as real.
 

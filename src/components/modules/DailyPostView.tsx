@@ -171,6 +171,51 @@ const RETOUCH_LOCATION_PRESETS = [
     'Modern Rooftop Terrace',
 ];
 
+interface TextDesignStyleOption {
+    id: string;
+    label: string;
+    directive: string;
+}
+
+const TEXT_DESIGN_STYLES: TextDesignStyleOption[] = [
+    {
+        id: 'auto',
+        label: '✨ Auto Design',
+        directive:
+            'Art-direct the typography to match the photo mood and niche — clean editorial hierarchy, crisp mobile readability, subtle natural gradient or soft drop shadow for contrast, placed in open negative space away from the face.',
+    },
+    {
+        id: 'magazine',
+        label: '📰 Magazine Cover',
+        directive:
+            'Style the text like a high-fashion Vogue/GQ editorial magazine cover: refined high-contrast serif or tall condensed editorial display type, generous letter-spacing, subtle depth integration (e.g., clean upper-third masthead placement), never obscuring the subject’s face.',
+    },
+    {
+        id: 'bold_viral',
+        label: '🔥 Bold Viral Hook',
+        directive:
+            'Style the text as a scroll-stopping stacked bold display headline: heavy modern geometric sans-serif, tight line-height, key word highlighted in a clean accent color, crisp legibility over a subtle natural dark vignette/gradient in the lower or upper third.',
+    },
+    {
+        id: 'luxury_minimal',
+        label: '💎 Luxury Minimal',
+        directive:
+            'Style the text with understated luxury restraint: thin-to-medium tracked-out modern sans-serif or refined serif, clean small-to-medium scale with generous breathing room, crisp white or warm cream tone with delicate natural shadow — effortless high-end aesthetic.',
+    },
+    {
+        id: 'editorial_quote',
+        label: '💬 Editorial Quote',
+        directive:
+            'Style the text as an art-directed quote layout: clean balanced multi-line typography with a tasteful vertical accent bar or subtle quotation styling, set over a soft natural darkened gradient area so every word reads effortlessly on mobile.',
+    },
+    {
+        id: 'frosted_glass',
+        label: '🏷️ Frosted Glass Bar',
+        directive:
+            'Style the text inside a sleek, modern translucent frosted-glass pill/bar (subtle blur, soft light border, clean crisp sans-serif text) positioned cleanly near the bottom or top margin without touching the person’s face.',
+    },
+];
+
 function extractTextFromAiResponse(res: any): string {
     const parts = res?.candidates?.[0]?.content?.parts;
     if (Array.isArray(parts)) {
@@ -199,6 +244,7 @@ export const DailyPostView: FC<DailyPostViewProps> = ({
     const [nicheText, setNicheText] = useState<string>(brandNicheBio);
     const [topic, setTopic] = useState<string>('');
     const [headlineOnImage, setHeadlineOnImage] = useState<string>('');
+    const [textDesignStyleId, setTextDesignStyleId] = useState<string>('auto');
     const [includeLogo, setIncludeLogo] = useState<boolean>(false);
     const [useBrandColors, setUseBrandColors] = useState<boolean>(false);
     const [attachedImages, setAttachedImages] = useState<ImageAsset[]>([]);
@@ -229,6 +275,8 @@ export const DailyPostView: FC<DailyPostViewProps> = ({
 
     const selectedTarget = SOCIAL_TARGETS.find((t) => t.id === targetId) || SOCIAL_TARGETS[0];
     const selectedPostType = POST_TYPES.find((p) => p.id === postTypeId) || POST_TYPES[0];
+    const selectedTextDesignStyle =
+        TEXT_DESIGN_STYLES.find((s) => s.id === textDesignStyleId) || TEXT_DESIGN_STYLES[0];
 
     // Auto-select single saved character once
     useEffect(() => {
@@ -495,7 +543,7 @@ Return STRICT JSON only (no markdown fences):
                 subheadlineWeight: 'normal',
                 subheadlineItalic: false,
                 subheadlineColor: '#f3f4f6',
-                body: bodyPrompt,
+                body: `${bodyPrompt}${cleanHeadline ? ` [TEXT_DESIGN_STYLE: ${selectedTextDesignStyle.directive}]` : ''}`,
                 author: '',
             };
 
@@ -937,6 +985,37 @@ Return STRICT JSON only (no markdown fences):
                                             color: '#111827',
                                         }}
                                     />
+                                    {headlineOnImage.trim().length > 0 && (
+                                        <div style={{ marginTop: '8px' }}>
+                                            <div style={{ fontSize: '11px', fontWeight: 800, color: '#571c86', marginBottom: '5px' }}>
+                                                🎨 Text Design Style
+                                            </div>
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+                                                {TEXT_DESIGN_STYLES.map((st) => {
+                                                    const active = textDesignStyleId === st.id;
+                                                    return (
+                                                        <button
+                                                            key={st.id}
+                                                            type="button"
+                                                            onClick={() => setTextDesignStyleId(st.id)}
+                                                            style={{
+                                                                padding: '4px 9px',
+                                                                borderRadius: '999px',
+                                                                border: active ? '1.5px solid #571c86' : '1px solid #e4dcf2',
+                                                                background: active ? '#571c86' : '#ffffff',
+                                                                color: active ? '#ffffff' : '#374151',
+                                                                fontSize: '11px',
+                                                                fontWeight: 700,
+                                                                cursor: 'pointer',
+                                                            }}
+                                                        >
+                                                            {st.label}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </>
                         ) : (
@@ -1062,6 +1141,37 @@ Return STRICT JSON only (no markdown fences):
                                     color: '#111827',
                                 }}
                             />
+                            {headlineOnImage.trim().length > 0 && (
+                                <div style={{ marginTop: '8px' }}>
+                                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#571c86', marginBottom: '5px' }}>
+                                        🎨 Text Design Style
+                                    </div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+                                        {TEXT_DESIGN_STYLES.map((st) => {
+                                            const active = textDesignStyleId === st.id;
+                                            return (
+                                                <button
+                                                    key={st.id}
+                                                    type="button"
+                                                    onClick={() => setTextDesignStyleId(st.id)}
+                                                    style={{
+                                                        padding: '4px 9px',
+                                                        borderRadius: '999px',
+                                                        border: active ? '1.5px solid #571c86' : '1px solid #e4dcf2',
+                                                        background: active ? '#571c86' : '#ffffff',
+                                                        color: active ? '#ffffff' : '#374151',
+                                                        fontSize: '11px',
+                                                        fontWeight: 700,
+                                                        cursor: 'pointer',
+                                                    }}
+                                                >
+                                                    {st.label}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* 5. Character / Photo + Outfit */}
