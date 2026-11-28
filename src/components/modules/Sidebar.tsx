@@ -13,6 +13,7 @@ import { LogoModule } from './LogoModule';
 import { ColorPaletteModule } from './ColorPaletteModule';
 import { DesignPreferencesModule } from './DesignPreferencesModule';
 import { GenerateButton } from './GenerateButton';
+import { OutfitSelector } from './OutfitSelector';
 
 interface SidebarProps {
     platform: Platform;
@@ -193,6 +194,13 @@ export const Sidebar: FC<SidebarProps> = (props) => {
                                     );
                                 })}
                             </div>
+                            {props.savedCharacters.some((c) => props.images.some((img) => img.characterId === c.id)) && (
+                                <OutfitSelector
+                                    preferences={props.preferences}
+                                    onPreferencesChange={props.onPreferencesChange}
+                                    disabled={props.isGenerating}
+                                />
+                            )}
                         </div>
                     )}
                     <GenerateButton

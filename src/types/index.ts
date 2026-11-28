@@ -58,10 +58,14 @@ export interface ColorsState {
     background: string;
 }
 
+export type OutfitMode = 'keep' | 'ai_auto' | 'custom';
+
 export interface PreferencesState {
     style: string;
     variations: number;
     drama: number;
+    outfitMode?: OutfitMode;
+    customOutfit?: string;
 }
 
 export interface ThumbnailScore {

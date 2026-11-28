@@ -2,6 +2,7 @@ import React, { FC, useState } from 'react';
 import { toast } from 'react-toastify';
 import { ImageAsset, SavedCharacter, PreferencesState, TextState } from '../../types';
 import { Module } from './Module';
+import { OutfitSelector } from './OutfitSelector';
 import { ICONS } from '../../constants';
 import { fileToBase64, imageUrlToBase64 } from '../../shared/utils/image-utils';
 import { fetchTranscript } from '../../shared/utils/youtube-utils';
@@ -273,6 +274,13 @@ export const YouTubeModule: FC<YouTubeModuleProps> = ({
                                             );
                                         })}
                                     </div>
+                                    {savedCharacters.some((c) => referenceImages.some((img) => img.characterId === c.id)) && (
+                                        <OutfitSelector
+                                            preferences={preferences}
+                                            onPreferencesChange={onPreferencesChange}
+                                            disabled={isGenerating}
+                                        />
+                                    )}
                                 </div>
                             )}
                             <label htmlFor="improve-ref-upload">Reference Images (Optional)</label>

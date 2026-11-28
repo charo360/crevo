@@ -715,7 +715,22 @@ ${weaknessesList}
                           }). Compose the entire design strictly for ${effectiveAspectRatio} and ignore any conflicting orientation note above.`
                         : '';
 
-                const variationPrompt = `${finalPrompt}${referenceBlueprintDirective}${namedCharactersDirective}${designerLikenessDirective}${aspectOverrideDirective}\n\n${variationDirective}`;
+                const outfitMode = preferences.outfitMode || 'keep';
+                const customOutfitText = (preferences.customOutfit || '').trim();
+                const outfitDirective =
+                    images.length > 0 && outfitMode === 'ai_auto'
+                        ? `\n\n[OUTFIT DIRECTION — FRESH AI-DESIGNED OUTFIT (MANDATORY)]
+- DO NOT reuse or copy the clothing worn in the character's reference photos.
+- Dress the character in a completely DIFFERENT, fresh, real-world outfit that naturally fits the video's topic, mood, and setting (for example: tailored blazer or sharp shirt for business/finance, clean streetwear or hoodie for tech/creator vlogs, athletic wear for fitness, etc.).
+- Keep 100% of their exact real face, hair, skin tone, and exact real body proportions — ONLY change the clothing, rendered with realistic fabric texture, natural folds, seams, and matching scene lighting.`
+                        : images.length > 0 && outfitMode === 'custom' && customOutfitText
+                          ? `\n\n[OUTFIT DIRECTION — CUSTOM USER OUTFIT (MANDATORY)]
+- Ignore the clothing worn in the character's reference photos.
+- Dress the character specifically in: "${customOutfitText}".
+- Fit this outfit naturally onto their exact real shoulders, torso, and body proportions with realistic fabric texture, folds, and lighting while keeping 100% of their exact real face, hair, skin tone, and body build.`
+                          : '';
+
+                const variationPrompt = `${finalPrompt}${referenceBlueprintDirective}${namedCharactersDirective}${outfitDirective}${designerLikenessDirective}${aspectOverrideDirective}\n\n${variationDirective}`;
 
                 const imageConfig = {
                     responseModalities: [Modality.IMAGE],
