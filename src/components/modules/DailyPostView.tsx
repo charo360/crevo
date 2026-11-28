@@ -521,6 +521,36 @@ Return STRICT JSON only (no markdown fences):
         }
     };
 
+    const extractReferenceShotSheet = async (refImg: ImageAsset, copyFlags: string[]): Promise<string> => {
+        const wantPose = copyFlags.includes('pose');
+        const wantBg = copyFlags.includes('background');
+        const wantStyle = copyFlags.includes('style');
+        const wantOutfit = copyFlags.includes('outfit');
+
+        const extractPrompt = `You are a professional photography director analyzing a reference photo to create a shot sheet for a DIFFERENT person.
+Describe ONLY the elements marked YES below in vivid, concrete, camera-ready detail, and COMPLETELY OMIT everything marked NO:
+- Pose, posture, hand placement, head tilt, framing & camera angle: ${wantPose ? 'YES — describe precisely' : 'NO — omit completely'}
+- Background location, setting, props, lighting direction & time of day: ${wantBg ? 'YES — describe precisely' : 'NO — omit completely'}
+- Photography style, lens look, color grading & composition mood: ${wantStyle ? 'YES — describe precisely' : 'NO — omit completely'}
+- Clothing / outfit details: ${wantOutfit ? 'YES — describe the outfit style clearly' : 'NO — STRICTLY DO NOT MENTION ANY CLOTHING, DRESS, SHIRT, OR OUTFIT AT ALL'}
+
+CRITICAL: NEVER describe the reference person's face, gender, age, skin tone, hair, or body type — refer to the subject strictly as "the subject". Return 1 concise paragraph of pure photography direction (no markdown, no bullet points).`;
+
+        const res = await apiRequest<any>('/api/ai/generate', {
+            method: 'POST',
+            body: JSON.stringify({
+                model: 'google/gemini-2.5-flash',
+                contents: {
+                    parts: [
+                        { inlineData: { data: refImg.base64, mimeType: refImg.mimeType } },
+                        { text: extractPrompt },
+                    ],
+                },
+            }),
+        });
+        return extractTextFromAiResponse(res);
+    };
+
     const handleGenerateDailyPost = async () => {
         if (isGenerating) return;
         const cleanTopic = topic.trim();
@@ -593,38 +623,28 @@ Return STRICT JSON only (no markdown fences):
                     }
                 }
                 imagesForGen = [...attachedImages, ...autoMatched];
-                let refRulesTag = '';
+                let extractedShotSheet = '';
                 if (referencePost) {
-                    const copyParts: string[] = [];
-                    const ignoreParts: string[] = [
-                        'ALWAYS IGNORE the reference person’s face, hair, skin tone, gender, and body',
-                    ];
-                    if (refCopyElements.includes('pose')) {
-                        copyParts.push('COPY the pose, posture, and camera angle adapted naturally to the Primary Subject’s real body');
-                    } else {
-                        ignoreParts.push('DO NOT force the reference pose');
+                    try {
+                        extractedShotSheet = await extractReferenceShotSheet(referencePost, refCopyElements);
+                    } catch (err) {
+                        console.warn('Reference shot-sheet extraction skipped:', err);
                     }
-                    if (refCopyElements.includes('background')) {
-                        copyParts.push('COPY the background environment and lighting mood as a freshly photographed scene');
-                    } else {
-                        ignoreParts.push('DO NOT copy the reference background — build a fresh setting from the topic');
-                    }
-                    if (refCopyElements.includes('style')) {
-                        copyParts.push('COPY the overall editorial framing, color mood, and layout vibe');
-                    }
-                    if (refCopyElements.includes('outfit')) {
-                        copyParts.push('COPY a similar outfit/clothing style tailored cleanly to the Primary Subject’s real body and gender');
-                    } else {
-                        ignoreParts.push('DO NOT copy the reference person’s clothing/outfit — keep the Primary Subject’s own outfit (or the outfit selected in Outfit controls)');
-                    }
-                    refRulesTag = ` [REF_COPY_RULES: ${copyParts.join('; ')}. ${ignoreParts.join('; ')}.]`;
                 }
-                bodyPrompt = `DAILY SOCIAL POST FOR ${selectedTarget.label}. ${nicheText.trim() ? `Creator Niche / Identity: ${nicheText.trim()}. ` : ''}Post Vibe: ${selectedPostType.label}. Visual direction: ${selectedPostType.visualGuidance} Topic & scene: ${cleanTopic || cleanHeadline || 'Create a brand-new real-camera photo of the Primary Subject inspired by the selected reference elements'}. ${
+                const outfitGuard =
+                    referencePost && !refCopyElements.includes('outfit') && (preferences.outfitMode || 'keep') === 'keep'
+                        ? ' Keep the Primary Subject in their OWN clothing from their character reference photos.'
+                        : '';
+                bodyPrompt = `DAILY SOCIAL POST FOR ${selectedTarget.label}. ${nicheText.trim() ? `Creator Niche / Identity: ${nicheText.trim()}. ` : ''}Post Vibe: ${selectedPostType.label}. Visual direction: ${selectedPostType.visualGuidance} ${
+                    extractedShotSheet
+                        ? `EXACT PHOTOGRAPHY SHOT SHEET TO FOLLOW: ${extractedShotSheet}${outfitGuard} `
+                        : ''
+                }Topic & scene: ${cleanTopic || cleanHeadline || 'Create a brand-new real-camera photograph of the Primary Subject following the shot sheet above'}. ${
                     cleanHeadline
                         ? `Render ONLY this clean, readable headline on the graphic: "${cleanHeadline}".`
                         : 'Do NOT render any text overlay on the image — make it a clean, authentic, photo-only social post.'
-                }${refRulesTag}`;
-                captionContext = cleanTopic || cleanHeadline || 'Styled social photo inspired by a reference aesthetic';
+                }`;
+                captionContext = cleanTopic || cleanHeadline || extractedShotSheet.slice(0, 180) || 'Styled social photo';
             }
 
             const effectiveColors: ColorsState =
@@ -670,7 +690,7 @@ Return STRICT JSON only (no markdown fences):
                     '',
                     postTextState,
                     'improve',
-                    dailyMode === 'create' ? referencePost : null,
+                    null,
                     selectedTarget.aspectRatio
                 ),
                 generateSocialCaption(captionContext, cleanHeadline).catch(() => {}),
