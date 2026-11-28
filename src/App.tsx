@@ -106,6 +106,7 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
     const [brandChannelName, setBrandChannelName] = useState<string>('');
     const [savedCharacters, setSavedCharacters] = useState<SavedCharacter[]>([]);
     const brandKitAppliedRef = useRef<boolean>(false);
+    const autoSelectedSingleCharRef = useRef<boolean>(false);
 
     // Auto-load saved Brand Kit (Named Characters, Logo, Brand Colors & Style) once per Studio mount
     useEffect(() => {
@@ -205,6 +206,16 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                 }
                 if (parsedCharacters.length > 0) {
                     setSavedCharacters(parsedCharacters);
+                    // Auto-select the character when the user has 1 saved character on thumbnail/cover creation modes
+                    if (
+                        parsedCharacters.length === 1 &&
+                        platform !== 'youtube_improve' &&
+                        platform !== 'resize' &&
+                        !autoSelectedSingleCharRef.current
+                    ) {
+                        autoSelectedSingleCharRef.current = true;
+                        setImages((prev) => (prev.length === 0 ? parsedCharacters[0].photos : prev));
+                    }
                 }
             })
             .catch(() => {});
@@ -212,6 +223,19 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
             cancelled = true;
         };
     }, [user]);
+
+    // When switching from Improve Thumbnail to a creation tab, auto-select single saved character once if images is empty
+    useEffect(() => {
+        if (
+            platform !== 'youtube_improve' &&
+            platform !== 'resize' &&
+            savedCharacters.length === 1 &&
+            !autoSelectedSingleCharRef.current
+        ) {
+            autoSelectedSingleCharRef.current = true;
+            setImages((prev) => (prev.length === 0 ? savedCharacters[0].photos : prev));
+        }
+    }, [platform, savedCharacters]);
     
     // App status state (persist finished results in sessionStorage; never persist in-progress loading overlays)
     const [results, setResults] = useState<DesignResult[]>(() => {
@@ -374,7 +398,27 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
             if (videoAsset) {
                 videoFrames = await extractFramesFromVideo(videoAsset.url, trimTimes.start, trimTimes.end, 3, videoAsset.file);
             }
-            const allImages = [...images, ...videoFrames];
+            // Auto-attach any saved character explicitly mentioned by name in the headline/subheadline/body/title
+            const combinedPromptText = [
+                text.headline,
+                text.subheadline,
+                text.body,
+                originalYoutubeTitle,
+            ]
+                .filter(Boolean)
+                .join(' ');
+            const autoMatchedPhotos: ImageAsset[] = [];
+            if (savedCharacters.length > 0 && combinedPromptText.trim()) {
+                for (const char of savedCharacters) {
+                    const alreadyIncluded = images.some((img) => img.characterId === char.id);
+                    if (alreadyIncluded) continue;
+                    const escaped = char.name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    if (escaped && new RegExp(`\\b${escaped}\\b`, 'i').test(combinedPromptText)) {
+                        autoMatchedPhotos.push(...char.photos);
+                    }
+                }
+            }
+            const allImages = [...images, ...autoMatchedPhotos, ...videoFrames];
             const results = await generateDesign(
                 ai.current,
                 allImages,

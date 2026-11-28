@@ -1,6 +1,6 @@
 import React, { FC, useState } from 'react';
 import { toast } from 'react-toastify';
-import { ImageAsset, PreferencesState, TextState } from '../../types';
+import { ImageAsset, SavedCharacter, PreferencesState, TextState } from '../../types';
 import { Module } from './Module';
 import { ICONS } from '../../constants';
 import { fileToBase64, imageUrlToBase64 } from '../../shared/utils/image-utils';
@@ -10,6 +10,7 @@ interface YouTubeModuleProps {
     onImagesChange: (i: ImageAsset[]) => void;
     onTextChange: React.Dispatch<React.SetStateAction<TextState>>;
     images: ImageAsset[];
+    savedCharacters?: SavedCharacter[];
     onGenerate: (improveMode?: 'improve' | 'reimagine') => void;
     isGenerating: boolean;
     onTranscriptChange: (t: string | null) => void;
@@ -19,7 +20,7 @@ interface YouTubeModuleProps {
 }
 
 export const YouTubeModule: FC<YouTubeModuleProps> = ({ 
-    onImagesChange, onTextChange, images, onGenerate, isGenerating, 
+    onImagesChange, onTextChange, images, savedCharacters = [], onGenerate, isGenerating, 
     onTranscriptChange, onOriginalTitleChange, preferences, onPreferencesChange
 }) => {
     const [youtubeUrl, setYoutubeUrl] = useState('');
@@ -213,6 +214,67 @@ export const YouTubeModule: FC<YouTubeModuleProps> = ({
                             </div>
                         )}
                         <div className="form-group" style={{ marginTop: '12px', marginBottom: '12px' }}>
+                            {savedCharacters.length > 0 && (
+                                <div
+                                    style={{
+                                        marginBottom: '10px',
+                                        padding: '9px 10px',
+                                        borderRadius: '10px',
+                                        background: '#faf7ff',
+                                        border: '1px solid #e4dcf2',
+                                    }}
+                                >
+                                    <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#4c1d95', marginBottom: '6px' }}>
+                                        ⭐ Saved Characters (Tap to include face)
+                                    </div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                        {savedCharacters.map((char) => {
+                                            const selected = referenceImages.some((img) => img.characterId === char.id);
+                                            const avatarUrl = char.photos[0]?.url;
+                                            return (
+                                                <button
+                                                    key={char.id}
+                                                    type="button"
+                                                    disabled={isGenerating}
+                                                    onClick={() => {
+                                                        if (selected) {
+                                                            onImagesChange(
+                                                                images.filter((img, idx) => idx === 0 || img.characterId !== char.id)
+                                                            );
+                                                        } else {
+                                                            onImagesChange([...images, ...char.photos]);
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        padding: '4px 10px 4px 4px',
+                                                        borderRadius: '999px',
+                                                        border: selected ? '1.5px solid #571c86' : '1px solid #d8ccf0',
+                                                        background: selected ? 'linear-gradient(135deg, #571c86, #7e22ce)' : '#ffffff',
+                                                        color: selected ? '#ffffff' : '#2b2338',
+                                                        fontSize: '12px',
+                                                        fontWeight: 700,
+                                                        cursor: 'pointer',
+                                                    }}
+                                                >
+                                                    {avatarUrl && (
+                                                        <img
+                                                            src={avatarUrl}
+                                                            alt={char.name}
+                                                            style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover' }}
+                                                        />
+                                                    )}
+                                                    <span>{char.name}</span>
+                                                    <span style={{ fontSize: '10.5px', opacity: 0.8 }}>({char.photos.length})</span>
+                                                    {selected && <span>✓</span>}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
                             <label htmlFor="improve-ref-upload">Reference Images (Optional)</label>
                             <input
                                 id="improve-ref-upload"

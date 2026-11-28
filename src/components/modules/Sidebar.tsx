@@ -71,6 +71,7 @@ export const Sidebar: FC<SidebarProps> = (props) => {
                     onImagesChange={props.onImagesChange}
                     onTextChange={props.onTextChange}
                     images={props.images}
+                    savedCharacters={props.savedCharacters}
                     onGenerate={props.onGenerate}
                     isGenerating={props.isGenerating}
                     onTranscriptChange={props.onTranscriptChange}
@@ -134,6 +135,66 @@ export const Sidebar: FC<SidebarProps> = (props) => {
                         preferences={props.preferences}
                         onPreferencesChange={props.onPreferencesChange}
                     />
+                    {props.savedCharacters && props.savedCharacters.length > 0 && (
+                        <div
+                            style={{
+                                margin: '0 0 10px',
+                                padding: '10px 12px',
+                                borderRadius: '12px',
+                                background: '#faf7ff',
+                                border: '1px solid #e4dcf2',
+                            }}
+                        >
+                            <div style={{ fontSize: '11.5px', fontWeight: 800, color: '#4c1d95', marginBottom: '6px' }}>
+                                {props.savedCharacters.some((c) => props.images.some((img) => img.characterId === c.id))
+                                    ? '✅ Character included in this thumbnail:'
+                                    : '⭐ Tap a Character to include their face:'}
+                            </div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                {props.savedCharacters.map((char) => {
+                                    const selected = props.images.some((img) => img.characterId === char.id);
+                                    const avatarUrl = char.photos[0]?.url;
+                                    return (
+                                        <button
+                                            key={char.id}
+                                            type="button"
+                                            onClick={() => {
+                                                if (selected) {
+                                                    props.onImagesChange(props.images.filter((img) => img.characterId !== char.id));
+                                                } else {
+                                                    props.onImagesChange([...props.images, ...char.photos]);
+                                                }
+                                            }}
+                                            style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                padding: '4px 10px 4px 4px',
+                                                borderRadius: '999px',
+                                                border: selected ? '1.5px solid #571c86' : '1px solid #d8ccf0',
+                                                background: selected ? 'linear-gradient(135deg, #571c86, #7e22ce)' : '#ffffff',
+                                                color: selected ? '#ffffff' : '#2b2338',
+                                                fontSize: '12px',
+                                                fontWeight: 700,
+                                                cursor: 'pointer',
+                                            }}
+                                        >
+                                            {avatarUrl && (
+                                                <img
+                                                    src={avatarUrl}
+                                                    alt={char.name}
+                                                    style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover' }}
+                                                />
+                                            )}
+                                            <span>{char.name}</span>
+                                            <span style={{ fontSize: '10.5px', opacity: 0.8 }}>({char.photos.length})</span>
+                                            {selected && <span>✓</span>}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
                     <GenerateButton
                         onGenerate={() => props.onGenerate('improve')}
                         isGenerating={props.isGenerating}
