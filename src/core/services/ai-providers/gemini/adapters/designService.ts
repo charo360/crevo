@@ -339,27 +339,7 @@ export const generateDesign = async (
                 ? { inlineData: { data: optimizedLogo.base64, mimeType: optimizedLogo.mimeType } }
                 : null;
 
-            if (referenceThumbnail) {
-                let optimizedRef = referenceThumbnail;
-                try {
-                    const optimized = await optimizeImageForAI(referenceThumbnail.base64, referenceThumbnail.mimeType);
-                    optimizedRef = { ...referenceThumbnail, base64: optimized.base64, mimeType: optimized.mimeType };
-                } catch (error) {
-                    console.warn('Failed to optimize reference thumbnail, using original:', error);
-                }
-                allImageParts.push({
-                    text: 'IMAGE ROLE — REFERENCE THUMBNAIL BLUEPRINT (copy this exact layout, camera framing, background style, lighting, color mood, and text placement, but DO NOT keep the original person or original text from this reference):',
-                });
-                allImageParts.push({ inlineData: { data: optimizedRef.base64, mimeType: optimizedRef.mimeType } });
-
-                if (optimizedImages.length > 0) {
-                    allImageParts.push({
-                        text: 'IMAGE ROLE — USER SUBJECTS & PHOTOS (use THESE exact real people/subjects to replace the people in the reference blueprint, preserving their 100% physical likeness):',
-                    });
-                }
-            }
-
-            // Group named character photos so multi-angle references for the SAME person are clearly presented together
+            // ALWAYS place the user's REAL subject / character photos FIRST so the image model anchors 100% of identity, face, gender & body on them!
             const namedGroups = new Map<string, { name: string; photos: ImageAsset[] }>();
             const unnamedImages: ImageAsset[] = [];
             optimizedImages.forEach((img) => {
@@ -377,6 +357,12 @@ export const generateDesign = async (
                 }
             });
 
+            if (optimizedImages.length > 0 && referenceThumbnail) {
+                allImageParts.push({
+                    text: 'PRIMARY REAL SUBJECT (TOP PRIORITY — THIS IS THE ONLY REAL PERSON WHO MUST APPEAR IN THE FINAL IMAGE. Lock 100% of their exact real face, eyes, hair, skin tone, gender, and body build — NEVER replace or blend them with anyone from the style reference below):',
+                });
+            }
+
             let charGroupIdx = 0;
             namedGroups.forEach(({ name, photos }) => {
                 charGroupIdx += 1;
@@ -385,7 +371,7 @@ export const generateDesign = async (
                         ? `The following ${photos.length} reference photos ALL show the SAME exact real person ("${name}") from different angles/framing. Study ALL ${photos.length} photos together to lock 100% of "${name}"'s exact facial geometry (eyes, eyelids, eyebrows, nose bridge/tip, lips, teeth, jawline, cheeks, ears, hairline, hairstyle, facial hair, glasses, age, exact skin tone and natural pores/texture) AND their exact real body build (neck, shoulder width, torso proportions, arms, and posture)`
                         : `This reference photo shows the exact real person named "${name}". Preserve 100% of "${name}"'s exact facial geometry, skin texture, hair, and real body proportions`;
                 allImageParts.push({
-                    text: `NAMED CHARACTER #${charGroupIdx} — "${name}": ${countText}. Whenever "${name}" appears in the thumbnail, they MUST look 100% identical to a real unretouched photograph of THIS exact person — NEVER alter their face, NEVER change their body size/shape, NEVER beautify or airbrush them, and NEVER blend them with anyone else:`,
+                    text: `NAMED CHARACTER #${charGroupIdx} — "${name}": ${countText}. Whenever "${name}" appears in the final image, they MUST look 100% identical to a real unretouched photograph of THIS exact person — NEVER alter their face, NEVER change their body size/shape, NEVER beautify or airbrush them, and NEVER blend them with anyone else:`,
                 });
                 photos.forEach((p) => {
                     allImageParts.push({ inlineData: { data: p.base64, mimeType: p.mimeType } });
@@ -395,6 +381,20 @@ export const generateDesign = async (
             unnamedImages.forEach((img) => {
                 allImageParts.push({ inlineData: { data: img.base64, mimeType: img.mimeType } });
             });
+
+            if (referenceThumbnail) {
+                let optimizedRef = referenceThumbnail;
+                try {
+                    const optimized = await optimizeImageForAI(referenceThumbnail.base64, referenceThumbnail.mimeType);
+                    optimizedRef = { ...referenceThumbnail, base64: optimized.base64, mimeType: optimized.mimeType };
+                } catch (error) {
+                    console.warn('Failed to optimize reference thumbnail, using original:', error);
+                }
+                allImageParts.push({
+                    text: 'SECONDARY STYLE / COMPOSITION REFERENCE ONLY (DO NOT reprint this image directly! NEVER copy this person’s face, identity, gender, or body! Use ONLY as inspiration for the specific elements requested in the Reference Blueprint rules below, and generate a BRAND-NEW photograph of the PRIMARY REAL SUBJECT above):',
+                });
+                allImageParts.push({ inlineData: { data: optimizedRef.base64, mimeType: optimizedRef.mimeType } });
+            }
             if (logoPart) {
                 allImageParts.push({
                     text: `BRAND LOGO REFERENCE — Place this logo natively inside the design at the ${logo.position.replace('-', ' ')} corner. Extract ONLY the logo emblem/wordmark itself (completely remove any white or solid rectangular background box around it) so it blends seamlessly as an authentic part of the artwork, NEVER looking like a pasted sticker:`,
@@ -626,6 +626,7 @@ ${weaknessesList}
                 const cleanBody = (currentText.body || '')
                     .replace('[RETOUCH_MY_PHOTO]', '')
                     .replace(/\[TEXT_DESIGN_STYLE:\s*[^\]]+\]/, '')
+                    .replace(/\[REF_COPY_RULES:\s*[^\]]+\]/, '')
                     .trim();
 
                 const textDesignRule = hasHeadline
@@ -754,11 +755,14 @@ ${weaknessesList}
 - **Natural Scene Integration:** Match the lighting direction, color temperature, and shadows on the person naturally to the real environment so it looks like they were physically photographed on location — never like an AI-generated illustration or pasted cutout.`
                         : '';
 
+                const refCopyRulesMatch = currentText.body?.match(/\[REF_COPY_RULES:\s*([^\]]+)\]/);
+                const refCopyRulesText = refCopyRulesMatch?.[1]?.trim() || '';
                 const referenceBlueprintDirective = referenceThumbnail
-                    ? `\n\n[REFERENCE THUMBNAIL RECREATION MODE — NON-NEGOTIABLE]
-- **Exact Structural Blueprint:** Recreate the EXACT visual layout, composition, subject placement, camera angle, background environment, lighting mood, contrast, and typography placement/styling of the attached REFERENCE THUMBNAIL BLUEPRINT.
-- **100% Subject Swap:** Completely REMOVE every person/face from the reference thumbnail and REPLACE them with the USER'S OWN PEOPLE from the attached user photos/cutouts — preserving the user's exact 100% physical likeness while matching the pose, scale, and high-CTR expression of the reference composition.
-- **100% Information & Text Swap:** Completely REMOVE all original text, logos, and watermarks from the reference thumbnail. Replace the text in the same visual style & position using ONLY the user's Headline ("${currentText.headline || ''}") and Subheadline ("${currentText.subheadline || ''}"). NEVER copy words or branding from the reference thumbnail.`
+                    ? `\n\n[SECONDARY REFERENCE INSPIRATION RULES — STRICT SUBJECT PROTECTION (NON-NEGOTIABLE)]
+- **NEVER Reprint the Reference Image:** Generate a BRAND-NEW photograph/design. NEVER return or lightly filter the reference image itself.
+- **100% Primary Subject Identity Lock:** Completely DISCARD the person, face, gender, hair, and body from the secondary reference image. The person in the final image MUST be 100% the PRIMARY REAL SUBJECT from the first attached user photos (exact face, exact skin tone, exact hair, exact gender, exact body proportions).
+${refCopyRulesText ? `- **EXACT ELEMENTS TO COPY / IGNORE FROM REFERENCE:** ${refCopyRulesText}` : '- **Elements to Inspire From Reference:** Adapt the pose, camera framing, composition, background mood, lighting, and layout style naturally to the Primary Real Subject.'}
+- **100% Text & Branding Swap:** Completely REMOVE any original text, logos, or watermarks from the reference image.${currentText.headline?.trim() ? ` Render ONLY the user's text: "${currentText.headline.trim()}".` : ' Do NOT copy any text from the reference image.'}`
                     : '';
 
                 const aspectOverrideDirective =

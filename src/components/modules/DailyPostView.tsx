@@ -181,6 +181,13 @@ const RETOUCH_EXTRA_TOUCHES = [
     { id: 'clean_bg', label: '🧹 Declutter Background', prompt: 'cleanly remove messy background objects/clutter while keeping the scene authentic' },
 ];
 
+const REFERENCE_COPY_OPTIONS = [
+    { id: 'pose', label: '🧍 Pose & Angle' },
+    { id: 'background', label: '🌍 Background & Lighting' },
+    { id: 'style', label: '🎨 Style & Layout' },
+    { id: 'outfit', label: '👕 Copy Outfit' },
+];
+
 interface TextDesignStyleOption {
     id: string;
     label: string;
@@ -260,6 +267,7 @@ export const DailyPostView: FC<DailyPostViewProps> = ({
     const [useBrandColors, setUseBrandColors] = useState<boolean>(false);
     const [attachedImages, setAttachedImages] = useState<ImageAsset[]>([]);
     const [referencePost, setReferencePost] = useState<ImageAsset | null>(null);
+    const [refCopyElements, setRefCopyElements] = useState<string[]>(['pose', 'background', 'style']);
     const [retouchPhoto, setRetouchPhoto] = useState<ImageAsset | null>(null);
     const [retouchStyle, setRetouchStyle] = useState<'keep_bg' | 'change_bg'>('keep_bg');
     const [retouchLocation, setRetouchLocation] = useState<string>('');
@@ -350,6 +358,15 @@ export const DailyPostView: FC<DailyPostViewProps> = ({
                       ? prev.filter((id) => id !== 'soft_makeup')
                       : prev;
             return [...filtered, touchId];
+        });
+    };
+
+    const toggleRefCopyElement = (id: string) => {
+        setRefCopyElements((prev) => {
+            if (prev.includes(id)) {
+                return prev.length > 1 ? prev.filter((item) => item !== id) : prev;
+            }
+            return [...prev, id];
         });
     };
 
@@ -576,15 +593,37 @@ Return STRICT JSON only (no markdown fences):
                     }
                 }
                 imagesForGen = [...attachedImages, ...autoMatched];
-                bodyPrompt = `DAILY SOCIAL POST FOR ${selectedTarget.label}. ${nicheText.trim() ? `Creator Niche / Identity: ${nicheText.trim()}. ` : ''}Post Vibe: ${selectedPostType.label}. Visual direction: ${selectedPostType.visualGuidance} ${
-                    referencePost
-                        ? 'REFERENCE MATCH MODE: Recreate the exact pose, camera framing, composition, lighting, background aesthetic, and graphic style of the attached Reference Blueprint — replacing the original person 100% with the user’s real face & body and removing any original text from the reference. '
-                        : ''
-                }Topic & scene: ${cleanTopic || cleanHeadline || 'Match the exact style, pose, and aesthetic of the reference image'}. ${
+                let refRulesTag = '';
+                if (referencePost) {
+                    const copyParts: string[] = [];
+                    const ignoreParts: string[] = [
+                        'ALWAYS IGNORE the reference person’s face, hair, skin tone, gender, and body',
+                    ];
+                    if (refCopyElements.includes('pose')) {
+                        copyParts.push('COPY the pose, posture, and camera angle adapted naturally to the Primary Subject’s real body');
+                    } else {
+                        ignoreParts.push('DO NOT force the reference pose');
+                    }
+                    if (refCopyElements.includes('background')) {
+                        copyParts.push('COPY the background environment and lighting mood as a freshly photographed scene');
+                    } else {
+                        ignoreParts.push('DO NOT copy the reference background — build a fresh setting from the topic');
+                    }
+                    if (refCopyElements.includes('style')) {
+                        copyParts.push('COPY the overall editorial framing, color mood, and layout vibe');
+                    }
+                    if (refCopyElements.includes('outfit')) {
+                        copyParts.push('COPY a similar outfit/clothing style tailored cleanly to the Primary Subject’s real body and gender');
+                    } else {
+                        ignoreParts.push('DO NOT copy the reference person’s clothing/outfit — keep the Primary Subject’s own outfit (or the outfit selected in Outfit controls)');
+                    }
+                    refRulesTag = ` [REF_COPY_RULES: ${copyParts.join('; ')}. ${ignoreParts.join('; ')}.]`;
+                }
+                bodyPrompt = `DAILY SOCIAL POST FOR ${selectedTarget.label}. ${nicheText.trim() ? `Creator Niche / Identity: ${nicheText.trim()}. ` : ''}Post Vibe: ${selectedPostType.label}. Visual direction: ${selectedPostType.visualGuidance} Topic & scene: ${cleanTopic || cleanHeadline || 'Create a brand-new real-camera photo of the Primary Subject inspired by the selected reference elements'}. ${
                     cleanHeadline
                         ? `Render ONLY this clean, readable headline on the graphic: "${cleanHeadline}".`
                         : 'Do NOT render any text overlay on the image — make it a clean, authentic, photo-only social post.'
-                }`;
+                }${refRulesTag}`;
                 captionContext = cleanTopic || cleanHeadline || 'Styled social photo inspired by a reference aesthetic';
             }
 
@@ -1532,35 +1571,61 @@ Return STRICT JSON only (no markdown fences):
                                 )}
                             </div>
                             {referencePost ? (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
-                                    <img
-                                        src={referencePost.url}
-                                        alt="Reference style blueprint"
-                                        style={{ width: '58px', height: '58px', borderRadius: '8px', objectFit: 'cover', border: '1.5px solid #c4b5fd' }}
-                                    />
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ fontSize: '12px', fontWeight: 800, color: '#111827' }}>
-                                            Matching this exact pose, lighting &amp; layout
+                                <div style={{ marginTop: '6px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <img
+                                            src={referencePost.url}
+                                            alt="Reference style blueprint"
+                                            style={{ width: '58px', height: '58px', borderRadius: '8px', objectFit: 'cover', border: '1.5px solid #c4b5fd' }}
+                                        />
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontSize: '12px', fontWeight: 800, color: '#111827' }}>
+                                                What should AI copy from this reference?
+                                            </div>
+                                            <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
+                                                Your exact face, gender &amp; body are always 100% protected.
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => referenceInputRef.current?.click()}
+                                                    style={{ padding: '3px 8px', borderRadius: '6px', border: '1px solid #d8ccf0', background: '#fff', color: '#571c86', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                                                >
+                                                    Replace
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setReferencePost(null)}
+                                                    style={{ padding: '3px 8px', borderRadius: '6px', border: '1px solid #fecaca', background: '#fff5f5', color: '#b91c1c', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                                                >
+                                                    Remove
+                                                </button>
+                                            </div>
                                         </div>
-                                        <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
-                                            Original person &amp; text will be swapped with yours.
-                                        </div>
-                                        <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
-                                            <button
-                                                type="button"
-                                                onClick={() => referenceInputRef.current?.click()}
-                                                style={{ padding: '3px 8px', borderRadius: '6px', border: '1px solid #d8ccf0', background: '#fff', color: '#571c86', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
-                                            >
-                                                Replace
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setReferencePost(null)}
-                                                style={{ padding: '3px 8px', borderRadius: '6px', border: '1px solid #fecaca', background: '#fff5f5', color: '#b91c1c', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
-                                            >
-                                                Remove
-                                            </button>
-                                        </div>
+                                    </div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '9px' }}>
+                                        {REFERENCE_COPY_OPTIONS.map((opt) => {
+                                            const active = refCopyElements.includes(opt.id);
+                                            return (
+                                                <button
+                                                    key={opt.id}
+                                                    type="button"
+                                                    onClick={() => toggleRefCopyElement(opt.id)}
+                                                    style={{
+                                                        padding: '4px 9px',
+                                                        borderRadius: '999px',
+                                                        border: active ? '1.5px solid #571c86' : '1px solid #e4dcf2',
+                                                        background: active ? '#571c86' : '#ffffff',
+                                                        color: active ? '#ffffff' : '#374151',
+                                                        fontSize: '11px',
+                                                        fontWeight: 700,
+                                                        cursor: 'pointer',
+                                                    }}
+                                                >
+                                                    {opt.label} {active ? '✓' : ''}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             ) : (
