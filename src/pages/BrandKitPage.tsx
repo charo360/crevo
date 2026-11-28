@@ -128,9 +128,9 @@ export const BrandKitPage: FC = () => {
         e.target.value = '';
         if (files.length === 0) return;
 
-        const remainingSlots = Math.max(0, 3 - faces.length);
+        const remainingSlots = Math.max(0, 6 - faces.length);
         if (remainingSlots === 0) {
-            toast.info('You can save up to 3 face photos. Remove one first to add another.');
+            toast.info('You can save up to 6 face photos. Remove one first to add another.');
             return;
         }
 
@@ -149,7 +149,7 @@ export const BrandKitPage: FC = () => {
             }
         }
         if (toAdd.length > 0) {
-            setFaces((prev) => [...prev, ...toAdd].slice(0, 3));
+            setFaces((prev) => [...prev, ...toAdd].slice(0, 6));
         }
     };
 
@@ -292,10 +292,10 @@ export const BrandKitPage: FC = () => {
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
                                 <div>
                                     <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#111827' }}>
-                                        1. My Face / Subject Photos (Up to 3)
+                                        1. My Face / Subject Photos (Up to 6)
                                     </h2>
                                     <p style={{ margin: '3px 0 0', fontSize: '13px', color: '#6b7280' }}>
-                                        Upload clear, well-lit photos of yourself (or co-hosts). Crevo automatically pre-loads them in Thumbnail Studio.
+                                        Upload clear, well-lit photos of yourself or co-hosts (up to 6). Crevo automatically pre-loads them in Thumbnail Studio.
                                     </p>
                                 </div>
                                 <input
@@ -309,19 +309,19 @@ export const BrandKitPage: FC = () => {
                                 <button
                                     type="button"
                                     onClick={() => faceInputRef.current?.click()}
-                                    disabled={faces.length >= 3}
+                                    disabled={faces.length >= 6}
                                     style={{
                                         padding: '8px 14px',
                                         borderRadius: '10px',
                                         border: 'none',
-                                        background: faces.length >= 3 ? '#d1d5db' : '#571c86',
+                                        background: faces.length >= 6 ? '#d1d5db' : '#571c86',
                                         color: '#ffffff',
                                         fontSize: '13px',
                                         fontWeight: 700,
-                                        cursor: faces.length >= 3 ? 'not-allowed' : 'pointer',
+                                        cursor: faces.length >= 6 ? 'not-allowed' : 'pointer',
                                     }}
                                 >
-                                    + Upload Face Photo ({faces.length}/3)
+                                    + Upload Face Photo ({faces.length}/6)
                                 </button>
                             </div>
 
@@ -340,7 +340,7 @@ export const BrandKitPage: FC = () => {
                                     }}
                                 >
                                     <div style={{ fontSize: '26px', marginBottom: '6px' }}>📸</div>
-                                    <strong>Click to upload 1–3 clear face photos</strong>
+                                    <strong>Click to upload 1–6 clear face photos</strong>
                                     <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
                                         JPG, PNG, or WebP · Automatically compressed for fast syncing
                                     </div>

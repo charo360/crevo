@@ -4241,7 +4241,7 @@ app.get('/api/user/brand-kit', requireAuth, async (req, res) => {
 app.put('/api/user/brand-kit', requireAuth, async (req, res) => {
     try {
         const body = req.body || {};
-        const rawFaces = Array.isArray(body.face_images) ? body.face_images.slice(0, 3) : [];
+        const rawFaces = Array.isArray(body.face_images) ? body.face_images.slice(0, 6) : [];
         const face_images = [];
         for (const f of rawFaces) {
             const dataUrl = typeof f?.data_url === 'string' ? f.data_url.trim() : '';
