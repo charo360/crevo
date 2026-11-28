@@ -13,12 +13,14 @@ interface OutfitSelectorProps {
     preferences: PreferencesState;
     onPreferencesChange: (p: PreferencesState) => void;
     disabled?: boolean;
+    showTopDivider?: boolean;
 }
 
 export const OutfitSelector: FC<OutfitSelectorProps> = ({
     preferences,
     onPreferencesChange,
     disabled = false,
+    showTopDivider = false,
 }) => {
     const mode: OutfitMode = preferences.outfitMode || 'keep';
     const customOutfit = preferences.customOutfit || '';
@@ -40,11 +42,15 @@ export const OutfitSelector: FC<OutfitSelectorProps> = ({
 
     return (
         <div
-            style={{
-                marginTop: '10px',
-                paddingTop: '10px',
-                borderTop: '1px solid #e4dcf2',
-            }}
+            style={
+                showTopDivider
+                    ? {
+                          marginTop: '10px',
+                          paddingTop: '10px',
+                          borderTop: '1px solid #e4dcf2',
+                      }
+                    : undefined
+            }
         >
             <div style={{ fontSize: '11.5px', fontWeight: 800, color: '#4c1d95', marginBottom: '6px' }}>
                 👕 Outfit (Optional)

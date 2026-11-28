@@ -274,13 +274,6 @@ export const YouTubeModule: FC<YouTubeModuleProps> = ({
                                             );
                                         })}
                                     </div>
-                                    {savedCharacters.some((c) => referenceImages.some((img) => img.characterId === c.id)) && (
-                                        <OutfitSelector
-                                            preferences={preferences}
-                                            onPreferencesChange={onPreferencesChange}
-                                            disabled={isGenerating}
-                                        />
-                                    )}
                                 </div>
                             )}
                             <label htmlFor="improve-ref-upload">Reference Images (Optional)</label>
@@ -344,6 +337,21 @@ export const YouTubeModule: FC<YouTubeModuleProps> = ({
                                     ))}
                                 </div>
                             )}
+                        </div>
+                        <div
+                            style={{
+                                marginTop: '10px',
+                                padding: '8px 10px',
+                                borderRadius: '10px',
+                                background: '#faf7ff',
+                                border: '1px solid #e4dcf2',
+                            }}
+                        >
+                            <OutfitSelector
+                                preferences={preferences}
+                                onPreferencesChange={onPreferencesChange}
+                                disabled={isGenerating}
+                            />
                         </div>
                         <div className="form-group" style={{ marginTop: '12px', marginBottom: '12px' }}>
                             <label htmlFor="improve-variations">Number of Variations</label>
