@@ -10,10 +10,11 @@ import {
     SavedCharacter,
     TextState,
 } from '../../types';
-import { generateDesign } from '../../core/services/ai-providers/gemini';
+import { generateDesign, editImage, upscaleImage } from '../../core/services/ai-providers/gemini';
 import { fileToBase64 } from '../../shared/utils/image-utils';
 import { apiRequest } from '../../lib/api';
 import { OutfitSelector } from './OutfitSelector';
+import { MagicStudioModal } from '../modals/MagicStudioModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { CREDIT_COSTS, deductCredits, hasEnoughCredits } from '../../services/payments/creditService';
 import { triggerOutOfCreditsModal } from '../modals/OutOfCreditsModal';
@@ -278,9 +279,13 @@ export const DailyPostView: FC<DailyPostViewProps> = ({
 
     const [isSuggesting, setIsSuggesting] = useState<boolean>(false);
     const [isGenerating, setIsGenerating] = useState<boolean>(false);
+    const [isEditing, setIsEditing] = useState<boolean>(false);
+    const [isUpscaling, setIsUpscaling] = useState<boolean>(false);
+    const [showMagicEditModal, setShowMagicEditModal] = useState<boolean>(false);
     const [isRegeneratingCaption, setIsRegeneratingCaption] = useState<boolean>(false);
 
-    const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
+    const [generatedImage, setGeneratedImage] = useState<ImageAsset | null>(null);
+    const generatedImageUrl = generatedImage?.url || null;
     const [caption, setCaption] = useState<string>('');
     const [hashtags, setHashtags] = useState<string[]>([]);
 
@@ -612,7 +617,7 @@ Return STRICT JSON only (no markdown fences):
             if (!first?.image?.url) {
                 throw new Error('No image was returned. Please try again.');
             }
-            setGeneratedImageUrl(first.image.url);
+            setGeneratedImage(first.image);
 
             if (user) {
                 const actionTitle =
@@ -675,6 +680,75 @@ Return STRICT JSON only (no markdown fences):
             toast.success('Caption & hashtags copied!');
         } catch {
             toast.error('Could not copy to clipboard.');
+        }
+    };
+
+    const handleConfirmMagicEdit = async (originalImg: ImageAsset, prompt: string, mask: ImageAsset | null) => {
+        if (isEditing) return;
+        if (user) {
+            const hasCredits = await hasEnoughCredits(user.id, CREDIT_COSTS.AI_EDIT);
+            if (!hasCredits) {
+                triggerOutOfCreditsModal({ requiredCredits: CREDIT_COSTS.AI_EDIT, actionLabel: 'AI Photo Edit' });
+                toast.error(`Insufficient credits. AI Edit requires ${CREDIT_COSTS.AI_EDIT} credits.`);
+                return;
+            }
+        }
+        setShowMagicEditModal(false);
+        setShowOriginalBefore(false);
+        setIsEditing(true);
+        try {
+            const edited = await editImage(ai, originalImg, prompt, mask);
+            if (user) {
+                await deductCredits(user.id, 'Daily Post AI Edit', CREDIT_COSTS.AI_EDIT, { feature: 'daily_post_edit' });
+                await refreshCredits();
+                saveImageToLibrary({
+                    dataUrl: edited.url,
+                    type: 'thumbnail',
+                    platform: 'daily_post',
+                    title: `${headlineOnImage.trim() || 'Daily Post'} (Edited)`,
+                    aspectRatio: selectedTarget.aspectRatio,
+                }).catch(() => {});
+            }
+            setGeneratedImage(edited);
+            toast.success('Photo edited successfully!');
+        } catch (err: any) {
+            toast.error(err?.message || 'Failed to edit photo.');
+        } finally {
+            setIsEditing(false);
+        }
+    };
+
+    const handleUpscaleDailyPost = async () => {
+        if (!generatedImage || isUpscaling || isEditing) return;
+        if (user) {
+            const hasCredits = await hasEnoughCredits(user.id, CREDIT_COSTS.AI_UPSCALE);
+            if (!hasCredits) {
+                triggerOutOfCreditsModal({ requiredCredits: CREDIT_COSTS.AI_UPSCALE, actionLabel: 'AI Photo Upscale' });
+                toast.error(`Insufficient credits. Upscaling requires ${CREDIT_COSTS.AI_UPSCALE} credits.`);
+                return;
+            }
+        }
+        setShowOriginalBefore(false);
+        setIsUpscaling(true);
+        try {
+            const upscaled = await upscaleImage(ai, generatedImage);
+            if (user) {
+                await deductCredits(user.id, 'Daily Post Upscale', CREDIT_COSTS.AI_UPSCALE, { feature: 'daily_post_upscale' });
+                await refreshCredits();
+                saveImageToLibrary({
+                    dataUrl: upscaled.url,
+                    type: 'thumbnail',
+                    platform: 'daily_post',
+                    title: `${headlineOnImage.trim() || 'Daily Post'} (Upscaled HD)`,
+                    aspectRatio: selectedTarget.aspectRatio,
+                }).catch(() => {});
+            }
+            setGeneratedImage(upscaled);
+            toast.success('Photo upscaled to crisp HD!');
+        } catch (err: any) {
+            toast.error(err?.message || 'Failed to upscale photo.');
+        } finally {
+            setIsUpscaling(false);
         }
     };
 
@@ -1464,8 +1538,42 @@ Return STRICT JSON only (no markdown fences):
                             <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#111827' }}>
                                 Ready-to-Post Pack ({selectedTarget.shortLabel})
                             </h2>
-                            {generatedImageUrl && (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            {generatedImage && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                    <button
+                                        type="button"
+                                        disabled={isEditing || isUpscaling}
+                                        onClick={() => setShowMagicEditModal(true)}
+                                        style={{
+                                            padding: '7px 11px',
+                                            borderRadius: '9px',
+                                            border: '1px solid #d8ccf0',
+                                            background: '#ffffff',
+                                            color: '#571c86',
+                                            fontSize: '12px',
+                                            fontWeight: 700,
+                                            cursor: isEditing || isUpscaling ? 'wait' : 'pointer',
+                                        }}
+                                    >
+                                        {isEditing ? 'Editing...' : '🪄 AI Edit'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={isUpscaling || isEditing}
+                                        onClick={handleUpscaleDailyPost}
+                                        style={{
+                                            padding: '7px 11px',
+                                            borderRadius: '9px',
+                                            border: '1px solid #d8ccf0',
+                                            background: '#ffffff',
+                                            color: '#571c86',
+                                            fontSize: '12px',
+                                            fontWeight: 700,
+                                            cursor: isUpscaling || isEditing ? 'wait' : 'pointer',
+                                        }}
+                                    >
+                                        {isUpscaling ? 'Upscaling...' : '⬆️ Upscale'}
+                                    </button>
                                     {dailyMode === 'retouch' && retouchPhoto && (
                                         <button
                                             type="button"
@@ -1498,7 +1606,7 @@ Return STRICT JSON only (no markdown fences):
                                             cursor: 'pointer',
                                         }}
                                     >
-                                        ⬇️ Download Image
+                                        ⬇️ Download
                                     </button>
                                 </div>
                             )}
@@ -1530,6 +1638,7 @@ Return STRICT JSON only (no markdown fences):
                             <>
                                 <div
                                     style={{
+                                        position: 'relative',
                                         borderRadius: '12px',
                                         overflow: 'hidden',
                                         background: '#0f172a',
@@ -1542,8 +1651,35 @@ Return STRICT JSON only (no markdown fences):
                                     <img
                                         src={showOriginalBefore && retouchPhoto ? retouchPhoto.url : generatedImageUrl}
                                         alt={showOriginalBefore ? 'Original Uploaded Photo' : 'Generated Daily Social Post'}
-                                        style={{ maxWidth: '100%', maxHeight: '520px', objectFit: 'contain', display: 'block' }}
+                                        style={{
+                                            maxWidth: '100%',
+                                            maxHeight: '520px',
+                                            objectFit: 'contain',
+                                            display: 'block',
+                                            opacity: isEditing || isUpscaling ? 0.5 : 1,
+                                            transition: 'opacity 0.2s ease',
+                                        }}
                                     />
+                                    {(isEditing || isUpscaling) && (
+                                        <div
+                                            style={{
+                                                position: 'absolute',
+                                                inset: 0,
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                background: 'rgba(15, 23, 42, 0.45)',
+                                                color: '#ffffff',
+                                                gap: '10px',
+                                                fontWeight: 800,
+                                                fontSize: '14px',
+                                            }}
+                                        >
+                                            <div className="spinner" />
+                                            <span>{isUpscaling ? 'Upscaling to crisp HD...' : 'Applying AI Edit...'}</span>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Caption & Hashtags Box */}
@@ -1660,6 +1796,13 @@ Return STRICT JSON only (no markdown fences):
                     </div>
                 </div>
             </div>
+            {showMagicEditModal && generatedImage && (
+                <MagicStudioModal
+                    image={generatedImage}
+                    onConfirm={handleConfirmMagicEdit}
+                    onCancel={() => setShowMagicEditModal(false)}
+                />
+            )}
         </div>
     );
 };
