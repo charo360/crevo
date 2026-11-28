@@ -48,6 +48,12 @@ const ContactPage = lazy(() =>
 const AffiliatesPage = lazy(() =>
   import('../pages/AffiliatesPage').then(m => ({ default: m.AffiliatesPage }))
 );
+const DailyPostLandingPage = lazy(() =>
+  import('../pages/DailyPostLandingPage').then(m => ({ default: m.DailyPostLandingPage }))
+);
+const PhotoRetouchLandingPage = lazy(() =>
+  import('../pages/PhotoRetouchLandingPage').then(m => ({ default: m.PhotoRetouchLandingPage }))
+);
 
 // Platform Pages
 const YouTubePage = lazy(() => 
@@ -166,6 +172,8 @@ export const AppRoutes: FC = () => {
           <Route path={AppRoutePaths.pricing} element={<PricingPage />} />
           <Route path={AppRoutePaths.business} element={<BusinessPage />} />
           <Route path="/affiliates" element={<AffiliatesPage />} />
+          <Route path="/daily-post" element={<DailyPostLandingPage />} />
+          <Route path="/photo-retouch" element={<PhotoRetouchLandingPage />} />
 
           {/* Platform Information Pages */}
           <Route path={AppRoutePaths.platforms.youtube} element={<YouTubePage />} />

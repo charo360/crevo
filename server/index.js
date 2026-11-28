@@ -34,6 +34,8 @@ import jwt from 'jsonwebtoken';
 import { generateWithOpenRouter } from './openrouter.js';
 import {
     sendWelcomeEmail,
+    sendOnboardingDay2Email,
+    sendOnboardingDay5Email,
     sendAdminNewSignupAlert,
     sendPasswordResetEmail,
     sendPasswordChangedEmail,
@@ -4331,5 +4333,62 @@ app.delete('/api/user/brand-kit', requireAuth, async (req, res) => {
         return res.status(500).json({ error: err?.message || 'Failed to clear Brand Kit' });
     }
 });
+
+// ==================== Automated 3-Email Onboarding Drip ====================
+async function runOnboardingEmailDrip() {
+    try {
+        const now = Date.now();
+        const fourteenDaysAgo = new Date(now - 14 * 24 * 60 * 60 * 1000);
+        const twoDaysAgo = new Date(now - 48 * 60 * 60 * 1000);
+        const fiveDaysAgo = new Date(now - 120 * 60 * 60 * 1000);
+
+        // Day 2 email: free users signed up 48h–14d ago who haven't received Day 2 yet
+        const day2Candidates = await User.find({
+            subscription_tier: 'free',
+            created_at: { $lte: twoDaysAgo, $gte: fourteenDaysAgo },
+            'onboarding_emails.day2_sent_at': null,
+        })
+            .select('_id email credits brand_kit')
+            .limit(20)
+            .lean();
+
+        for (const u of day2Candidates) {
+            if (!u?.email) continue;
+            await User.updateOne(
+                { _id: u._id, 'onboarding_emails.day2_sent_at': null },
+                { $set: { 'onboarding_emails.day2_sent_at': new Date() } }
+            );
+            await sendOnboardingDay2Email(u.email, Number(u.credits || 0)).catch(() => {});
+        }
+
+        // Day 5 email: free users signed up 5d–14d ago who haven't received Day 5 yet
+        const day5Candidates = await User.find({
+            subscription_tier: 'free',
+            created_at: { $lte: fiveDaysAgo, $gte: fourteenDaysAgo },
+            'onboarding_emails.day5_sent_at': null,
+        })
+            .select('_id email credits')
+            .limit(20)
+            .lean();
+
+        for (const u of day5Candidates) {
+            if (!u?.email) continue;
+            await User.updateOne(
+                { _id: u._id, 'onboarding_emails.day5_sent_at': null },
+                { $set: { 'onboarding_emails.day5_sent_at': new Date() } }
+            );
+            await sendOnboardingDay5Email(u.email, Number(u.credits || 0)).catch(() => {});
+        }
+    } catch (err) {
+        console.warn('Onboarding email drip tick failed:', err?.message || err);
+    }
+}
+
+setTimeout(() => {
+    runOnboardingEmailDrip().catch(() => {});
+    setInterval(() => {
+        runOnboardingEmailDrip().catch(() => {});
+    }, 60 * 60 * 1000);
+}, 2 * 60 * 1000);
 
 start();

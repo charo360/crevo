@@ -10,6 +10,8 @@
 - [Instagram 4:5 & 1:1 Image Resizer](https://crevo.app/tools/instagram-image-resizer): Resize images to Instagram Portrait (1080x1350) or Square (1080x1080) without cutting off subjects.
 
 ## Core AI Studio Capabilities
+- [AI Daily Social Post Generator](https://crevo.app/daily-post): Create real-camera Instagram, Facebook, LinkedIn, X, Stories, and YouTube Community posts locked to your 3-photo Named Character, with 1-tap AI outfits, 6 text design styles, and cliché-free human captions.
+- [AI Photo Retouch & Location Changer](https://crevo.app/photo-retouch): Upload any phone selfie or portrait to upgrade lighting and sharpness or seamlessly change locations while preserving 100% of your real face, body, and pose — with pre-delivery Vision Quality Audit and Before/After comparison.
 - [AI YouTube Thumbnail Generator & CTR Improver](https://crevo.app/platforms/youtube): Analyze existing YouTube thumbnails, score CTR potential, generate viral hook titles, and create upgraded or fresh-concept 16:9 thumbnails.
 - [AI Video Repurposing (Long Video or YouTube URL to Viral 1080p Shorts, TikTok & Reels)](https://crevo.app/platforms/repurpose): Paste a YouTube link or upload videos up to 5GB, detect non-overlapping viral moments with AI, render 1080p vertical HD clips with burned-in captions in the background, and generate matching cover thumbnails in 1 click.
 - [All Features](https://crevo.app/features): Full overview of Crevo AI tools for creators.

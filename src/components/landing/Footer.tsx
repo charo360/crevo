@@ -25,6 +25,8 @@ export const Footer: FC = () => {
                     <div className="footer-section">
                         <h5 className="footer-heading">Product</h5>
                         <ul className="footer-links">
+                            <li><Link to="/daily-post">Daily Social Posts</Link></li>
+                            <li><Link to="/photo-retouch">AI Photo Retouch</Link></li>
                             <li><Link to="/features">Features</Link></li>
                             <li><Link to="/pricing">Pricing</Link></li>
                             <li><Link to="/dashboard">Studio</Link></li>

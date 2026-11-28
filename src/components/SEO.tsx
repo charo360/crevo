@@ -35,6 +35,18 @@ const ROUTE_SEO: Record<string, SEOConfig> = {
             'Join the Crevo AI Affiliate Program and earn 30% recurring commission for 12 months on every paying creator you refer. Automatic monthly payouts.',
         path: '/affiliates',
     },
+    '/daily-post': {
+        title: 'AI Daily Social Post Generator (Instagram, Facebook, LinkedIn & X) | Crevo AI',
+        description:
+            'Create real-camera daily social media posts using your exact face and body, 1-tap AI outfits, agency text styles, and cliché-free human captions in 15 seconds.',
+        path: '/daily-post',
+    },
+    '/photo-retouch': {
+        title: 'AI Photo Retouch & Location Changer — Pro DSLR Edit Online | Crevo AI',
+        description:
+            'Turn any phone selfie or portrait into a pro photographer shot. Fix lighting, declutter backgrounds, or change locations realistically while keeping 100% of your real face and pose.',
+        path: '/photo-retouch',
+    },
     '/business': {
         title: 'Crevo for Teams & Agencies — Scale Thumbnails & Short-Form Video',
         description:

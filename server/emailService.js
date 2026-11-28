@@ -93,22 +93,72 @@ export async function sendEmail({ to, subject, html }) {
 export function sendWelcomeEmail(toEmail) {
     return sendEmail({
         to: toEmail,
-        subject: 'Welcome to Crevo AI — Your Creator Studio is Ready!',
+        subject: 'Welcome to Crevo AI — Your 6 Free Credits Are Ready!',
         html: wrapEmailHtml({
             title: 'Welcome to Crevo AI! 🎉',
-            preheader: 'Create high-CTR thumbnails and viral Shorts in seconds.',
+            preheader: 'Your 6 free starter credits are waiting — create realistic Daily Posts, Retouch photos, or design YouTube thumbnails.',
             bodyHtml: `
-                <p>Thanks for joining <strong>Crevo AI</strong>! Your creative studio is ready to use.</p>
-                <p>Here is what you can create right away:</p>
+                <p>Thanks for joining <strong>Crevo AI</strong>! We&rsquo;ve added <strong>6 free starter credits</strong> to your account so you can try everything right away.</p>
+                <p>Here is what creators love trying first:</p>
                 <ul style="padding-left:20px;margin:12px 0;">
-                    <li><strong>Improve YouTube Thumbnails</strong> with AI CTR scoring &amp; viral hook titles</li>
-                    <li><strong>Repurpose Long Videos (up to 5GB)</strong> into 9:16 Shorts, TikToks &amp; Reels with AI captions</li>
-                    <li><strong>AI Smart Image Resizer</strong> that extends backgrounds without cropping</li>
-                    <li><strong>7-Day Cloud Library</strong> automatically saving your recent work</li>
+                    <li><strong>📅 Daily Social Posts &amp; 🪄 Retouch My Photo:</strong> Turn any phone photo into a pro-photographer shot or create fresh Instagram, Facebook &amp; LinkedIn posts with realistic captions</li>
+                    <li><strong>⭐ Named Characters (3 Photos Each):</strong> Save your face once so AI locks 100% of your real face &amp; body — and switch outfits in 1 tap</li>
+                    <li><strong>🎯 YouTube Thumbnails &amp; CTR Improver:</strong> Upgrade existing thumbnails or design fresh concepts from scratch</li>
+                    <li><strong>🎬 1080p Viral Shorts &amp; Clips:</strong> Paste any YouTube link or upload a video for auto-captioned vertical clips</li>
                 </ul>
             `,
-            ctaLabel: 'Open Crevo Studio →',
+            ctaLabel: 'Use Your 6 Free Credits →',
             ctaUrl: `${SITE_URL()}/dashboard`,
+        }),
+    });
+}
+
+export function sendOnboardingDay2Email(toEmail, remainingCredits = 0) {
+    const creditLine =
+        remainingCredits > 0
+            ? `<p>You still have <strong>${remainingCredits} free credit${remainingCredits === 1 ? '' : 's'}</strong> waiting in your account — enough to create your first real-camera Daily Post or retouch a photo right now.</p>`
+            : `<p>Ready to get even better, 100% real-looking results on every post and thumbnail?</p>`;
+    return sendEmail({
+        to: toEmail,
+        subject: 'Quick tip: Save 3 photos once for 100% real-face posts ⭐',
+        html: wrapEmailHtml({
+            title: 'Make AI Look 100% Like You',
+            preheader: 'Save 3 quick angles in My Face & Brand Kit so Crevo nails your exact face & body every time.',
+            bodyHtml: `
+                ${creditLine}
+                <p>The fastest way to make every Daily Post and YouTube thumbnail look like a real photographer shot it is to set up your <strong>Named Character</strong> once:</p>
+                <ol style="padding-left:20px;margin:12px 0;">
+                    <li>Open <strong>My Face &amp; Brand Kit</strong></li>
+                    <li>Upload 3 clear photos of yourself (front face, smile/angle, and upper body)</li>
+                    <li>Add 1 sentence about your niche so AI suggests tailored daily post ideas &amp; human captions</li>
+                </ol>
+                <p>From there, you can generate fresh social posts in any outfit or retouch your own phone photos in 15 seconds.</p>
+            `,
+            ctaLabel: 'Set Up My Face & Brand Kit →',
+            ctaUrl: `${SITE_URL()}/dashboard/brand-kit`,
+        }),
+    });
+}
+
+export function sendOnboardingDay5Email(toEmail, remainingCredits = 0) {
+    return sendEmail({
+        to: toEmail,
+        subject: 'Keep creating every day — $9 pack (never expires) or Pro 🚀',
+        html: wrapEmailHtml({
+            title: 'Ready to Post Every Day Without Hiring a Designer?',
+            preheader: 'Unlock 35 never-expiring credits for $9 or 200 monthly credits with Crevo Pro.',
+            bodyHtml: `
+                <p>Creators use <strong>Crevo AI</strong> every day to publish real-camera Instagram &amp; Facebook posts, retouch phone photos, design high-CTR YouTube thumbnails, and clip 1080p viral Shorts — all in one studio.</p>
+                ${remainingCredits > 0 ? `<p>You currently have <strong>${remainingCredits} credit${remainingCredits === 1 ? '' : 's'}</strong> left.</p>` : ''}
+                <p>Whenever you&rsquo;re ready for more credits, pick the plan that fits your pace:</p>
+                <ul style="padding-left:20px;margin:12px 0;">
+                    <li><strong>Pay As You Go — $9 one-time:</strong> 35 credits that <strong>never expire</strong> (no subscription)</li>
+                    <li><strong>Pro Plan — $29/month:</strong> 200 credits/month for active daily creators</li>
+                </ul>
+                <p style="font-size:13px;color:#6b7280;">Bonus: Share your personal referral link in the Affiliates tab to earn <strong>30% recurring commission</strong> for 12 months on every creator you invite.</p>
+            `,
+            ctaLabel: 'View Plans & Top Up Credits →',
+            ctaUrl: `${SITE_URL()}/pricing`,
         }),
     });
 }

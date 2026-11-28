@@ -113,6 +113,10 @@ const userSchema = new mongoose.Schema(
             preferred_style: { type: String, default: '' },
             updated_at: { type: Date, default: null },
         },
+        onboarding_emails: {
+            day2_sent_at: { type: Date, default: null },
+            day5_sent_at: { type: Date, default: null },
+        },
     },
     {
         timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
