@@ -27,6 +27,7 @@ import { RepurposeModule } from './features/content-repurpose/components/Repurpo
 import { YouTubeToolsView } from './components/modules/YouTubeToolsView';
 import { CreditManagement } from './components/dashboard/CreditManagement';
 import { useAuth } from './contexts/AuthContext';
+import { apiRequest } from './lib/api';
 import { triggerOutOfCreditsModal } from './components/modals/OutOfCreditsModal';
 import { hasEnoughCredits, deductCredits, CREDIT_COSTS } from './services/payments/creditService';
 import { saveImageToLibrary } from './services/libraryService';
@@ -102,6 +103,84 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
     const prefs = loadPreferences();
     const [colors, setColors] = useState<ColorsState>(prefs.colors);
     const [preferences, setPreferences] = useState<PreferencesState>(prefs.preferences);
+    const [brandChannelName, setBrandChannelName] = useState<string>('');
+    const brandKitFacesRef = useRef<ImageAsset[]>([]);
+    const brandKitAppliedRef = useRef<boolean>(false);
+
+    // Auto-load saved Brand Kit (My Face, Logo, Brand Colors & Style) once per Studio mount
+    useEffect(() => {
+        if (!user || brandKitAppliedRef.current) return;
+        let cancelled = false;
+        apiRequest<{ brandKit: any }>('/api/user/brand-kit')
+            .then((res) => {
+                if (cancelled) return;
+                const bk = res?.brandKit;
+                if (!bk) return;
+                brandKitAppliedRef.current = true;
+
+                if (typeof bk.channel_name === 'string' && bk.channel_name.trim()) {
+                    setBrandChannelName(bk.channel_name.trim());
+                }
+                if (bk.colors?.primary && bk.colors?.secondary && bk.colors?.accent && bk.colors?.background) {
+                    setColors({
+                        primary: bk.colors.primary,
+                        secondary: bk.colors.secondary,
+                        accent: bk.colors.accent,
+                        background: bk.colors.background,
+                    });
+                }
+                if (bk.preferred_style) {
+                    setPreferences((prev) => ({ ...prev, style: bk.preferred_style }));
+                }
+                if (typeof bk.logo_data_url === 'string' && bk.logo_data_url.startsWith('data:image/')) {
+                    const m = bk.logo_data_url.match(/^data:([^;]+);base64,(.+)$/s);
+                    if (m) {
+                        setLogo((prev) => ({
+                            ...prev,
+                            image: prev.image || {
+                                id: `brand_logo_${Date.now()}`,
+                                mimeType: m[1],
+                                base64: m[2],
+                                url: bk.logo_data_url,
+                            },
+                            position: bk.logo_position || prev.position,
+                        }));
+                    }
+                }
+                if (Array.isArray(bk.face_images) && bk.face_images.length > 0) {
+                    const parsedFaces: ImageAsset[] = [];
+                    bk.face_images.forEach((f: any, idx: number) => {
+                        if (typeof f?.data_url === 'string' && f.data_url.startsWith('data:image/')) {
+                            const m = f.data_url.match(/^data:([^;]+);base64,(.+)$/s);
+                            if (m) {
+                                parsedFaces.push({
+                                    id: `brand_face_${idx}_${Date.now()}`,
+                                    mimeType: m[1],
+                                    base64: m[2],
+                                    url: f.data_url,
+                                });
+                            }
+                        }
+                    });
+                    brandKitFacesRef.current = parsedFaces;
+                    // Auto-populate saved faces on Thumbnail/Cover creation modes when no images are loaded yet
+                    if (parsedFaces.length > 0 && platform !== 'youtube_improve' && platform !== 'resize') {
+                        setImages((prev) => (prev.length === 0 ? parsedFaces : prev));
+                    }
+                }
+            })
+            .catch(() => {});
+        return () => {
+            cancelled = true;
+        };
+    }, [user]);
+
+    // When switching from Improve Thumbnail to a Thumbnail/Cover creation tab, auto-fill saved Brand Kit faces if empty
+    useEffect(() => {
+        if (platform !== 'youtube_improve' && platform !== 'resize' && brandKitFacesRef.current.length > 0) {
+            setImages((prev) => (prev.length === 0 ? brandKitFacesRef.current : prev));
+        }
+    }, [platform]);
     
     // App status state (persist finished results in sessionStorage; never persist in-progress loading overlays)
     const [results, setResults] = useState<DesignResult[]>(() => {
@@ -884,6 +963,7 @@ export const App: FC<AppProps> = ({ initialPlatform = 'youtube_improve', onPlatf
                 <PreviewModal
                     image={previewingImage}
                     defaultTitle={text.headline || originalYoutubeTitle}
+                    defaultChannelName={brandChannelName}
                     onCancel={() => setPreviewingImage(null)}
                 />
             )}

@@ -5,6 +5,7 @@ interface PreviewModalProps {
     image: ImageAsset;
     onCancel: () => void;
     defaultTitle?: string;
+    defaultChannelName?: string;
 }
 
 interface MockFeedCard {
@@ -83,13 +84,13 @@ const NEIGHBOR_CARDS: MockFeedCard[] = [
     },
 ];
 
-export const PreviewModal: FC<PreviewModalProps> = ({ image, onCancel, defaultTitle }) => {
+export const PreviewModal: FC<PreviewModalProps> = ({ image, onCancel, defaultTitle, defaultChannelName }) => {
     const [viewMode, setViewMode] = useState<'full' | 'yt_desktop' | 'yt_mobile'>('yt_desktop');
     const [ytTheme, setYtTheme] = useState<'dark' | 'light'>('dark');
     const [videoTitle, setVideoTitle] = useState(
         defaultTitle?.trim() || 'How I Tripled My Views With One Simple Change'
     );
-    const [channelName, setChannelName] = useState('Your Channel');
+    const [channelName, setChannelName] = useState(defaultChannelName?.trim() || 'Your Channel');
     const [slotIndex, setSlotIndex] = useState(1);
 
     const isDark = ytTheme === 'dark';

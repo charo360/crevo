@@ -13,7 +13,6 @@ import { LogoModule } from './LogoModule';
 import { ColorPaletteModule } from './ColorPaletteModule';
 import { DesignPreferencesModule } from './DesignPreferencesModule';
 import { GenerateButton } from './GenerateButton';
-import { BrandKitModule } from './BrandKitModule';
 
 interface SidebarProps {
     platform: Platform;
@@ -65,18 +64,6 @@ export const Sidebar: FC<SidebarProps> = (props) => {
                         <line x1="6" y1="6" x2="18" y2="18"></line>
                     </svg>
                 </button>
-            )}
-            {props.platform !== 'resize' && (
-                <BrandKitModule
-                    images={props.images}
-                    onImagesChange={props.onImagesChange}
-                    logo={props.logo}
-                    onLogoChange={props.onLogoChange}
-                    colors={props.colors}
-                    onColorsChange={props.onColorsChange}
-                    preferences={props.preferences}
-                    onPreferencesChange={props.onPreferencesChange}
-                />
             )}
             {props.platform === 'youtube_improve' ? (
                 <YouTubeModule

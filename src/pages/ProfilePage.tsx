@@ -145,6 +145,15 @@ export const ProfilePage: FC = () => {
                                         Manage Credits →
                                     </Link>
                                 </div>
+                                <div className="profile-info-item">
+                                    <label>My Face &amp; Brand Kit</label>
+                                    <div className="profile-value-small">
+                                        Save your face photos, logo &amp; brand colors once for every video
+                                    </div>
+                                    <Link to="/dashboard/brand-kit" className="profile-link">
+                                        ⭐ Open Brand Kit →
+                                    </Link>
+                                </div>
                             </div>
                         </div>
                     </section>

@@ -88,6 +88,9 @@ const AdminPage = lazy(() =>
 const LibraryPage = lazy(() =>
   import('../pages/LibraryPage').then(m => ({ default: m.LibraryPage }))
 );
+const BrandKitPage = lazy(() =>
+  import('../pages/BrandKitPage').then(m => ({ default: m.BrandKitPage }))
+);
 
 // ==================== Loading Fallback ====================
 const LoadingFallback: FC = () => (
@@ -279,6 +282,16 @@ export const AppRoutes: FC = () => {
             element={
               <ProtectedRoute>
                 <LibraryPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard/brand-kit"
+            element={
+              <ProtectedRoute>
+                <ErrorBoundary>
+                  <BrandKitPage />
+                </ErrorBoundary>
               </ProtectedRoute>
             }
           />

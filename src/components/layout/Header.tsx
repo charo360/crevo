@@ -470,6 +470,37 @@ export const Header: FC<HeaderProps> = ({ platform, onPlatformChange, onSidebarT
                                         <span>My Library (7-Day)</span>
                                     </Link>
                                     <Link
+                                        to="/dashboard/brand-kit"
+                                        className="user-menu-item-link"
+                                        onClick={() => setUserMenuOpen(false)}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '12px',
+                                            width: '100%',
+                                            padding: '12px 16px',
+                                            background: 'transparent',
+                                            border: 'none',
+                                            color: 'var(--text-primary)',
+                                            fontSize: '14px',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                            textDecoration: 'none',
+                                            transition: 'all 0.15s',
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.backgroundColor = 'var(--surface-2)';
+                                            e.currentTarget.style.color = 'var(--primary)';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.backgroundColor = 'transparent';
+                                            e.currentTarget.style.color = 'var(--text-primary)';
+                                        }}
+                                    >
+                                        <span style={{ fontSize: '18px', width: '20px', textAlign: 'center', flexShrink: 0 }}>⭐</span>
+                                        <span>My Face &amp; Brand Kit</span>
+                                    </Link>
+                                    <Link
                                         to="/dashboard/credits"
                                         className="user-menu-item-link"
                                         onClick={() => {
