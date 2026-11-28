@@ -807,39 +807,96 @@ ${refCopyRulesText ? `- **EXACT ELEMENTS TO COPY / IGNORE FROM REFERENCE:** ${re
                     aspectRatio: effectiveAspectRatio,
                 };
 
-                const response = await callWithFallback(
-                    () =>
-                        retryWithBackoff(
-                            () =>
-                                ai.models.generateContent({
-                                    model: getModelWithFallback('IMAGE', false),
-                                    contents: { parts: [...allImageParts, { text: variationPrompt }] },
-                                    config: imageConfig as any,
-                                }),
-                            {
-                                maxRetries: 2,
-                                initialDelayMs: 2000,
-                                retryableErrors: (error: any) =>
-                                    !error?.status || error.status === 429 || (error.status >= 500 && error.status < 600),
+                const generateOnce = (promptText: string) =>
+                    callWithFallback(
+                        () =>
+                            retryWithBackoff(
+                                () =>
+                                    ai.models.generateContent({
+                                        model: getModelWithFallback('IMAGE', false),
+                                        contents: { parts: [...allImageParts, { text: promptText }] },
+                                        config: imageConfig as any,
+                                    }),
+                                {
+                                    maxRetries: 2,
+                                    initialDelayMs: 2000,
+                                    retryableErrors: (error: any) =>
+                                        !error?.status || error.status === 429 || (error.status >= 500 && error.status < 600),
+                                }
+                            ),
+                        () =>
+                            retryWithBackoff(
+                                () =>
+                                    ai.models.generateContent({
+                                        model: getModelWithFallback('IMAGE', true),
+                                        contents: { parts: [...allImageParts, { text: promptText }] },
+                                        config: imageConfig as any,
+                                    }),
+                                {
+                                    maxRetries: 2,
+                                    initialDelayMs: 2000,
+                                    retryableErrors: (error: any) =>
+                                        !error?.status || error.status === 429 || (error.status >= 500 && error.status < 600),
+                                }
+                            ),
+                        'Failed to generate design variation'
+                    );
+
+                let response = await generateOnce(variationPrompt);
+
+                // Pre-delivery Vision Quality & Face-Likeness Audit for Thumbnail Studio modes (Daily Post runs its own dedicated audit)
+                if (platform !== 'daily_post' && optimizedImages.length > 0) {
+                    try {
+                        const genPart = response?.candidates?.[0]?.content?.parts?.find((p: any) => p?.inlineData?.data);
+                        const primarySubject = optimizedImages[0];
+                        if (genPart?.inlineData?.data && primarySubject?.base64) {
+                            const expectedText = (variationHookText || currentText.headline || '').trim();
+                            const auditRes = await ai.models.generateContent({
+                                model: getModelWithFallback('TEXT', false),
+                                contents: {
+                                    parts: [
+                                        { text: 'IMAGE A — REAL PERSON REFERENCE PHOTO (Ground Truth Identity):' },
+                                        { inlineData: { data: primarySubject.base64, mimeType: primarySubject.mimeType } },
+                                        { text: 'IMAGE B — GENERATED THUMBNAIL TO AUDIT:' },
+                                        {
+                                            inlineData: {
+                                                data: genPart.inlineData.data,
+                                                mimeType: genPart.inlineData.mimeType || 'image/png',
+                                            },
+                                        },
+                                        {
+                                            text: `Audit IMAGE B before showing it to the user.
+Check these 3 critical gates:
+1. Face & Body Match: Does the person in IMAGE B unmistakably look like the EXACT same real person from IMAGE A (same face, eyes, skin tone, hair, gender, body build — NOT a different person or plastic AI face)?
+2. Anatomy & Quality: No warped hands/eyes or glaring AI artifacts.
+3. Text Accuracy: ${expectedText ? `If text is rendered, "${expectedText}" must be spelled cleanly without gibberish.` : 'No random gibberish words.'}
+
+Only fail (passed: false) if there is a clear, noticeable identity drift or glaring defect.
+Return STRICT JSON only (no markdown fences):
+{"passed":true,"fixInstructions":""} or {"passed":false,"fixInstructions":"1-2 concrete sentences telling the image generator exactly what to fix"}`,
+                                        },
+                                    ],
+                                },
+                            });
+                            const rawAudit =
+                                auditRes?.candidates?.[0]?.content?.parts
+                                    ?.map((p: any) => p?.text || '')
+                                    .join('\n')
+                                    .trim() || '';
+                            const cleanedAudit = rawAudit.replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
+                            const parsedAudit = JSON.parse(cleanedAudit);
+                            if (parsedAudit?.passed === false && parsedAudit?.fixInstructions) {
+                                const correctedPrompt = `${variationPrompt}\n\n[MANDATORY LIKENESS & QUALITY AUDIT FIX — CORRECT THESE ISSUES]: ${String(parsedAudit.fixInstructions).trim()}`;
+                                const retried = await generateOnce(correctedPrompt);
+                                if (retried?.candidates?.[0]?.content?.parts?.some((p: any) => p?.inlineData?.data)) {
+                                    response = retried;
+                                }
                             }
-                        ),
-                    () =>
-                        retryWithBackoff(
-                            () =>
-                                ai.models.generateContent({
-                                    model: getModelWithFallback('IMAGE', true),
-                                    contents: { parts: [{ text: variationPrompt }, ...allImageParts] },
-                                    config: imageConfig as any,
-                                }),
-                            {
-                                maxRetries: 2,
-                                initialDelayMs: 2000,
-                                retryableErrors: (error: any) =>
-                                    !error?.status || error.status === 429 || (error.status >= 500 && error.status < 600),
-                            }
-                        ),
-                    'Failed to generate design variation'
-                );
+                        }
+                    } catch (auditErr) {
+                        console.warn('Thumbnail pre-delivery likeness audit skipped:', auditErr);
+                    }
+                }
 
                 return { response, label: variationLabel, hookText: variationHookText };
             };
