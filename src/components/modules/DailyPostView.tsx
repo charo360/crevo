@@ -255,6 +255,13 @@ export const DailyPostView: FC<DailyPostViewProps> = ({
     const uploadInputRef = useRef<HTMLInputElement>(null);
     const retouchInputRef = useRef<HTMLInputElement>(null);
     const referenceInputRef = useRef<HTMLInputElement>(null);
+    const previewCardRef = useRef<HTMLDivElement>(null);
+
+    const scrollToPreview = () => {
+        requestAnimationFrame(() => {
+            previewCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    };
 
     const [dailyMode, setDailyMode] = useState<'create' | 'retouch'>('create');
     const [targetId, setTargetId] = useState<string>('instagram_portrait');
@@ -647,6 +654,7 @@ or if failed:
 
         setIsGenerating(true);
         setShowOriginalBefore(false);
+        scrollToPreview();
         setGenerationStage(
             dailyMode === 'retouch'
                 ? 'Retouching your photo with pro lighting...'
@@ -817,6 +825,7 @@ or if failed:
             }
 
             setGeneratedImage(finalImage);
+            scrollToPreview();
 
             if (user) {
                 const actionTitle =
@@ -1827,7 +1836,9 @@ or if failed:
 
                     {/* RIGHT: Generated Post + Ready-to-Paste Caption */}
                     <div
+                        ref={previewCardRef}
                         style={{
+                            scrollMarginTop: '20px',
                             background: '#ffffff',
                             borderRadius: '16px',
                             border: '1px solid #e4dcf2',
