@@ -247,6 +247,7 @@ export const DailyPostView: FC<DailyPostViewProps> = ({
     const { user, refreshCredits } = useAuth();
     const uploadInputRef = useRef<HTMLInputElement>(null);
     const retouchInputRef = useRef<HTMLInputElement>(null);
+    const referenceInputRef = useRef<HTMLInputElement>(null);
 
     const [dailyMode, setDailyMode] = useState<'create' | 'retouch'>('create');
     const [targetId, setTargetId] = useState<string>('instagram_portrait');
@@ -258,6 +259,7 @@ export const DailyPostView: FC<DailyPostViewProps> = ({
     const [includeLogo, setIncludeLogo] = useState<boolean>(false);
     const [useBrandColors, setUseBrandColors] = useState<boolean>(false);
     const [attachedImages, setAttachedImages] = useState<ImageAsset[]>([]);
+    const [referencePost, setReferencePost] = useState<ImageAsset | null>(null);
     const [retouchPhoto, setRetouchPhoto] = useState<ImageAsset | null>(null);
     const [retouchStyle, setRetouchStyle] = useState<'keep_bg' | 'change_bg'>('keep_bg');
     const [retouchLocation, setRetouchLocation] = useState<string>('');
@@ -349,6 +351,24 @@ export const DailyPostView: FC<DailyPostViewProps> = ({
                       : prev;
             return [...filtered, touchId];
         });
+    };
+
+    const handleReferencePostUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file || !file.type.startsWith('image/')) return;
+        try {
+            const { base64, mimeType } = await fileToBase64(file);
+            setReferencePost({
+                id: `ref_post_${Date.now()}`,
+                url: `data:${mimeType};base64,${base64}`,
+                base64,
+                mimeType,
+            });
+            toast.success('Reference style loaded! AI will match this exact look with your face.');
+        } catch (err: any) {
+            toast.error(err?.message || 'Could not read reference image.');
+        }
     };
 
     const handleRetouchPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -498,8 +518,8 @@ Return STRICT JSON only (no markdown fences):
                 toast.error('Pick or type the new location/background you want.');
                 return;
             }
-        } else if (!cleanTopic && !cleanHeadline) {
-            toast.error('Enter a topic or click "Suggest Idea" first.');
+        } else if (!cleanTopic && !cleanHeadline && !referencePost) {
+            toast.error('Enter a topic, upload a Reference Design, or click "Suggest Idea" first.');
             return;
         }
 
@@ -556,12 +576,16 @@ Return STRICT JSON only (no markdown fences):
                     }
                 }
                 imagesForGen = [...attachedImages, ...autoMatched];
-                bodyPrompt = `DAILY SOCIAL POST FOR ${selectedTarget.label}. ${nicheText.trim() ? `Creator Niche / Identity: ${nicheText.trim()}. ` : ''}Post Vibe: ${selectedPostType.label}. Visual direction: ${selectedPostType.visualGuidance} Topic & scene: ${cleanTopic || cleanHeadline}. ${
+                bodyPrompt = `DAILY SOCIAL POST FOR ${selectedTarget.label}. ${nicheText.trim() ? `Creator Niche / Identity: ${nicheText.trim()}. ` : ''}Post Vibe: ${selectedPostType.label}. Visual direction: ${selectedPostType.visualGuidance} ${
+                    referencePost
+                        ? 'REFERENCE MATCH MODE: Recreate the exact pose, camera framing, composition, lighting, background aesthetic, and graphic style of the attached Reference Blueprint — replacing the original person 100% with the user’s real face & body and removing any original text from the reference. '
+                        : ''
+                }Topic & scene: ${cleanTopic || cleanHeadline || 'Match the exact style, pose, and aesthetic of the reference image'}. ${
                     cleanHeadline
                         ? `Render ONLY this clean, readable headline on the graphic: "${cleanHeadline}".`
                         : 'Do NOT render any text overlay on the image — make it a clean, authentic, photo-only social post.'
                 }`;
-                captionContext = cleanTopic || cleanHeadline;
+                captionContext = cleanTopic || cleanHeadline || 'Styled social photo inspired by a reference aesthetic';
             }
 
             const effectiveColors: ColorsState =
@@ -607,7 +631,7 @@ Return STRICT JSON only (no markdown fences):
                     '',
                     postTextState,
                     'improve',
-                    null,
+                    dailyMode === 'create' ? referencePost : null,
                     selectedTarget.aspectRatio
                 ),
                 generateSocialCaption(captionContext, cleanHeadline).catch(() => {}),
@@ -1465,6 +1489,84 @@ Return STRICT JSON only (no markdown fences):
                                     disabled={isGenerating}
                                     showTopDivider
                                 />
+                            )}
+                        </div>
+
+                        {/* 7. Optional Reference Photo / Design to Match */}
+                        <div
+                            style={{
+                                padding: '12px',
+                                borderRadius: '12px',
+                                background: '#faf7ff',
+                                border: '1px solid #e4dcf2',
+                            }}
+                        >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', gap: '8px' }}>
+                                <span style={{ fontSize: '12px', fontWeight: 800, color: '#4c1d95' }}>
+                                    🎯 Match a Reference Photo / Design <span style={{ fontWeight: 500, color: '#6b7280' }}>(optional)</span>
+                                </span>
+                                <input
+                                    ref={referenceInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleReferencePostUpload}
+                                    style={{ display: 'none' }}
+                                />
+                                {!referencePost && (
+                                    <button
+                                        type="button"
+                                        onClick={() => referenceInputRef.current?.click()}
+                                        style={{
+                                            padding: '4px 10px',
+                                            borderRadius: '8px',
+                                            border: '1px solid #d8ccf0',
+                                            background: '#ffffff',
+                                            color: '#571c86',
+                                            fontSize: '11.5px',
+                                            fontWeight: 700,
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        + Upload Reference
+                                    </button>
+                                )}
+                            </div>
+                            {referencePost ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
+                                    <img
+                                        src={referencePost.url}
+                                        alt="Reference style blueprint"
+                                        style={{ width: '58px', height: '58px', borderRadius: '8px', objectFit: 'cover', border: '1.5px solid #c4b5fd' }}
+                                    />
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ fontSize: '12px', fontWeight: 800, color: '#111827' }}>
+                                            Matching this exact pose, lighting &amp; layout
+                                        </div>
+                                        <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
+                                            Original person &amp; text will be swapped with yours.
+                                        </div>
+                                        <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => referenceInputRef.current?.click()}
+                                                style={{ padding: '3px 8px', borderRadius: '6px', border: '1px solid #d8ccf0', background: '#fff', color: '#571c86', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                                            >
+                                                Replace
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setReferencePost(null)}
+                                                style={{ padding: '3px 8px', borderRadius: '6px', border: '1px solid #fecaca', background: '#fff5f5', color: '#b91c1c', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div style={{ fontSize: '11.5px', color: '#6b7280', lineHeight: 1.4 }}>
+                                    Upload any Instagram/Pinterest photo or post design you love — AI will recreate that exact pose, lighting &amp; style with <strong>your real face</strong>.
+                                </div>
                             )}
                         </div>
 
