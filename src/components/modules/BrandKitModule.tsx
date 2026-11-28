@@ -266,7 +266,7 @@ export const BrandKitModule: FC<BrandKitModuleProps> = ({
                 </button>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    {hasSavedKit && (
+                    {hasSavedKit ? (
                         <button
                             type="button"
                             onClick={handleApplyKit}
@@ -282,6 +282,23 @@ export const BrandKitModule: FC<BrandKitModuleProps> = ({
                             }}
                         >
                             ⚡ Apply
+                        </button>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => setIsOpen(true)}
+                            style={{
+                                padding: '4px 9px',
+                                borderRadius: '8px',
+                                border: '1px solid #d8ccf0',
+                                background: '#ffffff',
+                                color: '#571c86',
+                                fontSize: '11.5px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                            }}
+                        >
+                            + Set Up
                         </button>
                     )}
                     <button

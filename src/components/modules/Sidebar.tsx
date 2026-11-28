@@ -66,6 +66,18 @@ export const Sidebar: FC<SidebarProps> = (props) => {
                     </svg>
                 </button>
             )}
+            {props.platform !== 'resize' && (
+                <BrandKitModule
+                    images={props.images}
+                    onImagesChange={props.onImagesChange}
+                    logo={props.logo}
+                    onLogoChange={props.onLogoChange}
+                    colors={props.colors}
+                    onColorsChange={props.onColorsChange}
+                    preferences={props.preferences}
+                    onPreferencesChange={props.onPreferencesChange}
+                />
+            )}
             {props.platform === 'youtube_improve' ? (
                 <YouTubeModule
                     onImagesChange={props.onImagesChange}
@@ -85,16 +97,6 @@ export const Sidebar: FC<SidebarProps> = (props) => {
                 />
             ) : (
                 <>
-                    <BrandKitModule
-                        images={props.images}
-                        onImagesChange={props.onImagesChange}
-                        logo={props.logo}
-                        onLogoChange={props.onLogoChange}
-                        colors={props.colors}
-                        onColorsChange={props.onColorsChange}
-                        preferences={props.preferences}
-                        onPreferencesChange={props.onPreferencesChange}
-                    />
                     <VideoModule
                         videoAsset={props.videoAsset}
                         onVideoAssetChange={props.onVideoAssetChange}
