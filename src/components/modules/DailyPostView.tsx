@@ -171,6 +171,15 @@ const RETOUCH_LOCATION_PRESETS = [
     'Modern Rooftop Terrace',
 ];
 
+const RETOUCH_EXTRA_TOUCHES = [
+    { id: 'soft_makeup', label: '💄 Soft Natural Makeup', prompt: 'subtle, realistic soft natural makeup (even tone, natural lip tint, defined lashes — zero heavy filter look)' },
+    { id: 'glam_makeup', label: '✨ Glam Makeup', prompt: 'tasteful editorial glam makeup (clean defined eyes, natural highlight, polished lip — realistic texture, never airbrushed plastic)' },
+    { id: 'neat_hair', label: '💇 Polished Hair', prompt: 'neatly styled, clean flyaway-free hair keeping their exact natural hairstyle and hairline' },
+    { id: 'sunglasses', label: '🕶️ Sunglasses', prompt: 'stylish modern sunglasses naturally fitted to their face with realistic reflections' },
+    { id: 'jewelry', label: '💎 Subtle Jewelry', prompt: 'tasteful subtle jewelry (minimal earrings, delicate necklace, or sleek watch) matching their style' },
+    { id: 'clean_bg', label: '🧹 Declutter Background', prompt: 'cleanly remove messy background objects/clutter while keeping the scene authentic' },
+];
+
 interface TextDesignStyleOption {
     id: string;
     label: string;
@@ -251,6 +260,8 @@ export const DailyPostView: FC<DailyPostViewProps> = ({
     const [retouchPhoto, setRetouchPhoto] = useState<ImageAsset | null>(null);
     const [retouchStyle, setRetouchStyle] = useState<'keep_bg' | 'change_bg'>('keep_bg');
     const [retouchLocation, setRetouchLocation] = useState<string>('');
+    const [retouchTouches, setRetouchTouches] = useState<string[]>([]);
+    const [retouchCustomNote, setRetouchCustomNote] = useState<string>('');
     const [showOriginalBefore, setShowOriginalBefore] = useState<boolean>(false);
     const autoSelectedRef = useRef<boolean>(false);
     const recentIdeasRef = useRef<string[]>([]);
@@ -317,6 +328,22 @@ export const DailyPostView: FC<DailyPostViewProps> = ({
         } catch (err: any) {
             toast.error(err?.message || 'Could not read selected photo.');
         }
+    };
+
+    const toggleRetouchTouch = (touchId: string) => {
+        setRetouchTouches((prev) => {
+            if (prev.includes(touchId)) {
+                return prev.filter((id) => id !== touchId);
+            }
+            // Keep soft_makeup and glam_makeup mutually exclusive
+            const filtered =
+                touchId === 'soft_makeup'
+                    ? prev.filter((id) => id !== 'glam_makeup')
+                    : touchId === 'glam_makeup'
+                      ? prev.filter((id) => id !== 'soft_makeup')
+                      : prev;
+            return [...filtered, touchId];
+        });
     };
 
     const handleRetouchPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -494,14 +521,24 @@ Return STRICT JSON only (no markdown fences):
             if (dailyMode === 'retouch' && retouchPhoto) {
                 imagesForGen = [retouchPhoto];
                 const loc = retouchLocation.trim();
+                const selectedTouchPrompts = RETOUCH_EXTRA_TOUCHES
+                    .filter((t) => retouchTouches.includes(t.id))
+                    .map((t) => t.prompt);
+                if (retouchCustomNote.trim()) {
+                    selectedTouchPrompts.push(retouchCustomNote.trim());
+                }
+                const extraTouchesText =
+                    selectedTouchPrompts.length > 0
+                        ? ` Extra requested touches (apply realistically while keeping 100% of their exact real facial structure, identity, and body unchanged): ${selectedTouchPrompts.join('; ')}.`
+                        : '';
                 bodyPrompt =
                     retouchStyle === 'change_bg'
-                        ? `[RETOUCH_MY_PHOTO] Keep 100% of this person's exact face, expression, hair, body build, and pose from their uploaded photo, and seamlessly place them in a realistic, natural "${loc}" setting with matching lighting, shadows, and crisp 50mm DSLR photo quality.`
-                        : `[RETOUCH_MY_PHOTO] Keep 100% of this person's exact face, expression, hair, body build, pose, AND their real background from the uploaded photo, but professionally retouch the photo like an elite photographer: balance lighting and exposure, clean up distracting clutter, enrich true-to-life film colors, sharpen focus on the subject, and add subtle natural lens depth-of-field.`;
+                        ? `[RETOUCH_MY_PHOTO] Keep 100% of this person's exact face, expression, hair, body build, and pose from their uploaded photo, and seamlessly place them in a realistic, natural "${loc}" setting with matching lighting, shadows, and crisp 50mm DSLR photo quality.${extraTouchesText}`
+                        : `[RETOUCH_MY_PHOTO] Keep 100% of this person's exact face, expression, hair, body build, pose, AND their real background from the uploaded photo, but professionally retouch the photo like an elite photographer: balance lighting and exposure, clean up distracting clutter, enrich true-to-life film colors, sharpen focus on the subject, and add subtle natural lens depth-of-field.${extraTouchesText}`;
                 captionContext =
                     retouchStyle === 'change_bg'
                         ? `Personal social photo at ${loc}`
-                        : cleanTopic || 'Personal everyday photo shared with friends & followers';
+                        : retouchCustomNote.trim() || cleanTopic || 'Personal everyday photo shared with friends & followers';
             } else {
                 // Auto-attach any saved character mentioned by name in topic/headline
                 const combinedText = `${cleanTopic} ${cleanHeadline}`;
@@ -953,6 +990,52 @@ Return STRICT JSON only (no markdown fences):
                                     )}
                                 </div>
 
+                                {/* Optional Extra Touches: Makeup, Accessories, Custom Edits */}
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, color: '#374151', marginBottom: '6px' }}>
+                                        4. Extra Touches <span style={{ fontWeight: 500, color: '#9ca3af' }}>(optional — makeup, accessories, or anything to add/fix)</span>
+                                    </label>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginBottom: '8px' }}>
+                                        {RETOUCH_EXTRA_TOUCHES.map((touch) => {
+                                            const active = retouchTouches.includes(touch.id);
+                                            return (
+                                                <button
+                                                    key={touch.id}
+                                                    type="button"
+                                                    onClick={() => toggleRetouchTouch(touch.id)}
+                                                    style={{
+                                                        padding: '5px 10px',
+                                                        borderRadius: '999px',
+                                                        border: active ? '1.5px solid #571c86' : '1px solid #e4dcf2',
+                                                        background: active ? '#571c86' : '#ffffff',
+                                                        color: active ? '#ffffff' : '#374151',
+                                                        fontSize: '11.5px',
+                                                        fontWeight: 700,
+                                                        cursor: 'pointer',
+                                                    }}
+                                                >
+                                                    {touch.label} {active ? '✓' : ''}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <input
+                                        type="text"
+                                        value={retouchCustomNote}
+                                        onChange={(e) => setRetouchCustomNote(e.target.value)}
+                                        placeholder="Or type anything custom (e.g., soft red lipstick, gold watch, remove bag behind me)..."
+                                        maxLength={160}
+                                        style={{
+                                            width: '100%',
+                                            padding: '9px 12px',
+                                            borderRadius: '10px',
+                                            border: '1.5px solid #e5e7eb',
+                                            fontSize: '13px',
+                                            color: '#111827',
+                                        }}
+                                    />
+                                </div>
+
                                 {/* Optional Outfit tweak for Retouch */}
                                 {retouchPhoto && (
                                     <div style={{ padding: '10px 12px', borderRadius: '12px', background: '#faf7ff', border: '1px solid #e4dcf2' }}>
@@ -967,7 +1050,7 @@ Return STRICT JSON only (no markdown fences):
                                 {/* Optional Text on Image */}
                                 <div>
                                     <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, color: '#374151', marginBottom: '6px' }}>
-                                        4. Text on Image <span style={{ fontWeight: 500, color: '#9ca3af' }}>(optional — leave blank for clean photo)</span>
+                                        5. Text on Image <span style={{ fontWeight: 500, color: '#9ca3af' }}>(optional — leave blank for clean photo)</span>
                                     </label>
                                     <input
                                         type="text"
